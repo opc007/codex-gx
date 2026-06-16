@@ -1,28 +1,68 @@
-# AgentShell
+# AgentShell — Codex 全功能平替，国产大模型驱动
 
-> **Codex 式极简 Agent 桌面壳 + 多模型 Provider（默认 [MiniMax M3](https://www.minimax.io/models/text/m3)）**
-> **macOS / Windows 双端桌面版** · **Tauri 2 + Rust**
+> **Codex 桌面版的开源平替**。功能对标 OpenAI Codex CLI / Desktop，**持续同步更新**。
+> 基于国产 [MiniMax M3](https://www.minimax.io/models/text/m3)，同时支持 Claude / GPT / DeepSeek / 自建模型。
+> **macOS / Windows 双端桌面版** · **Tauri 2 + Rust** · **MIT 许可证**
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 [![Tauri](https://img.shields.io/badge/Tauri-2-blue)](https://tauri.app/)
 [![Rust](https://img.shields.io/badge/Rust-1.85%2B-orange)](https://www.rust-lang.org/)
 [![Platform](https://img.shields.io/badge/Platform-macOS%20%7C%20Windows-lightgrey)](#-下载)
 [![Status](https://img.shields.io/badge/Status-Planning-yellow)](#-路线图)
+[![Price](https://img.shields.io/badge/Price-8×%20Cheaper%20than%20Opus-brightgreen)](#-为什么选-agentshell)
 
 ---
 
-## ✨ 这是什么
+## 🎯 为什么选 AgentShell？
 
-AgentShell 是一个**轻量级桌面 Agent**，让 AI 模型（M3 / Claude / GPT / DeepSeek）直接在你的电脑上干活：
+### 💰 最大的特点：便宜
 
-- 🪟 **极简** — 三栏布局，对标 Codex CLI / Cursor，开箱即用
-- 🤖 **多模型** — 默认 MiniMax M3（**$0.60 / M tokens，比 Opus 4.8 便宜 8×**），可切 Claude / GPT / DeepSeek
-- 🖥️ **Computer Use** — 浏览器层（Playwright）+ 桌面层（macOS/Windows 原生 CUA）
-- 🖼️ **多模态生成** — 集成 MiniMax 图像/视频生成 API（独立平台能力）
-- 🛠️ **完整工具集** — 60+ tools（文件 / Bash / 浏览器 / 桌面 / 网络 / 截图）
-- 💬 **远程触发** — 飞书 / 企微 / Slack / Mobile Web（5.29 Pocket）
-- 🔌 **插件市场** — 6 种 plugin（tool / skill / hook / provider / theme / workflow）
-- 🔐 **本地优先** — Memory / Session / Profile 全部本地加密，**不上云**
+- **Token 价格碾压式优势**：
+  - MiniMax M3：**$0.60 / M tokens**（输入）/ $2.40（输出）
+  - 对比 Claude Opus 4.8：~~$15 / M~~ → **便宜 8 倍**
+  - 对比 GPT-5.5：~~$5 / M~~ → **便宜 5 倍**
+  - 对比 DeepSeek V4-Pro：~~$0.27 / M~~ → 略贵，但速度快 4×
+- **订阅套餐更便宜**：MiniMax Token Plan $20/月起（**1.7B tokens / 月**，含 5h 滑动窗口）
+- **接入本地国产大模型**：DeepSeek / 通义千问 / 文心一言 / 智谱 GLM / 任何 OpenAI 兼容协议
+- **License 激活码**（可选）：月卡 ¥9.9 / 季卡 ¥29.9 / 年卡 ¥99 / 终身 ¥299 — 一次性购买，不退款、不自动续费、终身免费升级
+
+### 🤖 全 Agent 智能体：不是聊天，是干活
+
+AgentShell 不是聊天框，是**真正能干活的全能 Agent**：
+
+- **💻 写代码** — 跨文件重构 / 自动 PR / Code Review / TDD / 单元测试生成
+- **📝 做文案** — 营销文案 / 周报月报 / 公众号文章 / 多语言翻译 / 学术写作
+- **🎨 做图** — 海报 / 头像 / 配图 / 商品图 / 概念设计（集成 MiniMax 图像生成 API）
+- **🎬 做视频** — 短视频 / 宣传片 / **专业影视级** / 数字人 / 动画（集成 MiniMax 视频生成 API）
+- **🌐 操作电脑** — 浏览器自动化 / 桌面应用控制 / 跨软件工作流
+- **📊 数据分析** — Excel / CSV / 数据库查询 / 可视化
+
+### 🖥️ Codex 全部功能，我们都有
+
+| Codex 功能 | AgentShell 支持 | 状态 |
+|-----------|----------------|------|
+| ✅ Computer Use 浏览器（Playwright） | ✅ | v0.1 计划 |
+| ✅ Computer Use 桌面 CUA（macOS/Win） | ✅ | v0.4 计划 |
+| ✅ 多模态（图像理解 / OCR / 语音） | ✅ | v0.1 计划 |
+| ✅ 60+ 工具集（文件/Bash/浏览器/桌面/网络/截图） | ✅ | v0.1 计划 |
+| ✅ 远程触发（Pocket / 飞书 / 企微 / Slack） | ✅ | v0.4 计划 |
+| ✅ 插件市场（6 种 plugin） | ✅ | v0.4 计划 |
+| ✅ 自动化（`.toml` 定时任务） | ✅ | v0.3 计划 |
+| ✅ 本地优先（不上云） | ✅ | v0.1 计划 |
+| ✅ 主题 / Unified Mentions / Tab 队列 | ✅ | v0.1 计划 |
+| ✅ Vim / IDE context / diff & review | ✅ | v0.2 计划 |
+| ✅ Skills / Personality / Fork+Side | ✅ | v0.2 计划 |
+| ✅ Automations 调度器 + Voice Input | ✅ | v0.3 计划 |
+| ✅ Floating pop-out / Appshots | ✅ | v0.3 计划 |
+| ✅ Mobile Remote / Profile lifetime | ✅ | v0.4 计划 |
+
+### 🔐 开源 / 本地优先
+
+- **MIT 许可证** — 随便用、商用、改、闭源都行
+- **Memory / Session / Profile 全部本地加密**（macOS Keychain / Windows Credential Manager）
+- **不上传任何数据到云端**（除非你主动启用云功能）
+- **API key 加密本地存储**（v0.2 默认开启）
+- **可自建 M3 Open-weights 私有化部署**（v0.5 To B 路线）
 
 ## 📸 截图
 
@@ -34,16 +74,16 @@ AgentShell 是一个**轻量级桌面 Agent**，让 AI 模型（M3 / Claude / GP
 
 | 系统 | 下载 | 状态 |
 |------|------|------|
-| macOS (Apple Silicon) | [Releases](https://github.com/ahs/agentshell/releases) | v0.1.0-alpha 计划中 |
-| macOS (Intel) | [Releases](https://github.com/ahs/agentshell/releases) | v0.1.0-alpha 计划中 |
-| Windows (x64) | [Releases](https://github.com/ahs/agentshell/releases) | v0.1.0-alpha 计划中 |
-| Windows (ARM64) | [Releases](https://github.com/ahs/agentshell/releases) | v0.1.0-alpha 计划中 |
+| macOS (Apple Silicon) | [Releases](https://github.com/opc007/m3-agentshell/releases) | v0.1.0-alpha 计划中 |
+| macOS (Intel) | [Releases](https://github.com/opc007/m3-agentshell/releases) | v0.1.0-alpha 计划中 |
+| Windows (x64) | [Releases](https://github.com/opc007/m3-agentshell/releases) | v0.1.0-alpha 计划中 |
+| Windows (ARM64) | [Releases](https://github.com/opc007/m3-agentshell/releases) | v0.1.0-alpha 计划中 |
 
 ### 从源码编译
 
 ```bash
 # 前置：Rust 1.85+, Node.js 20+, pnpm 9+
-git clone https://github.com/ahs/agentshell.git
+git clone https://github.com/opc007/m3-agentshell.git
 cd agentshell
 pnpm install
 pnpm tauri build
@@ -94,7 +134,7 @@ export MINIMAX_API_KEY=sk-...
 
 我们**欢迎所有形式的贡献**！详情见 [CONTRIBUTING.md](CONTRIBUTING.md)：
 
-- 🐛 **Bug 报告**：[GitHub Issues](https://github.com/ahs/agentshell/issues/new?template=bug.md)
+- 🐛 **Bug 报告**：[GitHub Issues](https://github.com/opc007/m3-agentshell/issues/new?template=bug.md)
 - 💡 **功能请求**：[GitHub Issues](https://github.com/ahs/agent-agent/issues/new?template=feature.md)
 - 🔧 **Pull Request**：参考 [CONTRIBUTING.md](CONTRIBUTING.md) 的 PR 流程
 - 🌐 **翻译**：[docs/i18n](docs/i18n) （v0.4+ 启动）
@@ -104,15 +144,15 @@ export MINIMAX_API_KEY=sk-...
 
 ## 💬 社区
 
-- **GitHub Discussions**：[讨论区](https://github.com/ahs/agentshell/discussions)（问答 / 分享 / 提案）
-- **GitHub Issues**：[bug / feature](https://github.com/ahs/agentshell/issues)
+- **GitHub Discussions**：[讨论区](https://github.com/opc007/m3-agentshell/discussions)（问答 / 分享 / 提案）
+- **GitHub Issues**：[bug / feature](https://github.com/opc007/m3-agentshell/issues)
 - **微信公众号**：搜索 `AgentShell 社区`（即将开通）
 
 ## 📊 项目状态
 
 - 🚧 **v0.1.0-alpha**：规划中（设计已完成 100%，代码 0%）
 - 📋 **7700+ 行设计文档**：[docs/开发文档.md](docs/开发文档.md)
-- ⭐ **Star History**：[![](https://img.shields.io/github/stars/ahs/agentshell?style=social)](https://github.com/ahs/agentshell/stargazers)
+- ⭐ **Star History**：[![](https://img.shields.io/github/stars/opc007/m3-agentshell?style=social)](https://github.com/opc007/m3-agentshell/stargazers)
 
 ## 📜 许可证
 
@@ -148,7 +188,7 @@ SOFTWARE.
 - [MiniMax M3](https://www.minimax.io/models/text/m3) — 默认模型，MSA 架构 + 1M context + 多模态
 - [Anthropic Claude Code](https://github.com/anthropics/claude-code) — 权限模型与 Skill 系统
 - [Tauri](https://tauri.app/) — 跨平台桌面壳
-- 所有 [Contributors](https://github.com/ahs/agentshell/graphs/contributors) — 谢谢你们的 PR！
+- 所有 [Contributors](https://github.com/opc007/m3-agentshell/graphs/contributors) — 谢谢你们的 PR！
 
 ---
 
