@@ -22,9 +22,11 @@ use provider::response::AssistantMessage;
 use provider::stream::{ChatStream, StreamChunk};
 use provider::Model;
 use serde::Serialize;
+use std::collections::HashMap;
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
 use tauri::{AppHandle, Emitter};
-use tokio::sync::Mutex;
+use tokio::sync::{oneshot, Mutex};
 
 /// 单次 tool call（前端展示 + 批准）
 #[derive(Serialize, Clone, Debug)]
@@ -78,12 +80,25 @@ impl From<Usage> for UsageDto {
 
 /// Agent runner
 pub struct AgentRunner {
-    app: AppHandle,
-    session_id: String,
-    provider: Arc<dyn Model>,
-    tool_registry: Arc<Mutex<ToolRegistry>>,
-    history: Vec<ChatMessage>,
-    max_steps: usize,
+    pub app: AppHandle,
+    pub session_id: String,
+    pub provider: Arc<dyn Model>,
+    pub tool_registry: Arc<Mutex<ToolRegistry>>,
+    pub history: Vec<ChatMessage>,
+    pub max_steps: usize,
+    /// v0.4：取消标志
+    pub cancelled: Arc<AtomicBool>,
+    /// v0.4：每 session 一个 approval receiver，等待前端响应
+    pub approval_rx: Arc<Mutex<Option<oneshot::Sender<ApprovalResponse>>>>,
+    /// v0.4：是否启用 approval（false = auto-approve，true = 必须前端同意）
+    pub require_approval: bool,
+}
+
+/// v0.4：approval 响应
+#[derive(Debug, Clone)]
+pub enum ApprovalResponse {
+    Approve,
+    Deny(String),
 }
 
 impl AgentRunner {
@@ -100,6 +115,9 @@ impl AgentRunner {
             tool_registry,
             history: Vec::new(),
             max_steps: 10,
+            cancelled: Arc::new(AtomicBool::new(false)),
+            approval_rx: Arc::new(Mutex::new(None)),
+            require_approval: true,
         }
     }
 
@@ -113,6 +131,15 @@ impl AgentRunner {
         self
     }
 
+    pub fn with_require_approval(mut self, require: bool) -> Self {
+        self.require_approval = require;
+        self
+    }
+
+    pub fn cancel_handle(&self) -> Arc<AtomicBool> {
+        self.cancelled.clone()
+    }
+
     /// 主循环
     pub async fn run(&mut self, user_message: String) {
         // 追加 user message
@@ -123,6 +150,11 @@ impl AgentRunner {
         let mut step = 0;
 
         loop {
+            // v0.4：检查取消
+            if self.cancelled.load(Ordering::Relaxed) {
+                self.emit_error("用户取消".into());
+                return;
+            }
             step += 1;
             if step > self.max_steps {
                 self.emit_error("超过最大步数（10），强制结束".into());
@@ -302,6 +334,67 @@ impl AgentRunner {
                     Some(tc_evt.clone()),
                     None,
                 );
+
+                // v0.4：检查取消
+                if self.cancelled.load(Ordering::Relaxed) {
+                    self.emit_error("用户取消".into());
+                    return;
+                }
+
+                // v0.4：请求 approval
+                let approved = if self.require_approval {
+                    let (tx, rx) = oneshot::channel::<ApprovalResponse>();
+                    {
+                        let mut slot = self.approval_rx.lock().await;
+                        *slot = Some(tx);
+                    }
+                    // emit approval_request
+                    self.emit_event(
+                        "approval_request",
+                        String::new(),
+                        None,
+                        false,
+                        Some(tc_evt.clone()),
+                        None,
+                    );
+                    // 等响应（带超时 5 分钟）
+                    match tokio::time::timeout(std::time::Duration::from_secs(300), rx).await {
+                        Ok(Ok(ApprovalResponse::Approve)) => true,
+                        Ok(Ok(ApprovalResponse::Deny(reason))) => {
+                            self.emit_event(
+                                "tool_result",
+                                String::new(),
+                                None,
+                                false,
+                                None,
+                                Some(ToolResultEvent {
+                                    call_id: id.clone(),
+                                    success: false,
+                                    output: format!("[被用户拒绝: {}]", reason),
+                                    error: Some("denied".into()),
+                                    session_id: self.session_id.clone(),
+                                }),
+                            );
+                            // 仍要喂回 history，让模型知道被拒
+                            self.history.push(ChatMessage::tool(
+                                id.clone(),
+                                format!("[Denied by user] {}", reason),
+                            ));
+                            continue;
+                        }
+                        Ok(Err(_)) => false, // channel closed
+                        Err(_) => {
+                            // timeout
+                            self.emit_error("approval 超时（5 分钟）".into());
+                            return;
+                        }
+                    }
+                } else {
+                    true
+                };
+                if !approved {
+                    continue;
+                }
 
                 let (success, output, error) = {
                     let mut reg = self.tool_registry.lock().await;

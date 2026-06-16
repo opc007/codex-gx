@@ -15,6 +15,7 @@ export function Composer({ sessionId }: Props) {
   const [text, setText] = useState("");
   const [busy, setBusy] = useState(false);
   const [model, setModel] = useState("MiniMax-M3");
+  const [requireApproval, setRequireApproval] = useState(true);
   const [providers, setProviders] = useState<ProviderInfo[]>([]);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
 
@@ -63,34 +64,69 @@ export function Composer({ sessionId }: Props) {
       const helpMsg: PersistedMessage = {
         id: crypto.randomUUID(),
         role: "assistant",
-        text: `📖 AgentShell v0.3 命令帮助：
+        text: `📖 AgentShell v0.4 命令帮助：
 
 通用：
-/help    - 显示此帮助
-/status  - 查看会话状态
-/clear   - 清空当前会话
-/usage   - Token 用量 + 费用估算
+/help      - 显示此帮助
+/status    - 查看会话状态
+/clear     - 清空当前会话
+/usage     - Token 用量 + 费用估算
 
 主题 & 界面：
 /theme <light|dark|system> - 切主题
 
 Git & IDE：
-/ide     - 获取当前 IDE context（VSCode/Cursor）
-/diff    - Git diff vs HEAD
-/review  - AI 评审当前 diff（消耗 token）
+/ide       - 获取当前 IDE context（VSCode/Cursor）
+/diff      - Git diff vs HEAD
+/review    - AI 评审当前 diff（消耗 token）
 
-🛠️ v0.3 工具调用：
+🛠️ v0.4 工具调用：
 M3 / Claude / GPT 会自动调用：
 - bash（执行命令）
 - read_file / write_file / edit_file
 - list_dir
 - web_search（需要 BRAVE_API_KEY）
+- browser_navigate / browser_screenshot / browser_click / browser_type / browser_get_text（Computer Use，需要 Node + playwright）
+
+🔐 v0.4 批准模式：
+/approval on  - 启用手动批准（默认）
+/approval off - 自动批准所有工具调用
+/approval     - 查看当前模式
 
 💡 模型切换：Top bar 下拉
 💡 所有会话和消息自动保存到本地`,
         createdAt: Date.now(),
       };
       appendMessage(sessionId, helpMsg);
+      setText("");
+      return;
+    }
+    if (trimmed === "/approval" || trimmed.startsWith("/approval ")) {
+      const arg = trimmed.slice(10).trim();
+      if (arg === "on") {
+        setRequireApproval(true);
+        appendMessage(sessionId, {
+          id: crypto.randomUUID(),
+          role: "assistant",
+          text: "🔐 已开启手动批准模式。每个 tool call 会弹模态框让你确认。",
+          createdAt: Date.now(),
+        });
+      } else if (arg === "off") {
+        setRequireApproval(false);
+        appendMessage(sessionId, {
+          id: crypto.randomUUID(),
+          role: "assistant",
+          text: "⚡ 已关闭手动批准模式。所有 tool call 自动执行（适合信任模型时）。",
+          createdAt: Date.now(),
+        });
+      } else {
+        appendMessage(sessionId, {
+          id: crypto.randomUUID(),
+          role: "assistant",
+          text: `🔐 当前批准模式：**${requireApproval ? "手动（on）" : "自动（off）"}**\n\n切换：/approval on | /approval off`,
+          createdAt: Date.now(),
+        });
+      }
       setText("");
       return;
     }
@@ -241,6 +277,7 @@ ${diff.diff.slice(0, 5000)}${diff.truncated ? "\n... [truncated, view full in gi
           sessionId,
           userMessage: reviewPrompt,
           model,
+          requireApproval,
         });
         for await (const evt of stream) {
           if (evt.kind === "content") acc += evt.delta;
@@ -307,6 +344,7 @@ ${diff.diff.slice(0, 5000)}${diff.truncated ? "\n... [truncated, view full in gi
         sessionId,
         userMessage: trimmed,
         model,
+        requireApproval,
       });
 
       for await (const evt of stream) {
@@ -480,13 +518,33 @@ ${diff.diff.slice(0, 5000)}${diff.truncated ? "\n... [truncated, view full in gi
         <span className="composer-hint">
           {busy ? "正在生成（可能含工具调用）..." : `${text.length} 字符`}
         </span>
-        <button
-          className="composer-send"
-          disabled={!sessionId || busy || !text.trim()}
-          onClick={onSend}
-        >
-          发送 ⏎
-        </button>
+        <span className={`composer-approval ${requireApproval ? "approval-on" : "approval-off"}`}
+              title="工具调用批准模式"
+              onClick={() => setRequireApproval(!requireApproval)}>
+          {requireApproval ? "🔐 批准" : "⚡ 自动"}
+        </span>
+        {busy ? (
+          <button
+            className="composer-cancel"
+            onClick={async () => {
+              try {
+                await invoke("cancel_chat", { sessionId });
+              } catch (e) {
+                console.warn("cancel failed:", e);
+              }
+            }}
+          >
+            ⏹ 停止
+          </button>
+        ) : (
+          <button
+            className="composer-send"
+            disabled={!sessionId || !text.trim()}
+            onClick={onSend}
+          >
+            发送 ⏎
+          </button>
+        )}
       </div>
     </div>
   );

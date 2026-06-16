@@ -585,3 +585,114 @@ kbd {
   margin: 4px 0 0;
 }
 .tool-error-msg pre { color: var(--error); }
+
+/* ==========================================================
+   v0.4 Approval Dialog
+   ========================================================== */
+.approval-dialog {
+  width: 600px;
+  border-color: var(--accent);
+}
+.approval-countdown {
+  background: var(--accent);
+  color: white;
+  padding: 2px 10px;
+  border-radius: 999px;
+  font-size: 12px;
+  font-weight: 600;
+}
+.approval-risk {
+  padding: 10px 14px;
+  border-radius: 6px;
+  margin-bottom: 16px;
+  border: 1px solid var(--border);
+}
+.approval-risk strong { display: block; margin-bottom: 4px; }
+.approval-risk p { margin: 0; font-size: 13px; color: var(--muted); }
+.approval-safe { background: rgba(46, 160, 67, 0.08); }
+.approval-safe strong { color: var(--success); }
+.approval-warning { background: rgba(255, 191, 0, 0.08); border-color: #fbbf24; }
+.approval-warning strong { color: #d97706; }
+.approval-danger { background: rgba(207, 34, 46, 0.08); border-color: var(--error); }
+.approval-danger strong { color: var(--error); }
+
+.approval-tool, .approval-args {
+  margin-bottom: 14px;
+}
+.approval-tool h3, .approval-args h3, .approval-deny-input h3 {
+  font-size: 13px;
+  margin: 0 0 6px;
+  color: var(--muted);
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+.approval-tool-name {
+  background: var(--bg-2);
+  padding: 6px 12px;
+  border-radius: 6px;
+  font-size: 14px;
+  font-weight: 600;
+}
+.approval-args pre {
+  background: var(--bg-2);
+  padding: 10px 14px;
+  border-radius: 6px;
+  font-size: 12px;
+  overflow-x: auto;
+  white-space: pre-wrap;
+  max-height: 200px;
+  margin: 0;
+}
+.approval-deny-input input {
+  width: 100%;
+  background: var(--bg-2);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 8px 12px;
+  font-size: 13px;
+  color: var(--fg);
+}
+.approval-actions {
+  display: flex;
+  gap: 8px;
+  justify-content: flex-end;
+  margin-top: 16px;
+}
+.approval-hint {
+  margin-top: 12px;
+  font-size: 11px;
+  text-align: center;
+}
+.btn-secondary {
+  background: transparent;
+  border: 1px solid var(--border);
+  color: var(--fg);
+}
+.btn-secondary:hover { background: var(--bg-2); }
+
+/* Footer approval toggle */
+.composer-approval {
+  font-size: 11px;
+  padding: 2px 8px;
+  border-radius: 999px;
+  cursor: pointer;
+  user-select: none;
+  margin-left: 6px;
+}
+.composer-approval.approval-on {
+  background: rgba(255, 191, 0, 0.15);
+  color: #d97706;
+  border: 1px solid #fbbf24;
+}
+.composer-approval.approval-off {
+  background: rgba(46, 160, 67, 0.15);
+  color: var(--success);
+  border: 1px solid var(--success);
+}
+.composer-cancel {
+  background: var(--error);
+  color: white;
+  border: 1px solid var(--error);
+}
+.composer-cancel:hover { background: #c01a28; }

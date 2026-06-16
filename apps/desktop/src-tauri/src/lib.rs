@@ -10,6 +10,7 @@ mod tools;
 
 use agent_core::tool::ToolRegistry;
 use serde::{Deserialize, Serialize};
+use std::collections::HashMap;
 use std::path::PathBuf;
 use std::sync::Arc;
 use tauri::{AppHandle, Emitter, Manager};
@@ -25,6 +26,17 @@ type ProviderCache = Arc<Mutex<Option<Box<dyn Model>>>>;
 /// 全局工具注册表 — 直接用 Arc<Mutex<>> 让 AgentRunner 也能 clone
 type SharedToolRegistry = Arc<Mutex<ToolRegistry>>;
 
+/// v0.4：每个 session 一个 cancel handle + approval sender
+#[derive(Default)]
+struct SessionControl {
+    inner: Mutex<HashMap<String, SessionHandle>>,
+}
+
+struct SessionHandle {
+    cancel: std::sync::Arc<std::sync::atomic::AtomicBool>,
+    approval_tx: std::sync::Arc<tokio::sync::Mutex<Option<tokio::sync::oneshot::Sender<agent::ApprovalResponse>>>>,
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
@@ -35,14 +47,16 @@ pub fn run() {
         .plugin(tauri_plugin_os::init())
         .manage(ProviderCache::default())
         .manage(SharedToolRegistry::default())
+        .manage(SessionControl::default())
         .invoke_handler(tauri::generate_handler![
             ping,
             chat,
             agent_run,
+            cancel_chat,
+            respond_approval,
             list_providers,
             list_tools,
             execute_tool,
-            cancel_chat,
             activate_license,
             get_license_status,
             deactivate_license,
@@ -84,7 +98,7 @@ async fn chat(req: ChatRequestPayload) -> Result<ChatResponsePayload, String> {
     })
 }
 
-/// v0.3 Agent 运行入口 — 含 tool_calls 循环
+/// v0.4 Agent 运行入口 — 含 tool_calls 循环 + cancel + approval
 #[tauri::command]
 async fn agent_run(
     app: AppHandle,
@@ -120,6 +134,7 @@ async fn agent_run(
 
     let session_id = req.session_id.clone();
     let user_msg = req.message.clone();
+    let require_approval = req.require_approval;
     let app_clone = app.clone();
 
     tokio::spawn(async move {
@@ -127,16 +142,82 @@ async fn agent_run(
         let reg_arc: Arc<Mutex<ToolRegistry>> = Arc::clone(&reg_state);
         let mut runner = agent::AgentRunner::new(
             app_clone.clone(),
-            session_id,
+            session_id.clone(),
             provider_arc,
             reg_arc,
         )
         .with_history(history)
-        .with_max_steps(10);
+        .with_max_steps(10)
+        .with_require_approval(require_approval);
+
+        // v0.4：注册 cancel handle + approval sender 到 SessionControl
+        let cancel = runner.cancel_handle();
+        let approval_tx_slot = runner.approval_rx.clone();
+        {
+            let sc = app_clone.state::<SessionControl>();
+            let mut map = sc.inner.lock().await;
+            map.insert(
+                session_id.clone(),
+                SessionHandle {
+                    cancel: cancel.clone(),
+                    approval_tx: approval_tx_slot.clone(),
+                },
+            );
+        }
+
         runner.run(user_msg).await;
+
+        // 跑完清理
+        let sc = app_clone.state::<SessionControl>();
+        let mut map = sc.inner.lock().await;
+        map.remove(&session_id);
     });
 
     Ok(req.session_id)
+}
+
+/// v0.4：取消正在运行的 agent
+#[tauri::command]
+async fn cancel_chat(session_id: String, app: AppHandle) -> Result<(), String> {
+    let sc = app.state::<SessionControl>();
+    let map = sc.inner.lock().await;
+    if let Some(h) = map.get(&session_id) {
+        h.cancel.store(true, std::sync::atomic::Ordering::Relaxed);
+        // 唤醒 approval（让主循环检测取消）
+        let mut tx_slot = h.approval_tx.lock().await;
+        if let Some(tx) = tx_slot.take() {
+            let _ = tx.send(agent::ApprovalResponse::Deny("cancelled".into()));
+        }
+        Ok(())
+    } else {
+        Err(format!("session {} 不在运行中", session_id))
+    }
+}
+
+/// v0.4：响应 approval 请求
+#[tauri::command]
+async fn respond_approval(
+    session_id: String,
+    approve: bool,
+    reason: Option<String>,
+    app: AppHandle,
+) -> Result<(), String> {
+    let sc = app.state::<SessionControl>();
+    let map = sc.inner.lock().await;
+    if let Some(h) = map.get(&session_id) {
+        let mut tx_slot = h.approval_tx.lock().await;
+        if let Some(tx) = tx_slot.take() {
+            let resp = if approve {
+                agent::ApprovalResponse::Approve
+            } else {
+                agent::ApprovalResponse::Deny(reason.unwrap_or_else(|| "user denied".into()))
+            };
+            tx.send(resp).map_err(|_| "approval channel closed".to_string())?;
+        }
+        Ok(())
+    } else {
+        Err(format!("session {} 不在运行中", session_id))
+    }
 }
 
 #[derive(Deserialize)]
@@ -147,7 +228,12 @@ struct AgentRunPayload {
     session_id: String,
     #[serde(default)]
     messages: Vec<AgentHistoryMessage>,
+    /// v0.4：是否需要用户批准 tool call
+    #[serde(default = "default_true")]
+    require_approval: bool,
 }
+
+fn default_true() -> bool { true }
 
 #[derive(Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -158,12 +244,7 @@ struct AgentHistoryMessage {
     tool_call_id: Option<String>,
 }
 
-/// 取消进行中的聊天（通过 app data 标记 session_id 为 cancelled）
-/// v0.2 简化：前端忽略后续 chunk 即可
-#[tauri::command]
-async fn cancel_chat(_session_id: String) -> Result<(), String> {
-    Ok(())
-}
+/// 取消进行中的聊天（v0.2 占位，已被 v0.4 替换）
 
 /// 列出已注册工具
 #[tauri::command]

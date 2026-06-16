@@ -57,6 +57,8 @@ export type SendChatParams = {
   model: string;
   /** 历史消息（不含 tool_calls 的简化版） */
   history?: Array<{ role: string; content: string; toolCallId?: string }>;
+  /** v0.4：是否需要用户批准 tool call */
+  requireApproval?: boolean;
 };
 
 /**
@@ -106,6 +108,7 @@ export async function sendChatStream(
       message: params.userMessage,
       sessionId: params.sessionId,
       messages: params.history || [],
+      requireApproval: params.requireApproval ?? true,
     },
   });
 
