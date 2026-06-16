@@ -17,6 +17,8 @@ export function Composer({ sessionId }: Props) {
   const [busy, setBusy] = useState(false);
   const [model, setModel] = useState("MiniMax-M3");
   const [requireApproval, setRequireApproval] = useState(true);
+  // v0.6：plan mode
+  const [planMode, setPlanMode] = useState(false);
   const [providers, setProviders] = useState<ProviderInfo[]>([]);
   const [stages, setStages] = useState<Stage[]>([]);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
@@ -107,6 +109,11 @@ M3 / Claude / GPT 会自动调用：
 /approval off - 自动批准所有工具调用
 /approval     - 查看当前模式
 
+📋 v0.6 Plan Mode：
+/plan on  - 启用（下次发送先看模型给的执行计划）
+/plan off - 关闭
+/plan     - 查看当前模式
+
 💡 模型切换：Top bar 下拉
 💡 所有会话和消息自动保存到本地`,
         createdAt: Date.now(),
@@ -138,6 +145,36 @@ M3 / Claude / GPT 会自动调用：
           id: crypto.randomUUID(),
           role: "assistant",
           text: `🔐 当前批准模式：**${requireApproval ? "手动（on）" : "自动（off）"}**\n\n切换：/approval on | /approval off`,
+          createdAt: Date.now(),
+        });
+      }
+      setText("");
+      return;
+    }
+    // v0.6：plan mode 开关
+    if (trimmed === "/plan" || trimmed.startsWith("/plan ")) {
+      const arg = trimmed.slice(5).trim();
+      if (arg === "on") {
+        setPlanMode(true);
+        appendMessage(sessionId, {
+          id: crypto.randomUUID(),
+          role: "assistant",
+          text: "📋 已开启 plan mode。下次发送时会先让模型输出执行计划等你批准。",
+          createdAt: Date.now(),
+        });
+      } else if (arg === "off") {
+        setPlanMode(false);
+        appendMessage(sessionId, {
+          id: crypto.randomUUID(),
+          role: "assistant",
+          text: "📋 已关闭 plan mode。",
+          createdAt: Date.now(),
+        });
+      } else {
+        appendMessage(sessionId, {
+          id: crypto.randomUUID(),
+          role: "assistant",
+          text: `📋 当前 plan mode：**${planMode ? "on" : "off"}**\n\n切换：/plan on | /plan off`,
           createdAt: Date.now(),
         });
       }
@@ -292,6 +329,7 @@ ${diff.diff.slice(0, 5000)}${diff.truncated ? "\n... [truncated, view full in gi
           userMessage: reviewPrompt,
           model,
           requireApproval,
+          planMode,
         });
         for await (const evt of stream) {
           if (evt.kind === "content") acc += evt.delta;
@@ -359,6 +397,7 @@ ${diff.diff.slice(0, 5000)}${diff.truncated ? "\n... [truncated, view full in gi
         userMessage: trimmed,
         model,
         requireApproval,
+        planMode,
       });
 
       for await (const evt of stream) {
@@ -569,6 +608,12 @@ ${diff.diff.slice(0, 5000)}${diff.truncated ? "\n... [truncated, view full in gi
               title="工具调用批准模式"
               onClick={() => setRequireApproval(!requireApproval)}>
           {requireApproval ? "🔐 批准" : "⚡ 自动"}
+        </span>
+        {/* v0.6：plan mode 切换 */}
+        <span className={`composer-plan ${planMode ? "plan-on" : "plan-off"}`}
+              title="Plan Mode：先让模型输出执行计划再批准"
+              onClick={() => setPlanMode(!planMode)}>
+          {planMode ? "📋 Plan" : "📋"}
         </span>
         {busy ? (
           <button

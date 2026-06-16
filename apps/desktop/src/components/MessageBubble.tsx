@@ -1,10 +1,15 @@
+import { useState } from "react";
 import type { PersistedMessage } from "../stores/sessions";
+import ReplayDialog, { type ToolCallRecord } from "./ReplayDialog";
 
 type Props = {
   msg: PersistedMessage;
 };
 
 export function MessageBubble({ msg }: Props) {
+  // v0.6：tool call 回放
+  const [replayTarget, setReplayTarget] = useState<ToolCallRecord | null>(null);
+
   return (
     <div className={`bubble bubble-${msg.role}`}>
       <div className="bubble-meta">
@@ -40,6 +45,25 @@ export function MessageBubble({ msg }: Props) {
                     </span>
                     <code className="tool-name">{tc.name}</code>
                     {tc.success && <span className="tool-done">已完成</span>}
+                    {/* v0.6：回放按钮（仅已完成或失败的） */}
+                    {tc.success !== undefined && (
+                      <button
+                        className="tool-replay-btn"
+                        title="重新执行（可修改参数）"
+                        onClick={() =>
+                          setReplayTarget({
+                            id: tc.id,
+                            name: tc.name,
+                            arguments: tc.arguments,
+                            result: tc.result,
+                            success: tc.success,
+                            error: tc.error,
+                          })
+                        }
+                      >
+                        🔁 回放
+                      </button>
+                    )}
                   </div>
                   <div className="tool-args">
                     <strong>参数：</strong>
@@ -64,6 +88,7 @@ export function MessageBubble({ msg }: Props) {
         )}
         <div className="bubble-text">{msg.text}</div>
       </div>
+      <ReplayDialog record={replayTarget} onClose={() => setReplayTarget(null)} />
     </div>
   );
 }

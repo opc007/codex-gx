@@ -6,6 +6,7 @@
 
 mod agent;
 mod cu_tool;
+mod desktop_cua;
 mod mcp_tool;
 mod tools;
 
@@ -36,6 +37,8 @@ struct SessionControl {
 struct SessionHandle {
     cancel: std::sync::Arc<std::sync::atomic::AtomicBool>,
     approval_tx: std::sync::Arc<tokio::sync::Mutex<Option<tokio::sync::oneshot::Sender<agent::ApprovalResponse>>>>,
+    /// v0.6：plan approval sender
+    plan_tx: std::sync::Arc<tokio::sync::Mutex<Option<tokio::sync::oneshot::Sender<agent::PlanApproval>>>>,
 }
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
@@ -55,6 +58,7 @@ pub fn run() {
             agent_run,
             cancel_chat,
             respond_approval,
+            respond_plan, // v0.6
             list_providers,
             list_tools,
             execute_tool,
@@ -118,6 +122,7 @@ async fn agent_run(
         if reg.is_empty() {
             tools::register_all(&mut reg, cwd.clone(), cwd);
             cu_tool::register_computer_use(&mut reg);
+            desktop_cua::register_desktop_cua(&mut reg); // v0.6
             mcp_tool::register_mcp_tools(&mut reg).await;
         }
     }
@@ -139,6 +144,7 @@ async fn agent_run(
     let session_id = req.session_id.clone();
     let user_msg = req.message.clone();
     let require_approval = req.require_approval;
+    let plan_mode = req.plan_mode;
     let app_clone = app.clone();
 
     tokio::spawn(async move {
@@ -152,11 +158,13 @@ async fn agent_run(
         )
         .with_history(history)
         .with_max_steps(10)
-        .with_require_approval(require_approval);
+        .with_require_approval(require_approval)
+        .with_plan_mode(plan_mode);
 
         // v0.4：注册 cancel handle + approval sender 到 SessionControl
         let cancel = runner.cancel_handle();
         let approval_tx_slot = runner.approval_rx.clone();
+        let plan_tx_slot = runner.plan_approval_rx.clone();
         {
             let sc = app_clone.state::<SessionControl>();
             let mut map = sc.inner.lock().await;
@@ -165,6 +173,7 @@ async fn agent_run(
                 SessionHandle {
                     cancel: cancel.clone(),
                     approval_tx: approval_tx_slot.clone(),
+                    plan_tx: plan_tx_slot.clone(),
                 },
             );
         }
@@ -224,6 +233,34 @@ async fn respond_approval(
     }
 }
 
+/// v0.6：响应 plan approval 请求
+#[tauri::command]
+async fn respond_plan(
+    session_id: String,
+    action: String, // "approve" | "deny" | "edit"
+    reason: Option<String>, // for deny
+    edited_plan: Option<String>, // for edit
+    app: AppHandle,
+) -> Result<(), String> {
+    let sc = app.state::<SessionControl>();
+    let map = sc.inner.lock().await;
+    if let Some(h) = map.get(&session_id) {
+        let mut tx_slot = h.plan_tx.lock().await;
+        if let Some(tx) = tx_slot.take() {
+            let resp = match action.as_str() {
+                "approve" => agent::PlanApproval::Approve,
+                "deny" => agent::PlanApproval::Deny(reason.unwrap_or_else(|| "user denied".into())),
+                "edit" => agent::PlanApproval::Edit(edited_plan.unwrap_or_default()),
+                _ => return Err(format!("unknown plan action: {}", action)),
+            };
+            tx.send(resp).map_err(|_| "plan channel closed".to_string())?;
+        }
+        Ok(())
+    } else {
+        Err(format!("session {} 不在运行中", session_id))
+    }
+}
+
 #[derive(Deserialize)]
 #[serde(rename_all = "camelCase")]
 struct AgentRunPayload {
@@ -235,6 +272,9 @@ struct AgentRunPayload {
     /// v0.4：是否需要用户批准 tool call
     #[serde(default = "default_true")]
     require_approval: bool,
+    /// v0.6：plan mode —— 先输出 plan 等用户批准
+    #[serde(default)]
+    plan_mode: bool,
 }
 
 fn default_true() -> bool { true }

@@ -297,14 +297,18 @@ impl Tool for WebSearchTool {
         "web_search"
     }
     fn description(&self) -> &str {
-        "联网搜索（Brave Search API）。需要环境变量 BRAVE_API_KEY。返回前 N 条结果的标题 + 链接 + 摘要。"
+        "联网搜索（Brave Search API）。需要环境变量 BRAVE_API_KEY。支持按域名过滤、日期范围过滤。返回前 N 条结果的标题 + 链接 + 摘要。"
     }
     fn parameters_schema(&self) -> serde_json::Value {
         json!({
             "type": "object",
             "properties": {
                 "query": {"type": "string", "description": "搜索关键词"},
-                "count": {"type": "integer", "description": "返回条数，默认 5，最大 20"}
+                "count": {"type": "integer", "description": "返回条数，默认 5，最大 20"},
+                "site": {"type": "string", "description": "v0.6：限定到某个域名，如 'github.com' 或 '*.stackoverflow.com'"},
+                "site_filter": {"type": "string", "description": "v0.6：多域名白名单，逗号分隔，如 'github.com,stackoverflow.com'"},
+                "site_exclude": {"type": "string", "description": "v0.6：黑名单域名，逗号分隔"},
+                "freshness": {"type": "string", "description": "v0.6：时间范围过滤 - 'pd'(24h) | 'pw'(7d) | 'pm'(31d) | 'py'(365d) | 'YYYY-MM-DD..YYYY-MM-DD'"}
             },
             "required": ["query"]
         })
@@ -312,6 +316,10 @@ impl Tool for WebSearchTool {
     async fn execute(&self, input: ToolInput) -> agent_core::Result<ToolOutput> {
         let query = input["query"].as_str().unwrap_or("").to_string();
         let count = input["count"].as_u64().unwrap_or(5).min(20) as u32;
+        let site = input["site"].as_str().map(|s| s.to_string());
+        let site_filter = input["site_filter"].as_str().map(|s| s.to_string());
+        let site_exclude = input["site_exclude"].as_str().map(|s| s.to_string());
+        let freshness = input["freshness"].as_str().map(|s| s.to_string());
 
         if query.trim().is_empty() {
             return Ok(ToolOutput::err("query 不能为空".to_string()));
@@ -327,12 +335,25 @@ impl Tool for WebSearchTool {
             }
         };
 
-        // 2. 调 API
-        let url = format!(
+        // 2. 调 API（带 v0.6 过滤参数）
+        let mut url = format!(
             "https://api.search.brave.com/res/v1/web/search?q={}&count={}",
             urlencoding(&query),
             count
         );
+        if let Some(s) = &site {
+            url.push_str(&format!("&site_search={}", urlencoding(s)));
+        }
+        if let Some(s) = &site_filter {
+            url.push_str(&format!("&site_filter={}", urlencoding(s)));
+        }
+        if let Some(s) = &site_exclude {
+            // brave 没有 site_exclude，用 site_filter=null 也不行；先记在描述里
+            // 我们在 client-side 过滤
+        }
+        if let Some(f) = &freshness {
+            url.push_str(&format!("&freshness={}", urlencoding(f)));
+        }
         let client = reqwest::Client::builder()
             .timeout(std::time::Duration::from_secs(15))
             .build()
@@ -362,17 +383,63 @@ impl Tool for WebSearchTool {
             .map_err(|e| agent_core::Error::ToolExecution(format!("parse: {}", e)))?;
 
         // 3. 解析结果
-        let results = body
+        let mut results = body
             .pointer("/web/results")
             .and_then(|v| v.as_array())
             .cloned()
             .unwrap_or_default();
 
-        if results.is_empty() {
-            return Ok(ToolOutput::ok(format!("搜索 '{}' 无结果。", query)));
+        // v0.6：客户端 site_exclude 过滤
+        if let Some(exclude) = &site_exclude {
+            let excluded: Vec<String> = exclude
+                .split(',')
+                .map(|s| s.trim().to_lowercase())
+                .filter(|s| !s.is_empty())
+                .collect();
+            if !excluded.is_empty() {
+                results.retain(|r| {
+                    let url = r
+                        .get("url")
+                        .and_then(|v| v.as_str())
+                        .unwrap_or("")
+                        .to_lowercase();
+                    !excluded.iter().any(|e| url.contains(e))
+                });
+            }
         }
 
-        let mut text = format!("🔍 搜索结果：'{}' ({} 条)\n\n", query, results.len());
+        if results.is_empty() {
+            return Ok(ToolOutput::ok(format!(
+                "搜索 '{}' 无结果（应用了过滤条件）。",
+                query
+            )));
+        }
+
+        // 4. 描述过滤条件
+        let mut filter_desc = Vec::new();
+        if let Some(s) = &site {
+            filter_desc.push(format!("site={}", s));
+        }
+        if let Some(s) = &site_filter {
+            filter_desc.push(format!("sites={}", s));
+        }
+        if let Some(s) = &site_exclude {
+            filter_desc.push(format!("exclude={}", s));
+        }
+        if let Some(f) = &freshness {
+            filter_desc.push(format!("freshness={}", f));
+        }
+
+        let mut text = format!(
+            "🔍 搜索结果：'{}' ({} 条{})\n\n",
+            query,
+            results.len(),
+            if filter_desc.is_empty() {
+                String::new()
+            } else {
+                format!(" · 过滤: {}", filter_desc.join(", "))
+            }
+        );
         for (i, r) in results.iter().enumerate().take(count as usize) {
             let title = r.get("title").and_then(|v| v.as_str()).unwrap_or("(no title)");
             let url = r.get("url").and_then(|v| v.as_str()).unwrap_or("");

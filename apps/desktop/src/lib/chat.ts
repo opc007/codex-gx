@@ -32,6 +32,7 @@ export type AgentEvent = {
     | "assistant_turn"
     | "stage"
     | "approval_request"
+    | "plan"        // v0.6
     | "usage"
     | "done"
     | "error";
@@ -56,6 +57,10 @@ export type AgentEvent = {
     label: string;
     detail: string | null;
   } | null;
+  plan: {
+    plan: string;
+    planId: string;
+  } | null; // v0.6
 };
 
 export type SendChatParams = {
@@ -66,6 +71,8 @@ export type SendChatParams = {
   history?: Array<{ role: string; content: string; toolCallId?: string }>;
   /** v0.4：是否需要用户批准 tool call */
   requireApproval?: boolean;
+  /** v0.6：plan mode — 先输出 plan 等用户批准 */
+  planMode?: boolean;
 };
 
 /**
@@ -116,6 +123,7 @@ export async function sendChatStream(
       sessionId: params.sessionId,
       messages: params.history || [],
       requireApproval: params.requireApproval ?? true,
+      planMode: params.planMode ?? false, // v0.6
     },
   });
 

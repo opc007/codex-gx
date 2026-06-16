@@ -3,7 +3,7 @@
 //! 详细设计见 docs/开发文档.md §6 Agent Core
 //!
 //! ## 流程
-//! ```
+//! ```text
 //! user_message →
 //!   loop {
 //!     response = provider.chat_stream(req, tools)
@@ -13,7 +13,7 @@
 //!       done → execute each tool_call → emit "tool_result" → 喂回 history
 //!     if no tool_calls → break
 //!   }
-//! ```
+//! ```text
 
 use agent_core::tool::ToolRegistry;
 use provider::model::Usage;
@@ -58,7 +58,15 @@ pub struct StageEvent {
     pub detail: Option<String>,
 }
 
-/// 流式 chunk 事件
+/// v0.6：plan 完整内容（一次 emit）
+#[derive(Serialize, Clone, Debug)]
+#[serde(rename_all = "camelCase")]
+pub struct PlanEvent {
+    pub plan: String,
+    pub plan_id: String,
+}
+
+/// v0.6：流式 chunk 事件
 #[derive(Serialize, Clone, Debug)]
 #[serde(rename_all = "camelCase")]
 pub struct StreamEvent {
@@ -71,7 +79,11 @@ pub struct StreamEvent {
     pub tool_result: Option<ToolResultEvent>,
     /// v0.5：阶段信息
     pub stage: Option<StageEvent>,
+    /// v0.6：plan 内容
+    pub plan: Option<PlanEvent>,
 }
+
+/// 流式 chunk 事件（v0.6 — 加 plan 字段）
 
 #[derive(Serialize, Clone, Debug)]
 #[serde(rename_all = "camelCase")]
@@ -103,6 +115,18 @@ pub struct AgentRunner {
     pub approval_rx: Arc<Mutex<Option<oneshot::Sender<ApprovalResponse>>>>,
     /// v0.4：是否启用 approval（false = auto-approve，true = 必须前端同意）
     pub require_approval: bool,
+    /// v0.6：是否启用 plan mode（先输出 plan，批准后才执行）
+    pub plan_mode: bool,
+    /// v0.6：plan approval receiver（用户批准 plan）
+    pub plan_approval_rx: Arc<Mutex<Option<oneshot::Sender<PlanApproval>>>>,
+}
+
+/// v0.6：plan 审批响应
+#[derive(Debug, Clone)]
+pub enum PlanApproval {
+    Approve,
+    Deny(String),
+    Edit(String), // 编辑后批准
 }
 
 /// v0.4：approval 响应
@@ -129,6 +153,8 @@ impl AgentRunner {
             cancelled: Arc::new(AtomicBool::new(false)),
             approval_rx: Arc::new(Mutex::new(None)),
             require_approval: true,
+            plan_mode: false,
+            plan_approval_rx: Arc::new(Mutex::new(None)),
         }
     }
 
@@ -144,6 +170,11 @@ impl AgentRunner {
 
     pub fn with_require_approval(mut self, require: bool) -> Self {
         self.require_approval = require;
+        self
+    }
+
+    pub fn with_plan_mode(mut self, mode: bool) -> Self {
+        self.plan_mode = mode;
         self
     }
 
@@ -166,6 +197,21 @@ impl AgentRunner {
                 self.emit_error("用户取消".into());
                 return;
             }
+
+            // v0.6：plan mode — 第一轮不带 tools，只让模型输出 markdown plan
+            if self.plan_mode && step == 0 {
+                self.execute_plan_phase().await;
+                if self.cancelled.load(Ordering::Relaxed) {
+                    return;
+                }
+                // plan 已批准，关闭 plan_mode，进入正常执行
+                self.plan_mode = false;
+                // 把"执行 plan"作为 system hint 喂给模型
+                self.history.push(ChatMessage::system(
+                    "用户已批准计划。请按计划逐步执行，使用合适的工具。",
+                ));
+            }
+
             step += 1;
             if step > self.max_steps {
                 self.emit_error("超过最大步数（10），强制结束".into());
@@ -185,6 +231,7 @@ impl AgentRunner {
                     label: format!("Step {}/{} - 思考中...", step, self.max_steps),
                     detail: None,
                 }),
+                None,
             );
 
             // 构建请求（含 tools schema）
@@ -227,11 +274,11 @@ impl AgentRunner {
                 match chunk_res {
                     Ok(StreamChunk::Content(s)) => {
                         acc_content.push_str(&s);
-                        self.emit_event("content", s, None, false, None, None, None);
+                        self.emit_event("content", s, None, false, None, None, None, None);
                     }
                     Ok(StreamChunk::Reasoning(s)) => {
                         acc_thinking.push_str(&s);
-                        self.emit_event("thinking", s, None, false, None, None, None);
+                        self.emit_event("thinking", s, None, false, None, None, None, None);
                     }
                     Ok(StreamChunk::ToolCallDelta {
                         index,
@@ -257,7 +304,7 @@ impl AgentRunner {
                             "index": index,
                             "arguments_delta": arguments_delta,
                         });
-                        self.emit_event("tool_call_delta", payload.to_string(), None, false, None, None, None);
+                        self.emit_event("tool_call_delta", payload.to_string(), None, false, None, None, None, None);
                     }
 Ok(StreamChunk::Usage(u)) => {
                             total_input = u.input_tokens;
@@ -267,6 +314,7 @@ Ok(StreamChunk::Usage(u)) => {
                                 String::new(),
                                 Some(UsageDto::from(u)),
                                 false,
+                                None,
                                 None,
                                 None,
                                 None,
@@ -328,6 +376,7 @@ Ok(StreamChunk::Usage(u)) => {
                 None,
                 None,
                 None,
+                None,
             );
 
             // 没 tool_call 就结束
@@ -345,6 +394,7 @@ Ok(StreamChunk::Usage(u)) => {
                         label: "生成最终回答".into(),
                         detail: None,
                     }),
+                    None,
                 );
                 self.emit_event(
                     "done",
@@ -361,6 +411,7 @@ Ok(StreamChunk::Usage(u)) => {
                         label: "完成".into(),
                         detail: None,
                     }),
+                    None,
                 );
                 return;
             }
@@ -384,6 +435,7 @@ Ok(StreamChunk::Usage(u)) => {
                             .join(", "),
                     ),
                 }),
+                None,
             );
 
             // 执行每个 tool_call
@@ -400,6 +452,7 @@ Ok(StreamChunk::Usage(u)) => {
                     None,
                     false,
                     Some(tc_evt.clone()),
+                    None,
                     None,
                     None,
                 );
@@ -430,6 +483,7 @@ Ok(StreamChunk::Usage(u)) => {
                             label: "等待用户批准".into(),
                             detail: Some(name.clone()),
                         }),
+                        None,
                     );
                     // 等响应（带超时 5 分钟）
                     match tokio::time::timeout(std::time::Duration::from_secs(300), rx).await {
@@ -448,6 +502,7 @@ Ok(StreamChunk::Usage(u)) => {
                                     error: Some("denied".into()),
                                     session_id: self.session_id.clone(),
                                 }),
+                                None,
                                 None,
                             );
                             // 仍要喂回 history，让模型知道被拒
@@ -497,6 +552,7 @@ Ok(StreamChunk::Usage(u)) => {
                     None,
                     Some(tr_evt),
                     None,
+                    None,
                 );
 
                 // 把结果喂回 history
@@ -524,6 +580,7 @@ Ok(StreamChunk::Usage(u)) => {
         tool_call: Option<ToolCallEvent>,
         tool_result: Option<ToolResultEvent>,
         stage: Option<StageEvent>,
+        plan: Option<PlanEvent>,
     ) {
         let evt = StreamEvent {
             session_id: self.session_id.clone(),
@@ -534,11 +591,174 @@ Ok(StreamChunk::Usage(u)) => {
             tool_call,
             tool_result,
             stage,
+            plan,
         };
         let _ = self.app.emit("agent:event", evt);
     }
 
     fn emit_error(&self, msg: String) {
-        self.emit_event("error", msg, None, true, None, None, None);
+        self.emit_event("error", msg, None, true, None, None, None, None);
     }
+
+    /// v0.6：plan mode 第一轮 —— 不带 tools 让模型输出 markdown plan，
+    /// emit "plan" 事件给前端，等待 PlanApproval。
+    async fn execute_plan_phase(&mut self) {
+        // v0.5: plan stage
+        self.emit_event(
+            "stage",
+            String::new(),
+            None,
+            false,
+            None,
+            None,
+            Some(StageEvent {
+                stage: "plan".into(),
+                label: "制定计划中...".into(),
+                detail: None,
+            }),
+            None,
+        );
+
+        // 不带 tools，让模型只输出计划文本
+        let req = ChatRequest {
+            model: String::new(),
+            messages: self.history.clone(),
+            tools: Vec::new(), // 关键：不提供 tools
+            temperature: Some(0.4),
+            max_tokens: Some(800),
+            top_p: None,
+            reasoning_effort: None,
+            reasoning_split: None,
+            stop: Vec::new(),
+            stream: true,
+            user: None,
+        };
+
+        // 收集完整 plan 文本
+        let mut plan_text = String::new();
+        let stream = match self.provider.chat_stream(req).await {
+            Ok(s) => s,
+            Err(e) => {
+                self.emit_error(format!("plan 生成失败: {}", e));
+                return;
+            }
+        };
+        use futures::StreamExt;
+        let mut stream = Box::pin(stream);
+        let mut last_usage: Option<Usage> = None;
+        while let Some(chunk) = stream.next().await {
+            match chunk {
+                Ok(StreamChunk::Content(s)) => {
+                    plan_text.push_str(&s);
+                    // 同步把 plan 内容作为 content 推到前端，让用户实时看到
+                    self.emit_event(
+                        "content",
+                        s,
+                        None,
+                        false,
+                        None,
+                        None,
+                        None,
+                        None,
+                    );
+                }
+                Ok(StreamChunk::Reasoning(s)) => {
+                    self.emit_event(
+                        "thinking",
+                        s,
+                        None,
+                        false,
+                        None,
+                        None,
+                        None,
+                        None,
+                    );
+                }
+                Ok(StreamChunk::Usage(u)) => last_usage = Some(u),
+                Ok(StreamChunk::Done) => break,
+                Err(e) => {
+                    self.emit_error(format!("plan stream error: {}", e));
+                    return;
+                }
+                _ => {}
+            }
+        }
+        if let Some(u) = last_usage {
+            self.emit_event(
+                "usage",
+                String::new(),
+                Some(UsageDto::from(u)),
+                false,
+                None,
+                None,
+                None,
+                None,
+            );
+        }
+
+        if plan_text.trim().is_empty() {
+            self.emit_error("模型未生成任何 plan 文本".into());
+            return;
+        }
+
+        // 推一个 plan 事件给前端（让 PlanDialog 弹窗）
+        let plan_id = format!("plan_{}", uuid_v4());
+        self.emit_event(
+            "plan",
+            String::new(),
+            None,
+            false,
+            None,
+            None,
+            None,
+            Some(PlanEvent {
+                plan: plan_text.clone(),
+                plan_id: plan_id.clone(),
+            }),
+        );
+
+        // 等待前端 respond_plan 响应（带超时 10 分钟）
+        let (tx, rx) = oneshot::channel::<PlanApproval>();
+        {
+            let mut slot = self.plan_approval_rx.lock().await;
+            *slot = Some(tx);
+        }
+        let approval = match tokio::time::timeout(
+            std::time::Duration::from_secs(600),
+            rx,
+        )
+        .await
+        {
+            Ok(Ok(a)) => a,
+            Ok(Err(_)) => {
+                self.emit_error("plan 审批通道关闭".into());
+                return;
+            }
+            Err(_) => {
+                self.emit_error("plan 审批超时（10 分钟）".into());
+                return;
+            }
+        };
+
+        match approval {
+            PlanApproval::Approve => {
+                // 把 plan 喂回 history 作为 assistant 消息，让后续轮次知道这个计划
+                self.history.push(ChatMessage::assistant(plan_text));
+            }
+            PlanApproval::Edit(edited) => {
+                self.history.push(ChatMessage::assistant(edited));
+            }
+            PlanApproval::Deny(reason) => {
+                self.emit_error(format!("plan 被用户拒绝: {}", reason));
+                // 用 cancelled 标记中止
+                self.cancelled.store(true, Ordering::Relaxed);
+            }
+        }
+    }
+}
+
+fn uuid_v4() -> String {
+    use std::time::{SystemTime, UNIX_EPOCH};
+    let now = SystemTime::now().duration_since(UNIX_EPOCH).unwrap_or_default();
+    format!("{:x}_{:x}", now.as_nanos(), std::process::id())
 }
