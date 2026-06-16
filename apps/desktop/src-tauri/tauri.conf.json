@@ -40,7 +40,7 @@
     "longDescription": "AgentShell 是一个轻量级桌面 Agent，让 AI 模型（M3 / Claude / GPT / DeepSeek）直接在你的电脑上干活。支持代码生成、文案撰写、图像视频生成、Computer Use、Tool Calling 等全功能。比 Codex 便宜 8x，默认使用国产 MiniMax M3 大模型。",
     "publisher": "AgentShell Contributors",
     "copyright": "© 2026 opc007",
-    "homepage": "https://github.com/opc007/m3-agentshell",
+    "homepage": "https://github.com/opc007/codex-gx",
     "createUpdaterArtifacts": false
   }
 }

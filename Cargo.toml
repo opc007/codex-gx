@@ -18,8 +18,8 @@ edition = "2021"
 rust-version = "1.85"
 authors = ["AgentShell Contributors"]
 license = "MIT"
-repository = "https://github.com/opc007/m3-agentshell"
-homepage = "https://github.com/opc007/m3-agentshell"
+repository = "https://github.com/opc007/codex-gx"
+homepage = "https://github.com/opc007/codex-gx"
 
 [workspace.dependencies]
 # 核心异步运行时
