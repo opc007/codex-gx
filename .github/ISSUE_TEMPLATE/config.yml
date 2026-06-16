@@ -1,0 +1,11 @@
+blank_issues_enabled: true
+contact_links:
+  - name: 💬 社区讨论
+    url: https://github.com/ahs/agentshell/discussions
+    about: 提问 / 分享 / 提案
+  - name: 🔒 安全漏洞
+    url: https://github.com/ahs/agentshell/security/advisories/new
+    about: 私下报告安全漏洞
+  - name: 📖 开发文档
+    url: https://github.com/ahs/agentshell/blob/main/docs/开发文档.md
+    about: 7700+ 行完整设计文档

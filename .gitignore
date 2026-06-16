@@ -1,0 +1,72 @@
+# OS
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+Desktop.ini
+
+# Editors
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+
+# Logs
+*.log
+logs/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
+# Env
+.env
+.env.*
+!.env.example
+
+# Build outputs
+node_modules/
+target/
+dist/
+build/
+out/
+*.local
+
+# Test coverage
+coverage/
+*.lcov
+.nyc_output
+
+# Tauri
+src-tauri/target/
+src-tauri/Cargo.lock.bak
+
+# User data (never commit local config)
+.agentshell/
+*.agentshell/
+
+# License / encrypted blobs
+*.license
+*.key
+*.pem
+
+# Temporary
+tmp/
+temp/
+.cache/
+.turbo/
+.next/
+.nuxt/
+.svelte-kit/
+.vite/
+
+# TypeScript
+*.tsbuildinfo
+
+# Generated
+CHANGELOG.md.tmp
+docs/.cache/

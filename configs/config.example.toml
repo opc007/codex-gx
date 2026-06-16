@@ -1,0 +1,49 @@
+# AgentShell 配置示例
+# 复制到 ~/.agentshell/config.toml 后修改
+
+model = "MiniMax-M3"
+model_provider = "minimax"
+model_reasoning_effort = "high"
+thinking = "adaptive"
+approval_mode = "on-request"
+
+[features]
+memories = false
+mcp = false
+worktree = false
+multimodal = true
+
+[model_providers.minimax]
+name = "MiniMax 国内"
+base_url = "https://api.minimaxi.com/v1"
+wire_api = "chat"
+env_key = "MINIMAX_API_KEY"
+default_model = "MiniMax-M3"
+supports_vision = true
+supports_video = true
+supports_tools = true
+thinking_default = "adaptive"
+max_context_tokens = 1000000
+
+[model_providers.deepseek]
+name = "DeepSeek 官方"
+base_url = "https://api.deepseek.com/v1"
+wire_api = "chat"
+env_key = "DEEPSEEK_API_KEY"
+default_model = "deepseek-v4-flash"
+supports_vision = false
+supports_tools = true
+thinking_default = "disabled"
+
+[model_providers.custom]
+name = "自定义 OpenAI 兼容"
+base_url = "https://your-gateway.com/v1"
+wire_api = "chat"
+env_key = "OPENAI_API_KEY"
+default_model = "your-model-id"
+supports_vision = true
+supports_tools = true
+
+[desktop]
+conversation_detail_mode = "STEPS_COMMANDS"
+follow_up_queue_mode = "queue"
