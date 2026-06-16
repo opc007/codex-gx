@@ -1,0 +1,98 @@
+[workspace]
+resolver = "2"
+members = [
+    "crates/agent-core",
+    "crates/provider",
+    "crates/patch",
+    "crates/context",
+    "crates/mcp",
+    "crates/sandbox",
+    "crates/computer-use",
+    "crates/license",
+    "apps/desktop/src-tauri",
+]
+
+[workspace.package]
+version = "0.1.0-alpha"
+edition = "2021"
+rust-version = "1.85"
+authors = ["AgentShell Contributors"]
+license = "MIT"
+repository = "https://github.com/opc007/m3-agentshell"
+homepage = "https://github.com/opc007/m3-agentshell"
+
+[workspace.dependencies]
+# 核心异步运行时
+tokio = { version = "1.42", features = ["full"] }
+futures = "0.3"
+async-trait = "0.1"
+
+# 序列化
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+serde_yaml = "0.9"
+toml = "0.8"
+
+# 错误处理
+thiserror = "1.0"
+anyhow = "1.0"
+
+# 日志
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter", "fmt"] }
+
+# HTTP 客户端
+reqwest = { version = "0.12", default-features = false, features = ["json", "rustls-tls", "stream", "multipart"] }
+
+# WebSocket（用于 M3 / OpenAI 兼容 stream）
+tokio-tungstenite = { version = "0.24", features = ["native-tls"] }
+
+# 时间
+chrono = { version = "0.4", features = ["serde"] }
+uuid = { version = "1.11", features = ["v4", "serde"] }
+
+# 路径 / 文件
+path-clean = "1.0"
+walkdir = "2.5"
+
+# 加密 / 编码
+base64 = "0.22"
+sha2 = "0.10"
+hmac = "0.12"
+
+# CLI
+clap = { version = "4.5", features = ["derive"] }
+
+# 配置
+config = { version = "0.14", default-features = false, features = ["toml"] }
+
+# 平台特定依赖（只在 sandbox crate 引入，不放 workspace）
+# macOS / Windows 平台 SDK
+
+# 内部 crate 互引
+agent-core = { path = "crates/agent-core" }
+provider = { path = "crates/provider" }
+patch = { path = "crates/patch" }
+context = { path = "crates/context" }
+mcp = { path = "crates/mcp" }
+sandbox = { path = "crates/sandbox" }
+computer-use = { path = "crates/computer-use" }
+
+[profile.dev]
+opt-level = 0
+debug = 1
+incremental = true
+
+[profile.release]
+opt-level = 3
+lto = "thin"
+codegen-units = 1
+strip = true
+
+# 自定义 profile：dist（最终发布）
+[profile.dist]
+inherits = "release"
+opt-level = 3
+lto = "fat"
+codegen-units = 1
+strip = true
