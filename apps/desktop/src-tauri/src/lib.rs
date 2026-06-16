@@ -6,6 +6,7 @@
 
 mod agent;
 mod cu_tool;
+mod mcp_tool;
 mod tools;
 
 use agent_core::tool::ToolRegistry;
@@ -63,6 +64,8 @@ pub fn run() {
             get_ide_context,
             get_git_diff,
             list_git_branches,
+            list_mcp_servers,
+            reload_mcp,
         ])
         .setup(|_app| Ok(()))
         .run(tauri::generate_context!())
@@ -115,6 +118,7 @@ async fn agent_run(
         if reg.is_empty() {
             tools::register_all(&mut reg, cwd.clone(), cwd);
             cu_tool::register_computer_use(&mut reg);
+            mcp_tool::register_mcp_tools(&mut reg).await;
         }
     }
 
@@ -373,8 +377,48 @@ struct GitDiffDto {
 }
 
 // ============================================================
-// License
+// MCP
 // ============================================================
+
+/// 列出已连接的 MCP server
+#[tauri::command]
+async fn list_mcp_servers() -> Vec<McpServerDto> {
+    let mgr = mcp_tool::mcp_manager().await;
+    let mgr_lock = mgr.lock().await;
+    let names = mgr_lock.server_names();
+    let mut out = Vec::new();
+    for n in names {
+        let tool_count = if let Some(c) = mgr_lock.get(&n) {
+            c.lock().await.list_tools().await.map(|v| v.len()).unwrap_or(0)
+        } else {
+            0
+        };
+        out.push(McpServerDto { name: n, tool_count });
+    }
+    out
+}
+
+/// 重新加载 MCP 配置（~/.agentshell/mcp.json）
+#[tauri::command]
+async fn reload_mcp(app: AppHandle) -> Result<usize, String> {
+    // 清掉旧 tools（清空 registry）
+    {
+        let state = app.state::<SharedToolRegistry>();
+        let mut reg = state.lock().await;
+        // 注：v0.5 简化 — 直接 push 新 tool 到已有 registry
+        mcp_tool::register_mcp_tools(&mut reg).await;
+    }
+    let mgr = mcp_tool::mcp_manager().await;
+    let mgr_lock = mgr.lock().await;
+    Ok(mgr_lock.server_names().len())
+}
+
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+struct McpServerDto {
+    name: String,
+    tool_count: usize,
+}
 
 /// 激活码 demo 密钥（生产用 RSA public key 从服务端下发的 license_verify.pem）
 const LICENSE_DEMO_KEY: &[u8] = b"agentshell-demo-license-key-v0.2";

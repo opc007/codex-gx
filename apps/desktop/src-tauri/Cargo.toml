@@ -25,6 +25,7 @@ provider = { path = "../../../crates/provider" }
 patch = { path = "../../../crates/patch" }
 context = { path = "../../../crates/context" }
 mcp = { path = "../../../crates/mcp" }
+anyhow.workspace = true
 sandbox = { path = "../../../crates/sandbox" }
 computer-use = { path = "../../../crates/computer-use" }
 license = { path = "../../../crates/license" }

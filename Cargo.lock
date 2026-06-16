@@ -28,6 +28,7 @@ name = "agentshell-desktop"
 version = "0.1.0-alpha"
 dependencies = [
  "agent-core",
+ "anyhow",
  "async-trait",
  "chrono",
  "computer-use",

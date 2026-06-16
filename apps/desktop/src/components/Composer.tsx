@@ -3,6 +3,7 @@ import { invoke } from "@tauri-apps/api/core";
 import { useSessionsStore, getSessionsState, setSessionsState, type PersistedMessage } from "../stores/sessions";
 import { sendChatStream } from "../lib/chat";
 import { loadProviders, type ProviderInfo } from "../lib/providers";
+import { StageTimeline, type Stage } from "./StageTimeline";
 
 type Props = {
   sessionId: string | null;
@@ -17,11 +18,24 @@ export function Composer({ sessionId }: Props) {
   const [model, setModel] = useState("MiniMax-M3");
   const [requireApproval, setRequireApproval] = useState(true);
   const [providers, setProviders] = useState<ProviderInfo[]>([]);
+  const [stages, setStages] = useState<Stage[]>([]);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
 
   useEffect(() => {
     void loadProviders().then(setProviders);
   }, []);
+
+  // busy 时初始化 / 重置 stages
+  useEffect(() => {
+    if (busy && stages.length === 0) {
+      setStages([{ stage: "think", label: "正在启动...", detail: null, status: "running" }]);
+    }
+    if (!busy) {
+      // 1.5s 后清空 stages
+      const t = setTimeout(() => setStages([]), 1500);
+      return () => clearTimeout(t);
+    }
+  }, [busy]);
 
   useEffect(() => {
     const ta = textareaRef.current;
@@ -379,13 +393,45 @@ ${diff.diff.slice(0, 5000)}${diff.truncated ? "\n... [truncated, view full in gi
           if (streamingAssistantId) {
             updateAssistantMessage(sessionId, streamingAssistantId, { text: acc, thinking: accThinking, toolCalls: [...toolCalls] });
           }
+        } else if (evt.kind === "stage" && evt.stage) {
+          // v0.5：更新流程图
+          setStages((prev) => {
+            const stageKey = evt.stage!.stage;
+            // 找到同 stage 的最后一项，更新 status
+            const newStages = [...prev];
+            for (let i = newStages.length - 1; i >= 0; i--) {
+              if (newStages[i].stage === stageKey) {
+                newStages[i] = {
+                  ...newStages[i],
+                  label: evt.stage!.label,
+                  detail: evt.stage!.detail ?? newStages[i].detail,
+                  status: "done",
+                };
+                break;
+              }
+            }
+            // 如果是新 stage（approval 等），追加
+            const lastStage = newStages[newStages.length - 1];
+            if (!lastStage || lastStage.stage !== stageKey || stageKey === "approval" || stageKey === "act") {
+              newStages.push({
+                stage: stageKey,
+                label: evt.stage!.label,
+                detail: evt.stage!.detail ?? null,
+                status: "running",
+              });
+            }
+            return newStages;
+          });
         } else if (evt.kind === "done") {
           if (evt.usage) {
             inputTokens = evt.usage.inputTokens;
             outputTokens = evt.usage.outputTokens;
           }
+          // 标记所有 stage done
+          setStages((prev) => prev.map((s) => ({ ...s, status: "done" as const })));
         } else if (evt.kind === "error") {
           acc += `\n\n[错误] ${evt.delta}`;
+          setStages((prev) => prev.map((s) => (s.status === "running" ? { ...s, status: "error" as const } : s)));
         }
       }
 
@@ -471,6 +517,7 @@ ${diff.diff.slice(0, 5000)}${diff.truncated ? "\n... [truncated, view full in gi
   return (
     <div className="composer">
       {slashMenu}
+      {stages.length > 0 && <StageTimeline stages={stages} />}
       <div className="composer-toolbar">
         <select
           className="composer-model"

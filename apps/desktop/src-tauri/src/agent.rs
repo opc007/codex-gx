@@ -49,6 +49,15 @@ pub struct ToolResultEvent {
     pub session_id: String,
 }
 
+/// v0.5：阶段标记（think → plan → act → verify）
+#[derive(Serialize, Clone, Debug)]
+#[serde(rename_all = "camelCase")]
+pub struct StageEvent {
+    pub stage: String, // "think" | "plan" | "act" | "verify" | "done"
+    pub label: String,
+    pub detail: Option<String>,
+}
+
 /// 流式 chunk 事件
 #[derive(Serialize, Clone, Debug)]
 #[serde(rename_all = "camelCase")]
@@ -60,6 +69,8 @@ pub struct StreamEvent {
     pub done: bool,
     pub tool_call: Option<ToolCallEvent>,
     pub tool_result: Option<ToolResultEvent>,
+    /// v0.5：阶段信息
+    pub stage: Option<StageEvent>,
 }
 
 #[derive(Serialize, Clone, Debug)]
@@ -161,6 +172,21 @@ impl AgentRunner {
                 return;
             }
 
+            // v0.5：emit "think" stage
+            self.emit_event(
+                "stage",
+                String::new(),
+                None,
+                false,
+                None,
+                None,
+                Some(StageEvent {
+                    stage: "think".into(),
+                    label: format!("Step {}/{} - 思考中...", step, self.max_steps),
+                    detail: None,
+                }),
+            );
+
             // 构建请求（含 tools schema）
             let req = {
                 let reg = self.tool_registry.lock().await;
@@ -201,11 +227,11 @@ impl AgentRunner {
                 match chunk_res {
                     Ok(StreamChunk::Content(s)) => {
                         acc_content.push_str(&s);
-                        self.emit_event("content", s, None, false, None, None);
+                        self.emit_event("content", s, None, false, None, None, None);
                     }
                     Ok(StreamChunk::Reasoning(s)) => {
                         acc_thinking.push_str(&s);
-                        self.emit_event("thinking", s, None, false, None, None);
+                        self.emit_event("thinking", s, None, false, None, None, None);
                     }
                     Ok(StreamChunk::ToolCallDelta {
                         index,
@@ -231,20 +257,21 @@ impl AgentRunner {
                             "index": index,
                             "arguments_delta": arguments_delta,
                         });
-                        self.emit_event("tool_call_delta", payload.to_string(), None, false, None, None);
+                        self.emit_event("tool_call_delta", payload.to_string(), None, false, None, None, None);
                     }
-                    Ok(StreamChunk::Usage(u)) => {
-                        total_input = u.input_tokens;
-                        total_output = u.output_tokens;
-                        self.emit_event(
-                            "usage",
-                            String::new(),
-                            Some(UsageDto::from(u)),
-                            false,
-                            None,
-                            None,
-                        );
-                    }
+Ok(StreamChunk::Usage(u)) => {
+                            total_input = u.input_tokens;
+                            total_output = u.output_tokens;
+                            self.emit_event(
+                                "usage",
+                                String::new(),
+                                Some(UsageDto::from(u)),
+                                false,
+                                None,
+                                None,
+                                None,
+                            );
+                        }
                     Ok(StreamChunk::Done) => {
                         finish_chunk = true;
                         break;
@@ -300,10 +327,25 @@ impl AgentRunner {
                 false,
                 None,
                 None,
+                None,
             );
 
             // 没 tool_call 就结束
             if tool_calls.is_empty() {
+                // v0.5: verify stage
+                self.emit_event(
+                    "stage",
+                    String::new(),
+                    None,
+                    false,
+                    None,
+                    None,
+                    Some(StageEvent {
+                        stage: "verify".into(),
+                        label: "生成最终回答".into(),
+                        detail: None,
+                    }),
+                );
                 self.emit_event(
                     "done",
                     String::new(),
@@ -314,9 +356,35 @@ impl AgentRunner {
                     true,
                     None,
                     None,
+                    Some(StageEvent {
+                        stage: "done".into(),
+                        label: "完成".into(),
+                        detail: None,
+                    }),
                 );
                 return;
             }
+
+            // v0.5: act stage
+            self.emit_event(
+                "stage",
+                String::new(),
+                None,
+                false,
+                None,
+                None,
+                Some(StageEvent {
+                    stage: "act".into(),
+                    label: format!("执行 {} 个 tool call", tool_calls.len()),
+                    detail: Some(
+                        tool_calls
+                            .iter()
+                            .map(|(_, n, _)| n.as_str())
+                            .collect::<Vec<_>>()
+                            .join(", "),
+                    ),
+                }),
+            );
 
             // 执行每个 tool_call
             for (id, name, args) in &tool_calls {
@@ -332,6 +400,7 @@ impl AgentRunner {
                     None,
                     false,
                     Some(tc_evt.clone()),
+                    None,
                     None,
                 );
 
@@ -356,6 +425,11 @@ impl AgentRunner {
                         false,
                         Some(tc_evt.clone()),
                         None,
+                        Some(StageEvent {
+                            stage: "approval".into(),
+                            label: "等待用户批准".into(),
+                            detail: Some(name.clone()),
+                        }),
                     );
                     // 等响应（带超时 5 分钟）
                     match tokio::time::timeout(std::time::Duration::from_secs(300), rx).await {
@@ -374,6 +448,7 @@ impl AgentRunner {
                                     error: Some("denied".into()),
                                     session_id: self.session_id.clone(),
                                 }),
+                                None,
                             );
                             // 仍要喂回 history，让模型知道被拒
                             self.history.push(ChatMessage::tool(
@@ -421,6 +496,7 @@ impl AgentRunner {
                     false,
                     None,
                     Some(tr_evt),
+                    None,
                 );
 
                 // 把结果喂回 history
@@ -447,6 +523,7 @@ impl AgentRunner {
         done: bool,
         tool_call: Option<ToolCallEvent>,
         tool_result: Option<ToolResultEvent>,
+        stage: Option<StageEvent>,
     ) {
         let evt = StreamEvent {
             session_id: self.session_id.clone(),
@@ -456,11 +533,12 @@ impl AgentRunner {
             done,
             tool_call,
             tool_result,
+            stage,
         };
         let _ = self.app.emit("agent:event", evt);
     }
 
     fn emit_error(&self, msg: String) {
-        self.emit_event("error", msg, None, true, None, None);
+        self.emit_event("error", msg, None, true, None, None, None);
     }
 }

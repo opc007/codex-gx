@@ -696,3 +696,86 @@ kbd {
   border: 1px solid var(--error);
 }
 .composer-cancel:hover { background: #c01a28; }
+
+/* ==========================================================
+   v0.5 Stage Timeline
+   ========================================================== */
+.stage-timeline {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin: 8px 0;
+  padding: 8px 12px;
+  background: var(--bg-2);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  font-size: 12px;
+}
+.stage-item {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  padding: 6px 0;
+  position: relative;
+}
+.stage-item + .stage-item::before {
+  content: "";
+  position: absolute;
+  left: 12px;
+  top: -6px;
+  height: 6px;
+  width: 1px;
+  background: var(--border);
+}
+.stage-icon {
+  font-size: 14px;
+  width: 24px;
+  height: 24px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+.stage-running .stage-icon {
+  background: rgba(255, 191, 0, 0.15);
+  animation: pulse 1.5s infinite;
+}
+.stage-done .stage-icon { background: rgba(46, 160, 67, 0.15); }
+.stage-error .stage-icon { background: rgba(207, 34, 46, 0.15); }
+@keyframes pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.4; }
+}
+.stage-body {
+  flex: 1;
+  min-width: 0;
+}
+.stage-label {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+}
+.stage-label strong { color: var(--fg); }
+.stage-status {
+  font-size: 10px;
+  color: var(--muted);
+  margin-left: auto;
+}
+.stage-detail {
+  color: var(--muted);
+  font-size: 11px;
+  margin-top: 2px;
+}
+.stage-extra {
+  color: var(--accent);
+  font-size: 10px;
+  margin-top: 2px;
+  font-family: ui-monospace, monospace;
+}
+.stage-type-approval .stage-icon { background: rgba(255, 191, 0, 0.2); }
+.stage-type-approval.stage-running .stage-icon {
+  background: rgba(255, 191, 0, 0.3);
+  animation: pulse 1s infinite;
+}

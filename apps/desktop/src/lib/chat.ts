@@ -30,6 +30,8 @@ export type AgentEvent = {
     | "tool_call_complete"
     | "tool_result"
     | "assistant_turn"
+    | "stage"
+    | "approval_request"
     | "usage"
     | "done"
     | "error";
@@ -48,6 +50,11 @@ export type AgentEvent = {
     output: string;
     error: string | null;
     sessionId: string;
+  } | null;
+  stage: {
+    stage: string;
+    label: string;
+    detail: string | null;
   } | null;
 };
 
