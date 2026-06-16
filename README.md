@@ -1,6 +1,6 @@
-# AgentShell — Codex 全功能平替，国产大模型驱动
+# Codex gx— Codex 全功能平替，国产大模型驱动，可以自由控制本地电脑干活。
 
-> **Codex 桌面版的开源平替**。功能对标 OpenAI Codex CLI / Desktop，**持续同步更新**。
+> **Codex 桌面版的开源平替**。功能对标 OpenAI Codex CLI /cursor/ Desktop，**持续同步更新**。
 > 基于国产 [MiniMax M3](https://www.minimax.io/models/text/m3)，同时支持 Claude / GPT / DeepSeek / 自建模型。
 > **macOS / Windows 双端桌面版** · **Tauri 2 + Rust** · **MIT 许可证**
 
@@ -13,22 +13,22 @@
 
 ---
 
-## 🎯 为什么选 AgentShell？
+## 🎯 为什么选 Codex gx？
 
-### 💰 最大的特点：便宜
+### 💰 最大的特点：便宜，可以和codex一样控制自己的电脑给自己全天24小时牛马干活，一个月才需几十米就可以养一个7x24小时干活的牛马。
 
 - **Token 价格碾压式优势**：
-  - MiniMax M3：**$0.60 / M tokens**（输入）/ $2.40（输出）
-  - 对比 Claude Opus 4.8：~~$15 / M~~ → **便宜 8 倍**
+  - MiniMax M3：月租49元算力（接api），随便你天天跑都很难跑完，关键还不需要翻墙，开箱直接用。
+  - 对比 Claude Opus 4.8：~~$15 / M~~ → **便宜 18 倍**
   - 对比 GPT-5.5：~~$5 / M~~ → **便宜 5 倍**
   - 对比 DeepSeek V4-Pro：~~$0.27 / M~~ → 略贵，但速度快 4×
-- **订阅套餐更便宜**：MiniMax Token Plan $20/月起（**1.7B tokens / 月**，含 5h 滑动窗口）
+- **订阅套餐更便宜**：MiniMax Token Plan 49元订阅
 - **接入本地国产大模型**：DeepSeek / 通义千问 / 文心一言 / 智谱 GLM / 任何 OpenAI 兼容协议
 - **License 激活码**（可选）：月卡 ¥9.9 / 季卡 ¥29.9 / 年卡 ¥99 / 终身 ¥299 — 一次性购买，不退款、不自动续费、终身免费升级
 
 ### 🤖 全 Agent 智能体：不是聊天，是干活
 
-AgentShell 不是聊天框，是**真正能干活的全能 Agent**：
+ Codex gx 不是聊天框，是**真正能干活的全能 Agent**：
 
 - **💻 写代码** — 跨文件重构 / 自动 PR / Code Review / TDD / 单元测试生成
 - **📝 做文案** — 营销文案 / 周报月报 / 公众号文章 / 多语言翻译 / 学术写作
@@ -39,7 +39,7 @@ AgentShell 不是聊天框，是**真正能干活的全能 Agent**：
 
 ### 🖥️ Codex 全部功能，我们都有
 
-| Codex 功能 | AgentShell 支持 | 状态 |
+| Codex 功能 |  Codex gx 支持 | 状态 |
 |-----------|----------------|------|
 | ✅ Computer Use 浏览器（Playwright） | ✅ | v0.1 计划 |
 | ✅ Computer Use 桌面 CUA（macOS/Win） | ✅ | v0.4 计划 |
