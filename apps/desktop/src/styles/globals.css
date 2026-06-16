@@ -513,3 +513,75 @@ kbd {
 .license-tiers .muted { color: var(--muted); font-size: 12px; margin-top: 8px; }
 
 .muted { color: var(--muted); }
+
+/* ==========================================================
+   Tool Calls (v0.3)
+   ========================================================== */
+.bubble-streaming {
+  margin-left: auto;
+  font-size: 11px;
+  color: var(--accent);
+  font-style: italic;
+}
+.bubble-tools {
+  margin: 8px 0;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--bg-2);
+  padding: 8px 12px;
+}
+.bubble-tools summary {
+  cursor: pointer;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--accent);
+  user-select: none;
+}
+.bubble-tools-list {
+  margin-top: 8px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.tool-call {
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 8px 10px;
+  background: var(--bg);
+}
+.tool-call.tool-running { border-left: 3px solid var(--accent); }
+.tool-call.tool-success { border-left: 3px solid var(--success); }
+.tool-call.tool-error { border-left: 3px solid var(--error); }
+.tool-call-header {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-bottom: 6px;
+}
+.tool-name {
+  font-weight: 600;
+  background: var(--bg-2);
+  padding: 2px 6px;
+  border-radius: 4px;
+  font-size: 12px;
+}
+.tool-done {
+  margin-left: auto;
+  font-size: 11px;
+  color: var(--success);
+}
+.tool-args, .tool-result, .tool-error-msg {
+  font-size: 12px;
+  margin: 4px 0;
+}
+.tool-args code, .tool-result pre, .tool-error-msg pre {
+  background: var(--bg-2);
+  padding: 4px 6px;
+  border-radius: 4px;
+  font-size: 11px;
+  display: block;
+  overflow-x: auto;
+  white-space: pre-wrap;
+  margin: 4px 0 0;
+}
+.tool-error-msg pre { color: var(--error); }

@@ -4,6 +4,8 @@
 
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
+mod agent;
+mod cu_tool;
 mod tools;
 
 use agent_core::tool::ToolRegistry;
@@ -20,9 +22,8 @@ use provider::{
 /// 全局 provider 缓存（lazy，按 model id）
 type ProviderCache = Arc<Mutex<Option<Box<dyn Model>>>>;
 
-/// 全局工具注册表
-#[derive(Default)]
-struct ToolRegistryState(Mutex<ToolRegistry>);
+/// 全局工具注册表 — 直接用 Arc<Mutex<>> 让 AgentRunner 也能 clone
+type SharedToolRegistry = Arc<Mutex<ToolRegistry>>;
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
@@ -33,11 +34,11 @@ pub fn run() {
         .plugin(tauri_plugin_store::Builder::default().build())
         .plugin(tauri_plugin_os::init())
         .manage(ProviderCache::default())
-        .manage(ToolRegistryState::default())
+        .manage(SharedToolRegistry::default())
         .invoke_handler(tauri::generate_handler![
             ping,
             chat,
-            chat_stream,
+            agent_run,
             list_providers,
             list_tools,
             execute_tool,
@@ -83,146 +84,78 @@ async fn chat(req: ChatRequestPayload) -> Result<ChatResponsePayload, String> {
     })
 }
 
-/// 真流式聊天 — 后端 spawn stream + emit Tauri event
-/// 前端通过 `listen("chat-chunk:{session_id}", ...)` 收
+/// v0.3 Agent 运行入口 — 含 tool_calls 循环
 #[tauri::command]
-async fn chat_stream(
+async fn agent_run(
     app: AppHandle,
-    cache: tauri::State<'_, ProviderCache>,
-    req: ChatRequestPayload,
+    req: AgentRunPayload,
 ) -> Result<String, String> {
-    let _ = &cache; // 暂时未用，保留以备后续
-    let session_id = req.session_id.clone();
-    let model = req.model.clone();
-    let message = req.message.clone();
-    let ret_session_id = session_id.clone();
+    let provider = create_provider(&req.model).await?;
+    let provider_arc: Arc<dyn Model> = Arc::from(provider);
 
-    let provider = create_provider(&model).await?;
-    let chat_req = build_chat_request(&model, &message, true);
-
-    // 在后台 task 里跑 stream
-    tokio::spawn(async move {
-        let event = format!("chat-chunk:{}", session_id);
-        let stream = match provider.chat_stream(chat_req).await {
-            Ok(s) => s,
-            Err(e) => {
-                let _ = app.emit(
-                    &event,
-                    ChatChunkEvent {
-                        kind: "error".into(),
-                        delta: e.to_string(),
-                        usage: None,
-                        done: true,
-                    },
-                );
-                return;
-            }
-        };
-
-        use futures::StreamExt;
-        let mut stream = Box::pin(stream);
-        let mut total_input = 0u32;
-        let mut total_output = 0u32;
-
-        while let Some(chunk_res) = stream.next().await {
-            match chunk_res {
-                Ok(chunk) => {
-                    use provider::stream::StreamChunk;
-                    let (kind, delta) = match chunk {
-                        StreamChunk::Content(s) => ("content", s),
-                        StreamChunk::Reasoning(s) => ("thinking", s),
-                        StreamChunk::ToolCallDelta { index, id, name, arguments_delta } => {
-                            let payload = serde_json::json!({
-                                "index": index,
-                                "id": id,
-                                "name": name,
-                                "arguments_delta": arguments_delta,
-                            });
-                            let _ = app.emit(
-                                &event,
-                                ChatChunkEvent {
-                                    kind: "tool_call_delta".into(),
-                                    delta: payload.to_string(),
-                                    usage: None,
-                                    done: false,
-                                },
-                            );
-                            continue;
-                        }
-                        StreamChunk::Usage(u) => {
-                            total_input = u.input_tokens;
-                            total_output = u.output_tokens;
-                            let _ = app.emit(
-                                &event,
-                                ChatChunkEvent {
-                                    kind: "usage".into(),
-                                    delta: String::new(),
-                                    usage: Some(UsageInfo {
-                                        input_tokens: total_input,
-                                        output_tokens: total_output,
-                                    }),
-                                    done: false,
-                                },
-                            );
-                            continue;
-                        }
-                        StreamChunk::Done => {
-                            let _ = app.emit(
-                                &event,
-                                ChatChunkEvent {
-                                    kind: "done".into(),
-                                    delta: String::new(),
-                                    usage: Some(UsageInfo {
-                                        input_tokens: total_input,
-                                        output_tokens: total_output,
-                                    }),
-                                    done: true,
-                                },
-                            );
-                            return;
-                        }
-                    };
-                    let _ = app.emit(
-                        &event,
-                        ChatChunkEvent {
-                            kind: kind.into(),
-                            delta,
-                            usage: None,
-                            done: false,
-                        },
-                    );
-                }
-                Err(e) => {
-                    let _ = app.emit(
-                        &event,
-                        ChatChunkEvent {
-                            kind: "error".into(),
-                            delta: e.to_string(),
-                            usage: None,
-                            done: true,
-                        },
-                    );
-                    return;
-                }
-            }
+    // 确保 tool registry 已初始化
+    {
+        let state = app.state::<SharedToolRegistry>();
+        let mut reg = state.lock().await;
+        let cwd = std::env::current_dir().unwrap_or_else(|_| PathBuf::from("."));
+        if reg.is_empty() {
+            tools::register_all(&mut reg, cwd.clone(), cwd);
+            cu_tool::register_computer_use(&mut reg);
         }
+    }
 
-        // 流自然结束
-        let _ = app.emit(
-            &event,
-            ChatChunkEvent {
-                kind: "done".into(),
-                delta: String::new(),
-                usage: Some(UsageInfo {
-                    input_tokens: total_input,
-                    output_tokens: total_output,
-                }),
-                done: true,
-            },
-        );
+    // 构造 history
+    let mut history: Vec<ChatMessage> = Vec::new();
+    for m in &req.messages {
+        history.push(match m.role.as_str() {
+            "system" => ChatMessage::system(m.content.clone()),
+            "assistant" => ChatMessage::assistant(m.content.clone()),
+            "tool" => ChatMessage::tool(
+                m.tool_call_id.clone().unwrap_or_default(),
+                m.content.clone(),
+            ),
+            _ => ChatMessage::user(m.content.clone()),
+        });
+    }
+
+    let session_id = req.session_id.clone();
+    let user_msg = req.message.clone();
+    let app_clone = app.clone();
+
+    tokio::spawn(async move {
+        let reg_state = app_clone.state::<SharedToolRegistry>();
+        let reg_arc: Arc<Mutex<ToolRegistry>> = Arc::clone(&reg_state);
+        let mut runner = agent::AgentRunner::new(
+            app_clone.clone(),
+            session_id,
+            provider_arc,
+            reg_arc,
+        )
+        .with_history(history)
+        .with_max_steps(10);
+        runner.run(user_msg).await;
     });
 
-    Ok(ret_session_id)
+    Ok(req.session_id)
+}
+
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct AgentRunPayload {
+    model: String,
+    message: String,
+    session_id: String,
+    #[serde(default)]
+    messages: Vec<AgentHistoryMessage>,
+}
+
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct AgentHistoryMessage {
+    role: String,
+    content: String,
+    #[serde(default)]
+    tool_call_id: Option<String>,
 }
 
 /// 取消进行中的聊天（通过 app data 标记 session_id 为 cancelled）
@@ -235,8 +168,8 @@ async fn cancel_chat(_session_id: String) -> Result<(), String> {
 /// 列出已注册工具
 #[tauri::command]
 async fn list_tools(app: AppHandle) -> Result<Vec<ToolDefDto>, String> {
-    let state = app.state::<ToolRegistryState>();
-    let mut reg = state.0.lock().await;
+    let state = app.state::<SharedToolRegistry>();
+    let mut reg = state.lock().await;
     // lazy 初始化（用 cwd）
     let cwd = std::env::current_dir().unwrap_or_else(|_| PathBuf::from("."));
     if reg.is_empty() {
@@ -256,8 +189,8 @@ async fn execute_tool(
     name: String,
     arguments: serde_json::Value,
 ) -> Result<ToolExecDto, String> {
-    let state = app.state::<ToolRegistryState>();
-    let mut reg = state.0.lock().await;
+    let state = app.state::<SharedToolRegistry>();
+    let mut reg = state.lock().await;
     let cwd = std::env::current_dir().unwrap_or_else(|_| PathBuf::from("."));
     if reg.is_empty() {
         tools::register_all(&mut reg, cwd.clone(), cwd);

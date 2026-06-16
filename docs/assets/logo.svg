@@ -1,0 +1,15 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 480 240" width="480" height="240">
+  <rect width="480" height="240" fill="#0a0a0a"/>
+  <g transform="translate(48, 132)">
+    <text x="0" y="0" font-family="Impact, 'Arial Black', -apple-system, sans-serif" font-size="130" font-weight="900" fill="#fafafa" letter-spacing="-4">CODEX</text>
+    <g transform="translate(308, -84)">
+      <circle r="36" fill="#ff3b30"/>
+      <text x="0" y="10" text-anchor="middle" font-family="Impact, 'Arial Black', -apple-system, sans-serif" font-size="40" font-weight="900" fill="#fafafa" letter-spacing="-1">gx</text>
+    </g>
+  </g>
+  <g transform="translate(48, 188)">
+    <rect x="0" y="0" width="80" height="6" fill="#ff3b30"/>
+    <rect x="88" y="0" width="80" height="6" fill="#ffd60a"/>
+    <rect x="176" y="0" width="80" height="6" fill="#fafafa"/>
+  </g>
+</svg>

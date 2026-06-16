@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { invoke } from "@tauri-apps/api/core";
-import { useSessionsStore, getSessionsState, type PersistedMessage } from "../stores/sessions";
+import { useSessionsStore, getSessionsState, setSessionsState, type PersistedMessage } from "../stores/sessions";
 import { sendChatStream } from "../lib/chat";
 import { loadProviders, type ProviderInfo } from "../lib/providers";
 
@@ -18,7 +18,6 @@ export function Composer({ sessionId }: Props) {
   const [providers, setProviders] = useState<ProviderInfo[]>([]);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
 
-  // 动态加载 provider 列表
   useEffect(() => {
     void loadProviders().then(setProviders);
   }, []);
@@ -64,7 +63,7 @@ export function Composer({ sessionId }: Props) {
       const helpMsg: PersistedMessage = {
         id: crypto.randomUUID(),
         role: "assistant",
-        text: `📖 AgentShell v0.2 命令帮助：
+        text: `📖 AgentShell v0.3 命令帮助：
 
 通用：
 /help    - 显示此帮助
@@ -80,9 +79,15 @@ Git & IDE：
 /diff    - Git diff vs HEAD
 /review  - AI 评审当前 diff（消耗 token）
 
+🛠️ v0.3 工具调用：
+M3 / Claude / GPT 会自动调用：
+- bash（执行命令）
+- read_file / write_file / edit_file
+- list_dir
+- web_search（需要 BRAVE_API_KEY）
+
 💡 模型切换：Top bar 下拉
-💡 工具调用：M3 / Claude 自动用 bash / read_file / write_file
-💡 持久化：所有会话和消息自动保存到本地`,
+💡 所有会话和消息自动保存到本地`,
         createdAt: Date.now(),
       };
       appendMessage(sessionId, helpMsg);
@@ -106,7 +111,6 @@ Git & IDE：
       return;
     }
     if (trimmed === "/usage") {
-      // 从 store 取本会话累计
       const msgs = getSessionsState().messages[sessionId] || [];
       let totalIn = 0, totalOut = 0;
       const modelMsgs: Record<string, { in: number; out: number; count: number }> = {};
@@ -121,7 +125,6 @@ Git & IDE：
           modelMsgs[k].count += 1;
         }
       }
-      // 估算费用
       const PRICE_PER_M: Record<string, { in: number; out: number }> = {
         "MiniMax-M3": { in: 0.60, out: 2.40 },
         "claude-opus-4-8": { in: 15, out: 75 },
@@ -231,22 +234,21 @@ ${diff.diff.slice(0, 5000)}${diff.truncated ? "\n... [truncated, view full in gi
         appendMessage(sessionId, userMsg);
         setText("");
         setBusy(true);
-        // 复用流式 chat
         const assistantId = crypto.randomUUID();
         let acc = "", accThinking = "";
         let inT = 0, outT = 0;
-        const stream = await sendChatStream({
+        const { stream } = await sendChatStream({
           sessionId,
           userMessage: reviewPrompt,
           model,
         });
-        for await (const chunk of stream) {
-          if (chunk.kind === "content") acc += chunk.delta;
-          else if (chunk.kind === "thinking") accThinking += chunk.delta;
-          else if (chunk.kind === "done" && chunk.usage) {
-            inT = chunk.usage.inputTokens;
-            outT = chunk.usage.outputTokens;
-          } else if (chunk.kind === "error") acc += `\n\n[错误] ${chunk.delta}`;
+        for await (const evt of stream) {
+          if (evt.kind === "content") acc += evt.delta;
+          else if (evt.kind === "thinking") accThinking += evt.delta;
+          else if (evt.kind === "done" && evt.usage) {
+            inT = evt.usage.inputTokens;
+            outT = evt.usage.outputTokens;
+          } else if (evt.kind === "error") acc += `\n\n[错误] ${evt.delta}`;
         }
         appendMessage(sessionId, {
           id: assistantId,
@@ -270,7 +272,7 @@ ${diff.diff.slice(0, 5000)}${diff.truncated ? "\n... [truncated, view full in gi
       return;
     }
 
-    // 2. 普通消息 — 写入 user
+    // 2. 普通消息 — v0.3 用 agent_run + 监听 agent:event
     const userMsg: PersistedMessage = {
       id: crypto.randomUUID(),
       role: "user",
@@ -281,57 +283,120 @@ ${diff.diff.slice(0, 5000)}${diff.truncated ? "\n... [truncated, view full in gi
     setText("");
     setBusy(true);
 
-    // 3. 流式生成 assistant 响应（内存累积，最后一次性写入）
     const assistantId = crypto.randomUUID();
     let acc = "";
     let accThinking = "";
     let inputTokens: number | undefined;
     let outputTokens: number | undefined;
+    const toolCalls: NonNullable<PersistedMessage["toolCalls"]> = [];
+    let streamingAssistantId: string | null = null;
 
     try {
-      const stream = await sendChatStream({
+      // 先写一个空的 streaming assistant 消息
+      const placeholder: PersistedMessage = {
+        id: assistantId,
+        role: "assistant",
+        text: "",
+        createdAt: Date.now(),
+        streaming: true,
+      };
+      appendMessage(sessionId, placeholder);
+      streamingAssistantId = assistantId;
+
+      const { stream } = await sendChatStream({
         sessionId,
         userMessage: trimmed,
         model,
       });
 
-      for await (const chunk of stream) {
-        if (chunk.kind === "content") {
-          acc += chunk.delta;
-        } else if (chunk.kind === "thinking") {
-          accThinking += chunk.delta;
-        } else if (chunk.kind === "done") {
-          if (chunk.usage) {
-            inputTokens = chunk.usage.inputTokens;
-            outputTokens = chunk.usage.outputTokens;
+      for await (const evt of stream) {
+        if (evt.kind === "content") {
+          acc += evt.delta;
+          if (streamingAssistantId) {
+            updateAssistantMessage(sessionId, streamingAssistantId, { text: acc, thinking: accThinking, toolCalls: [...toolCalls] });
           }
-        } else if (chunk.kind === "error") {
-          acc += `\n\n[错误] ${chunk.delta}`;
+        } else if (evt.kind === "thinking") {
+          accThinking += evt.delta;
+          if (streamingAssistantId) {
+            updateAssistantMessage(sessionId, streamingAssistantId, { text: acc, thinking: accThinking, toolCalls: [...toolCalls] });
+          }
+        } else if (evt.kind === "tool_call_complete" && evt.toolCall) {
+          // 新增 tool call
+          toolCalls.push({
+            id: evt.toolCall.id,
+            name: evt.toolCall.name,
+            arguments: evt.toolCall.arguments,
+          });
+          if (streamingAssistantId) {
+            updateAssistantMessage(sessionId, streamingAssistantId, { text: acc, thinking: accThinking, toolCalls: [...toolCalls] });
+          }
+        } else if (evt.kind === "tool_result" && evt.toolResult) {
+          // 回填到对应的 toolCall
+          const tc = toolCalls.find((t) => t.id === evt.toolResult!.callId);
+          if (tc) {
+            tc.result = evt.toolResult.output;
+            tc.success = evt.toolResult.success;
+            tc.error = evt.toolResult.error || undefined;
+          }
+          if (streamingAssistantId) {
+            updateAssistantMessage(sessionId, streamingAssistantId, { text: acc, thinking: accThinking, toolCalls: [...toolCalls] });
+          }
+        } else if (evt.kind === "done") {
+          if (evt.usage) {
+            inputTokens = evt.usage.inputTokens;
+            outputTokens = evt.usage.outputTokens;
+          }
+        } else if (evt.kind === "error") {
+          acc += `\n\n[错误] ${evt.delta}`;
         }
       }
 
-      // 一次性写入最终 assistant 消息
-      const assistantMsg: PersistedMessage = {
-        id: assistantId,
-        role: "assistant",
-        text: acc || "(empty response)",
-        thinking: accThinking || undefined,
-        createdAt: Date.now(),
-        inputTokens,
-        outputTokens,
-      };
-      appendMessage(sessionId, assistantMsg);
+      if (streamingAssistantId) {
+        updateAssistantMessage(sessionId, streamingAssistantId, {
+          text: acc || "(empty response)",
+          thinking: accThinking || undefined,
+          streaming: false,
+          inputTokens,
+          outputTokens,
+          toolCalls: [...toolCalls],
+        });
+      }
     } catch (e) {
-      appendMessage(sessionId, {
-        id: assistantId,
-        role: "assistant",
-        text: `[请求失败] ${String(e)}`,
-        createdAt: Date.now(),
-      });
+      if (streamingAssistantId) {
+        updateAssistantMessage(sessionId, streamingAssistantId, {
+          text: `[请求失败] ${String(e)}`,
+          streaming: false,
+          toolCalls: [...toolCalls],
+        });
+      } else {
+        appendMessage(sessionId, {
+          id: assistantId,
+          role: "assistant",
+          text: `[请求失败] ${String(e)}`,
+          createdAt: Date.now(),
+        });
+      }
     } finally {
       setBusy(false);
     }
   };
+
+  // helper: 更新 streaming assistant 消息
+  function updateAssistantMessage(
+    sid: string,
+    mid: string,
+    patch: Partial<PersistedMessage>
+  ) {
+    const cur = getSessionsState();
+    const list = cur.messages[sid] || [];
+    const idx = list.findIndex((m) => m.id === mid);
+    if (idx < 0) return;
+    const newList = [...list];
+    newList[idx] = { ...newList[idx], ...patch };
+    setSessionsState({
+      messages: { ...cur.messages, [sid]: newList },
+    });
+  }
 
   const slashMenu = text.startsWith("/") && (
     <div className="slash-menu">
@@ -386,7 +451,7 @@ ${diff.diff.slice(0, 5000)}${diff.truncated ? "\n... [truncated, view full in gi
             ))
           )}
         </select>
-        <button className="composer-attachment" title="附件 (v0.3)" disabled>
+        <button className="composer-attachment" title="附件 (v0.4)" disabled>
           📎
         </button>
         <button
@@ -413,7 +478,7 @@ ${diff.diff.slice(0, 5000)}${diff.truncated ? "\n... [truncated, view full in gi
       />
       <div className="composer-footer">
         <span className="composer-hint">
-          {busy ? "正在生成..." : `${text.length} 字符`}
+          {busy ? "正在生成（可能含工具调用）..." : `${text.length} 字符`}
         </span>
         <button
           className="composer-send"

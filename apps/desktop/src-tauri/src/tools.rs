@@ -286,7 +286,7 @@ impl Tool for ListDirTool {
 }
 
 // ============================================================
-// web_search (v0.2 占位 — 真实接入在 v0.3)
+// web_search (v0.3 — Brave Search API)
 // ============================================================
 #[derive(Debug)]
 pub struct WebSearchTool;
@@ -297,24 +297,108 @@ impl Tool for WebSearchTool {
         "web_search"
     }
     fn description(&self) -> &str {
-        "联网搜索（v0.2 占位 — 返回提示，真实接入在 v0.3）"
+        "联网搜索（Brave Search API）。需要环境变量 BRAVE_API_KEY。返回前 N 条结果的标题 + 链接 + 摘要。"
     }
     fn parameters_schema(&self) -> serde_json::Value {
         json!({
             "type": "object",
             "properties": {
-                "query": {"type": "string"}
+                "query": {"type": "string", "description": "搜索关键词"},
+                "count": {"type": "integer", "description": "返回条数，默认 5，最大 20"}
             },
             "required": ["query"]
         })
     }
     async fn execute(&self, input: ToolInput) -> agent_core::Result<ToolOutput> {
-        let q = input["query"].as_str().unwrap_or("");
-        Ok(ToolOutput::err(format!(
-            "web_search 暂未实现（v0.3 接入 Brave/Tavily）。query: {}",
-            q
-        )))
+        let query = input["query"].as_str().unwrap_or("").to_string();
+        let count = input["count"].as_u64().unwrap_or(5).min(20) as u32;
+
+        if query.trim().is_empty() {
+            return Ok(ToolOutput::err("query 不能为空".to_string()));
+        }
+
+        // 1. 拿 API key
+        let api_key = match std::env::var("BRAVE_API_KEY") {
+            Ok(k) => k,
+            Err(_) => {
+                return Ok(ToolOutput::err(
+                    "BRAVE_API_KEY 未设置。请 export BRAVE_API_KEY=xxx (免费 key: https://brave.com/search/api/)".to_string(),
+                ));
+            }
+        };
+
+        // 2. 调 API
+        let url = format!(
+            "https://api.search.brave.com/res/v1/web/search?q={}&count={}",
+            urlencoding(&query),
+            count
+        );
+        let client = reqwest::Client::builder()
+            .timeout(std::time::Duration::from_secs(15))
+            .build()
+            .map_err(|e| agent_core::Error::ToolExecution(format!("client: {}", e)))?;
+
+        let resp = client
+            .get(&url)
+            .header("X-Subscription-Token", api_key)
+            .header("Accept", "application/json")
+            .send()
+            .await
+            .map_err(|e| agent_core::Error::ToolExecution(format!("http: {}", e)))?;
+
+        if !resp.status().is_success() {
+            let status = resp.status();
+            let body = resp.text().await.unwrap_or_default();
+            return Ok(ToolOutput::err(format!(
+                "Brave API 返回 {}: {}",
+                status,
+                if body.len() > 500 { &body[..500] } else { &body }
+            )));
+        }
+
+        let body: serde_json::Value = resp
+            .json()
+            .await
+            .map_err(|e| agent_core::Error::ToolExecution(format!("parse: {}", e)))?;
+
+        // 3. 解析结果
+        let results = body
+            .pointer("/web/results")
+            .and_then(|v| v.as_array())
+            .cloned()
+            .unwrap_or_default();
+
+        if results.is_empty() {
+            return Ok(ToolOutput::ok(format!("搜索 '{}' 无结果。", query)));
+        }
+
+        let mut text = format!("🔍 搜索结果：'{}' ({} 条)\n\n", query, results.len());
+        for (i, r) in results.iter().enumerate().take(count as usize) {
+            let title = r.get("title").and_then(|v| v.as_str()).unwrap_or("(no title)");
+            let url = r.get("url").and_then(|v| v.as_str()).unwrap_or("");
+            let desc = r.get("description").and_then(|v| v.as_str()).unwrap_or("");
+            text.push_str(&format!(
+                "{}. **{}**\n   {}\n   {}\n\n",
+                i + 1,
+                title,
+                url,
+                desc
+            ));
+        }
+        Ok(ToolOutput::ok(text))
     }
+}
+
+/// 简单 URL 编码（不依赖 url crate）
+fn urlencoding(s: &str) -> String {
+    let mut out = String::with_capacity(s.len());
+    for b in s.bytes() {
+        match b {
+            b'A'..=b'Z' | b'a'..=b'z' | b'0'..=b'9' | b'-' | b'_' | b'.' | b'~' => out.push(b as char),
+            _ => out.push_str(&format!("%{:02X}", b)),
+        }
+    }
+    out
 }
 
 /// 注册所有内置工具

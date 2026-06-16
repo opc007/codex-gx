@@ -1,5 +1,9 @@
 # Codex gx— Codex 全功能平替，国产大模型驱动，可以自由控制本地电脑干活。
 
+<p align="center">
+  <img src="docs/assets/logo.svg" alt="Codex gx" width="480">
+</p>
+
 > **Codex 桌面版的开源平替**。功能对标 OpenAI Codex CLI /cursor/ Desktop，**持续同步更新**。
 > 基于国产 [MiniMax M3](https://www.minimax.io/models/text/m3)，同时支持 Claude / GPT / DeepSeek / 自建模型。
 > **macOS / Windows 双端桌面版** · **Tauri 2 + Rust** · **MIT 许可证**

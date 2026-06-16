@@ -14,6 +14,15 @@ export type PersistedMessage = {
   role: "user" | "assistant" | "system" | "tool";
   text: string;
   thinking?: string;
+  toolCalls?: Array<{
+    id: string;
+    name: string;
+    arguments: unknown;
+    result?: string;
+    success?: boolean;
+    error?: string;
+  }>;
+  streaming?: boolean;
   createdAt: number;
   inputTokens?: number;
   outputTokens?: number;
@@ -175,4 +184,13 @@ export function useSessionsStore<T>(selector: (s: SessionsStore) => T): T {
 /// 非 hook 版：直接读当前状态
 export function getSessionsState(): SessionsStore {
   return getSnapshot();
+}
+
+/// 非 hook 版：直接写（用 patch 函数），触发 listeners
+export function setSessionsState(patch: Partial<SessionsStore> | ((s: SessionsStore) => Partial<SessionsStore>)) {
+  const current = getSnapshot();
+  const p = typeof patch === "function" ? patch(current) : patch;
+  state = { ...current, ...p };
+  void persist(state.sessions, state.currentId, state.messages);
+  listeners.forEach((l) => l());
 }

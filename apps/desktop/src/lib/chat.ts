@@ -1,4 +1,4 @@
-// 与 Rust 后端的聊天桥（真流式 — Tauri event）
+// 与 Rust 后端的聊天桥（v0.3 — listen "agent:event" 统一事件流）
 import { invoke } from "@tauri-apps/api/core";
 import { listen, type UnlistenFn } from "@tauri-apps/api/event";
 
@@ -7,130 +7,131 @@ export type ChatMessage = {
   role: "user" | "assistant" | "system" | "tool";
   text: string;
   thinking?: string;
-  toolCalls?: Array<{ id: string; name: string; arguments: unknown }>;
+  toolCalls?: Array<{
+    id: string;
+    name: string;
+    arguments: unknown;
+    result?: string;
+    success?: boolean;
+    error?: string;
+  }>;
   createdAt: number;
   streaming?: boolean;
-  /** v0.2 token usage */
   inputTokens?: number;
   outputTokens?: number;
 };
 
-export type ChatChunk =
-  | { kind: "content"; delta: string }
-  | { kind: "thinking"; delta: string }
-  | { kind: "tool_call_delta"; delta: string }
-  | { kind: "done"; usage?: { inputTokens: number; outputTokens: number } }
-  | { kind: "error"; delta: string };
+export type AgentEvent = {
+  sessionId: string;
+  kind:
+    | "content"
+    | "thinking"
+    | "tool_call_delta"
+    | "tool_call_complete"
+    | "tool_result"
+    | "assistant_turn"
+    | "usage"
+    | "done"
+    | "error";
+  delta: string;
+  usage: { inputTokens: number; outputTokens: number } | null;
+  done: boolean;
+  toolCall: {
+    id: string;
+    name: string;
+    arguments: unknown;
+    sessionId: string;
+  } | null;
+  toolResult: {
+    callId: string;
+    success: boolean;
+    output: string;
+    error: string | null;
+    sessionId: string;
+  } | null;
+};
 
 export type SendChatParams = {
   sessionId: string;
   userMessage: string;
   model: string;
+  /** 历史消息（不含 tool_calls 的简化版） */
+  history?: Array<{ role: string; content: string; toolCallId?: string }>;
 };
 
-const CHAT_EVENT_PREFIX = "chat-chunk:";
-
 /**
- * 发送消息并流式返回响应 chunks
+ * v0.3：调用 agent_run 命令 + 监听 "agent:event" 事件流
  *
- * 通过 tauri command `chat_stream` 调用 Rust 后端
- * 后端在 tokio::spawn 里跑 stream，每个 chunk 通过 emit 推到前端
- * 前端 listen "chat-chunk:{session_id}" 收
+ * Generator 通过队列 + Promise 解耦 listener 回调
  */
 export async function sendChatStream(
   params: SendChatParams
-): Promise<AsyncIterable<ChatChunk>> {
-  // 注册 listener
-  const eventName = CHAT_EVENT_PREFIX + params.sessionId;
+): Promise<{
+  stream: AsyncIterable<AgentEvent>;
+  cancel: () => void;
+}> {
+  // 监听队列
+  const queue: AgentEvent[] = [];
+  let waiter: ((v: void) => void) | null = null;
+  let done = false;
   let unlisten: UnlistenFn | null = null;
-  let resolveDone: (() => void) | null = null;
-  const donePromise = new Promise<void>((resolve) => {
-    resolveDone = resolve;
+
+  const wake = () => {
+    if (waiter) {
+      const w = waiter;
+      waiter = null;
+      w();
+    }
+  };
+
+  const push = (evt: AgentEvent) => {
+    queue.push(evt);
+    wake();
+    if (evt.done) {
+      done = true;
+      wake();
+    }
+  };
+
+  // 注册 listener
+  unlisten = await listen<AgentEvent>("agent:event", (event) => {
+    if (event.payload.sessionId !== params.sessionId) return;
+    push(event.payload);
   });
 
-  // 用 generator yield chunks
-  async function* gen(): AsyncIterable<ChatChunk> {
-    // 设置 listener
-    unlisten = await listen<{
-      kind: string;
-      delta: string;
-      usage: { inputTokens: number; outputTokens: number } | null;
-      done: boolean;
-    }>(eventName, (event) => {
-      const payload = event.payload;
-      // 这里不能直接 yield（listener 是另一个回调）
-      // 改为：把 chunk 推入队列，generator 异步拉
-      queue.push(payload);
-      if (payload.done && resolveDone) {
-        resolveDone();
-      }
-    });
+  // 触发后端
+  await invoke("agent_run", {
+    req: {
+      model: params.model,
+      message: params.userMessage,
+      sessionId: params.sessionId,
+      messages: params.history || [],
+    },
+  });
 
-    // 触发后端
-    await invoke("chat_stream", {
-      req: {
-        model: params.model,
-        message: params.userMessage,
-        sessionId: params.sessionId,
-      },
-    });
-
-    // 拉队列
+  async function* gen(): AsyncIterable<AgentEvent> {
     while (true) {
-      if (queue.length === 0) {
-        // 等 done 信号或新 chunk
-        await Promise.race([
-          donePromise,
-          new Promise((r) => setTimeout(r, 30)),
-        ]);
-        if (queue.length === 0) {
-          // 没有更多 + done 已发
-          break;
-        }
+      // 等到有数据或 done
+      while (queue.length === 0 && !done) {
+        await new Promise<void>((resolve) => {
+          waiter = resolve;
+        });
       }
-      const payload = queue.shift()!;
-      if (payload.kind === "content") {
-        yield { kind: "content", delta: payload.delta };
-      } else if (payload.kind === "thinking") {
-        yield { kind: "thinking", delta: payload.delta };
-      } else if (payload.kind === "tool_call_delta") {
-        yield { kind: "tool_call_delta", delta: payload.delta };
-      } else if (payload.kind === "usage") {
-        if (payload.usage) {
-          yield {
-            kind: "done",
-            usage: {
-              inputTokens: payload.usage.inputTokens,
-              outputTokens: payload.usage.outputTokens,
-            },
-          };
-        }
-      } else if (payload.kind === "done") {
-        if (payload.usage) {
-          yield {
-            kind: "done",
-            usage: {
-              inputTokens: payload.usage.inputTokens,
-              outputTokens: payload.usage.outputTokens,
-            },
-          };
-        }
-        break;
-      } else if (payload.kind === "error") {
-        yield { kind: "error", delta: payload.delta };
+      if (queue.length === 0 && done) {
         break;
       }
+      const evt = queue.shift()!;
+      yield evt;
+      if (evt.done) break;
     }
-
     if (unlisten) unlisten();
   }
 
-  const queue: Array<{
-    kind: string;
-    delta: string;
-    usage: { inputTokens: number; outputTokens: number } | null;
-    done: boolean;
-  }> = [];
+  const cancel = () => {
+    if (unlisten) unlisten();
+    done = true;
+    wake();
+  };
 
-  return gen();
+  return { stream: gen(), cancel };
 }
