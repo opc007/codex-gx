@@ -1,23 +1,25 @@
 import { useEffect, useRef } from "react";
-import type { SessionMeta } from "../stores/sessions";
-import type { ChatMessage } from "../lib/chat";
+import { useSessionsStore } from "../stores/sessions";
 import { MessageBubble } from "./MessageBubble";
 
 type Props = {
-  session?: SessionMeta;
+  sessionId: string | null;
 };
 
-export function Thread({ session }: Props) {
+export function Thread({ sessionId }: Props) {
   const scrollRef = useRef<HTMLDivElement>(null);
-
-  // v0.1 没有持久化 message，只在内存里
-  const messages: ChatMessage[] = session ? getMessages(session.id) : [];
+  const messages = useSessionsStore((s) =>
+    sessionId ? s.messages[sessionId] || [] : []
+  );
+  const session = useSessionsStore((s) =>
+    s.sessions.find((x) => x.id === sessionId)
+  );
 
   useEffect(() => {
     scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight });
-  }, [messages.length, session?.id]);
+  }, [messages.length, sessionId]);
 
-  if (!session) {
+  if (!sessionId || !session) {
     return (
       <div className="thread-empty">
         <h2>👋 欢迎使用 AgentShell</h2>
@@ -42,24 +44,4 @@ export function Thread({ session }: Props) {
       ))}
     </div>
   );
-}
-
-// v0.1 内存消息存储（后续会用 tauri-store 持久化）
-const messageMap = new Map<string, ChatMessage[]>();
-
-export function appendMessage(sessionId: string, msg: ChatMessage) {
-  const list = messageMap.get(sessionId) || [];
-  list.push(msg);
-  messageMap.set(sessionId, list);
-}
-
-export function updateMessage(sessionId: string, id: string, patch: Partial<ChatMessage>) {
-  const list = messageMap.get(sessionId);
-  if (!list) return;
-  const idx = list.findIndex((m) => m.id === id);
-  if (idx >= 0) list[idx] = { ...list[idx], ...patch };
-}
-
-function getMessages(sessionId: string): ChatMessage[] {
-  return messageMap.get(sessionId) || [];
 }

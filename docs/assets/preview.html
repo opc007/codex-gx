@@ -1,0 +1,108 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <title>Codex gx — Logo Candidates</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: -apple-system, "SF Pro Display", "Helvetica Neue", "PingFang SC", "Microsoft YaHei", sans-serif;
+      background: linear-gradient(135deg, #050818 0%, #0d1338 50%, #1a1f4a 100%);
+      color: #ffd700;
+      min-height: 100vh;
+      padding: 48px 32px;
+    }
+    h1 {
+      text-align: center;
+      font-size: 28px;
+      font-weight: 700;
+      letter-spacing: 4px;
+      margin-bottom: 8px;
+    }
+    .sub {
+      text-align: center;
+      color: rgba(255, 215, 0, 0.5);
+      font-size: 14px;
+      letter-spacing: 2px;
+      margin-bottom: 48px;
+    }
+    .grid {
+      display: grid;
+      grid-template-columns: 1fr;
+      gap: 40px;
+      max-width: 720px;
+      margin: 0 auto;
+    }
+    .card {
+      background: rgba(255, 255, 255, 0.03);
+      border: 1px solid rgba(255, 215, 0, 0.15);
+      border-radius: 16px;
+      overflow: hidden;
+      transition: transform 0.2s;
+    }
+    .card:hover {
+      transform: translateY(-2px);
+      border-color: rgba(255, 215, 0, 0.4);
+    }
+    .card img {
+      display: block;
+      width: 100%;
+      height: auto;
+    }
+    .meta {
+      padding: 16px 20px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+    .name {
+      font-size: 16px;
+      font-weight: 600;
+      letter-spacing: 2px;
+    }
+    .desc {
+      font-size: 12px;
+      color: rgba(255, 215, 0, 0.5);
+      letter-spacing: 1px;
+    }
+    .footer {
+      text-align: center;
+      margin-top: 48px;
+      font-size: 12px;
+      color: rgba(255, 215, 0, 0.4);
+    }
+  </style>
+</head>
+<body>
+  <h1>CODEX GX</h1>
+  <p class="sub">Genesis X · Logo Candidates</p>
+
+  <div class="grid">
+    <div class="card">
+      <img src="logo-candidate-A.svg" alt="Candidate A: Genesis Constellation">
+      <div class="meta">
+        <span class="name">A · GENESIS CONSTELLATION</span>
+        <span class="desc">大 G + X + 顶部星轨</span>
+      </div>
+    </div>
+
+    <div class="card">
+      <img src="logo-candidate-B.svg" alt="Candidate B: Codex Cube">
+      <div class="meta">
+        <span class="name">B · CODEX CUBE</span>
+        <span class="desc">3D 立方体 + G 镂空 + X</span>
+      </div>
+    </div>
+
+    <div class="card">
+      <img src="logo-candidate-C.svg" alt="Candidate C: Genesis X">
+      <div class="meta">
+        <span class="name">C · GENESIS X</span>
+        <span class="desc">C 包 X + 太阳创世纪</span>
+      </div>
+    </div>
+  </div>
+
+  <p class="footer">挑选后，把对应 SVG 改名为 logo.svg 并告诉我插到 README 顶部</p>
+</body>
+</html>

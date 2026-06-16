@@ -1,0 +1,63 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 480 240" width="480" height="240" role="img" aria-label="Codex gx  Genesis X logo">
+  <defs>
+    <linearGradient id="bgC" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#050818"/>
+      <stop offset="0.5" stop-color="#0d1338"/>
+      <stop offset="1" stop-color="#1a1f4a"/>
+    </linearGradient>
+    <linearGradient id="goldC" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#ffe680"/>
+      <stop offset="0.5" stop-color="#ffb800"/>
+      <stop offset="1" stop-color="#b8860b"/>
+    </linearGradient>
+    <radialGradient id="sunC" cx="0.5" cy="0.5" r="0.5">
+      <stop offset="0" stop-color="#fff4b0"/>
+      <stop offset="0.4" stop-color="#ffd700"/>
+      <stop offset="1" stop-color="#ffd700" stop-opacity="0"/>
+    </radialGradient>
+  </defs>
+
+  <rect x="0" y="0" width="480" height="240" rx="36" fill="url(#bgC)"/>
+
+  <g transform="translate(370, 70)">
+    <circle r="40" fill="url(#sunC)" opacity="0.5"/>
+    <circle r="10" fill="#fff4b0"/>
+    <circle r="6" fill="#ffd700"/>
+    <circle r="32" fill="none" stroke="#ffd700" stroke-width="0.6" opacity="0.5"/>
+    <circle r="48" fill="none" stroke="#ffd700" stroke-width="0.4" opacity="0.3"/>
+  </g>
+
+  <g transform="translate(40, 50)">
+    <circle r="1.2" fill="#ffffff" opacity="0.7"/>
+  </g>
+  <g transform="translate(80, 180)">
+    <circle r="1.0" fill="#ffd700" opacity="0.6"/>
+  </g>
+  <g transform="translate(420, 200)">
+    <circle r="1.0" fill="#ffffff" opacity="0.5"/>
+  </g>
+
+  <g transform="translate(180, 120)">
+    <path d="
+      M 0 -50
+      A 50 50 0 1 0 0 50
+      L 0 32
+      A 32 32 0 1 1 0 -32
+      Z
+    " fill="url(#goldC)"/>
+
+    <g stroke="url(#goldC)" stroke-width="10" stroke-linecap="round">
+      <line x1="-30" y1="-30" x2="30" y2="30"/>
+      <line x1="30" y1="-30" x2="-30" y2="30"/>
+    </g>
+  </g>
+
+  <g transform="translate(280, 95)">
+    <line x1="0" y1="0" x2="60" y2="50" stroke="url(#goldC)" stroke-width="11" stroke-linecap="round"/>
+    <line x1="60" y1="0" x2="0" y2="50" stroke="url(#goldC)" stroke-width="11" stroke-linecap="round"/>
+  </g>
+
+  <g transform="translate(240, 200)">
+    <text x="0" y="0" text-anchor="middle" font-family="-apple-system, 'SF Pro Display', 'Helvetica Neue', Arial, sans-serif" font-size="22" font-weight="700" fill="#ffd700" letter-spacing="8">CODEX GX</text>
+  </g>
+</svg>

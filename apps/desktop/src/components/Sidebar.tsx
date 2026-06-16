@@ -1,13 +1,11 @@
 import { useSessionsStore } from "../stores/sessions";
 
 export function Sidebar() {
-  const [sessions, currentId, setCurrent, create, remove] = useSessionsStore((s) => [
-    s.sessions,
-    s.currentId,
-    s.setCurrent,
-    s.create,
-    s.remove,
-  ]);
+  const sessions = useSessionsStore((s) => s.sessions);
+  const currentId = useSessionsStore((s) => s.currentId);
+  const setCurrent = useSessionsStore((s) => s.setCurrent);
+  const create = useSessionsStore((s) => s.create);
+  const remove = useSessionsStore((s) => s.remove);
 
   return (
     <aside className="sidebar">

@@ -1,18 +1,17 @@
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import { Sidebar } from "./components/Sidebar";
 import { Thread } from "./components/Thread";
 import { Composer } from "./components/Composer";
 import { StatusBar } from "./components/StatusBar";
 import { TopBar } from "./components/TopBar";
+import { LicenseDialog } from "./components/LicenseDialog";
 import { useThemeStore, type ThemeMode } from "./stores/theme";
 import { useSessionsStore } from "./stores/sessions";
 
 export default function App() {
   const [themeMode, setThemeMode] = useThemeStore((s) => [s.mode, s.setMode]);
-  const [sessions, currentId] = useSessionsStore((s) => [
-    s.sessions,
-    s.currentId,
-  ]);
+  const [currentId] = useSessionsStore((s) => [s.currentId]);
+  const [showLicense, setShowLicense] = useState(false);
 
   // 跟随系统
   useEffect(() => {
@@ -32,19 +31,41 @@ export default function App() {
     document.documentElement.dataset.theme = themeMode;
   }, [themeMode]);
 
-  const current = sessions.find((s) => s.id === currentId);
+  // 监听 /theme slash 命令
+  useEffect(() => {
+    const handler = (e: Event) => {
+      const mode = (e as CustomEvent).detail as string;
+      if (["light", "dark", "system"].includes(mode)) {
+        setThemeMode(mode as ThemeMode);
+      }
+    };
+    window.addEventListener("agentshell:theme", handler);
+    return () => window.removeEventListener("agentshell:theme", handler);
+  }, [setThemeMode]);
 
   return (
     <div className="app-shell">
-      <TopBar themeMode={themeMode} setThemeMode={setThemeMode} />
+      <TopBar
+        themeMode={themeMode}
+        setThemeMode={setThemeMode}
+        onLicenseClick={() => setShowLicense(true)}
+      />
       <div className="app-body">
         <Sidebar />
         <main className="main-pane">
-          <Thread session={current} />
+          <Thread sessionId={currentId} />
           <Composer sessionId={currentId} />
         </main>
       </div>
-      <StatusBar session={current} />
+      <StatusBar sessionId={currentId} />
+      {showLicense && (
+        <LicenseDialog
+          onClose={() => setShowLicense(false)}
+          onChange={() => {
+            // StatusBar / TopBar 会通过 listen("license:changed") 自动刷新
+          }}
+        />
+      )}
     </div>
   );
 }

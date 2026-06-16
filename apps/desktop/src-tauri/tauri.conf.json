@@ -1,18 +1,18 @@
 {
   "$schema": "https://schema.tauri.app/config/2",
   "productName": "AgentShell",
-  "version": "0.1.0-alpha",
+  "version": "0.2.0-alpha",
   "identifier": "dev.agentshell.app",
   "build": {
     "frontendDist": "../dist",
     "devUrl": "http://localhost:1420",
-    "beforeDevCommand": "pnpm dev",
-    "beforeBuildCommand": "pnpm build"
+    "beforeDevCommand": "npm run dev",
+    "beforeBuildCommand": "npm run build"
   },
   "app": {
     "windows": [
       {
-        "title": "AgentShell",
+        "title": "AgentShell — Codex 平替",
         "width": 1280,
         "height": 800,
         "minWidth": 800,
@@ -34,6 +34,13 @@
       "icons/128x128@2x.png",
       "icons/icon.icns",
       "icons/icon.ico"
-    ]
+    ],
+    "category": "DeveloperTool",
+    "shortDescription": "Codex 全功能平替 · 默认 MiniMax M3",
+    "longDescription": "AgentShell 是一个轻量级桌面 Agent，让 AI 模型（M3 / Claude / GPT / DeepSeek）直接在你的电脑上干活。支持代码生成、文案撰写、图像视频生成、Computer Use、Tool Calling 等全功能。比 Codex 便宜 8x，默认使用国产 MiniMax M3 大模型。",
+    "publisher": "AgentShell Contributors",
+    "copyright": "© 2026 opc007",
+    "homepage": "https://github.com/opc007/m3-agentshell",
+    "createUpdaterArtifacts": false
   }
 }

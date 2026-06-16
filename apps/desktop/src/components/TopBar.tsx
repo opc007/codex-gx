@@ -1,14 +1,42 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { invoke } from "@tauri-apps/api/core";
+import { listen } from "@tauri-apps/api/event";
 import type { ThemeMode } from "../stores/theme";
+
+type LicenseStatus = {
+  active: boolean;
+  tier: string;
+  tierDisplay: string;
+  remainingDays: number | null;
+};
 
 type Props = {
   themeMode: ThemeMode;
   setThemeMode: (m: ThemeMode) => void;
+  onLicenseClick: () => void;
 };
 
-export function TopBar({ themeMode, setThemeMode }: Props) {
+export function TopBar({ themeMode, setThemeMode, onLicenseClick }: Props) {
   const [busy, setBusy] = useState(false);
+  const [license, setLicense] = useState<LicenseStatus | null>(null);
+
+  const refreshLicense = async () => {
+    try {
+      const s = await invoke<LicenseStatus>("get_license_status");
+      setLicense(s);
+    } catch {
+      setLicense(null);
+    }
+  };
+
+  useEffect(() => {
+    void refreshLicense();
+    // 监听 license 变更
+    const unlistenP = listen("license:changed", () => void refreshLicense());
+    return () => {
+      void unlistenP.then((u) => u());
+    };
+  }, []);
 
   const cycleTheme = () => {
     const next: ThemeMode =
@@ -32,9 +60,16 @@ export function TopBar({ themeMode, setThemeMode }: Props) {
     <header className="topbar">
       <div className="topbar-left">
         <strong>AgentShell</strong>
-        <span className="topbar-version">v0.1.0-alpha</span>
+        <span className="topbar-version">v0.2.0-alpha</span>
       </div>
       <div className="topbar-right">
+        <button
+          className="topbar-btn"
+          onClick={onLicenseClick}
+          title="License"
+        >
+          🔑 {license?.active ? license.tierDisplay : "未激活"}
+        </button>
         <button className="topbar-btn" onClick={pingBackend} disabled={busy}>
           {busy ? "..." : "Ping"}
         </button>

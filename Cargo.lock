@@ -29,8 +29,11 @@ version = "0.1.0-alpha"
 dependencies = [
  "agent-core",
  "async-trait",
+ "chrono",
  "computer-use",
  "context",
+ "futures",
+ "license",
  "mcp",
  "patch",
  "provider",
