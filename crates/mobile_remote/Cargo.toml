@@ -1,0 +1,15 @@
+[package]
+name = "mobile_remote"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+description = "AgentShell v1.9.1 Mobile Remote — 移动 App 远程监控/遥控 (token 认证 + 状态机)"
+
+[dependencies]
+serde.workspace = true
+serde_json.workspace = true
+thiserror.workspace = true
+chrono.workspace = true
+uuid.workspace = true
+rand = "0.8"

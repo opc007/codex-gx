@@ -17,6 +17,7 @@ mod goal_tauri;
 mod background_tauri;
 mod screenshot_tauri;
 mod desktop_perm_tauri;
+mod mobile_tauri;
 mod lint_tauri;
 mod local_tauri;
 mod marketplace_tauri;
@@ -129,6 +130,7 @@ pub fn run() {
         .manage::<goal_tauri::GoalState>(goal_tauri::build_state())
         .manage::<background_tauri::BackgroundState>(background_tauri::build_state())
         .manage::<desktop_perm_tauri::PermListState>(desktop_perm_tauri::build_state())
+        .manage::<mobile_tauri::MobileState>(mobile_tauri::build_state())
         .setup(|app| {
             // v1.3：安装 panic hook
             if let Some(state) = app.try_state::<BugReportState>() {
@@ -244,6 +246,13 @@ pub fn run() {
             desktop_perm_tauri::perm_decide,                // v1.9 5.28 Permission
             desktop_perm_tauri::perm_is_blacklisted,        // v1.9 5.28 Permission
             desktop_perm_tauri::perm_decide_request,        // v1.9 5.28 Permission
+            mobile_tauri::mobile_get_token,                  // v1.9.1 5.30 Mobile
+            mobile_tauri::mobile_regen_token,                // v1.9.1 5.30 Mobile
+            mobile_tauri::mobile_pair_device,                // v1.9.1 5.30 Mobile
+            mobile_tauri::mobile_unpair_device,              // v1.9.1 5.30 Mobile
+            mobile_tauri::mobile_list_devices,               // v1.9.1 5.30 Mobile
+            mobile_tauri::mobile_verify,                     // v1.9.1 5.30 Mobile
+            mobile_tauri::mobile_call,                       // v1.9.1 5.30 Mobile
             get_ide_context,
             get_git_diff,
             list_git_branches,

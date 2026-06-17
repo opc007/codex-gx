@@ -2,7 +2,6 @@ import { useEffect, useState, Component, type ReactNode, type ErrorInfo } from "
 import { Sidebar } from "./components/Sidebar";
 import { Thread } from "./components/Thread";
 import { Composer } from "./components/Composer";
-import { StatusBar } from "./components/StatusBar";
 import { TopBar } from "./components/TopBar";
 import { ApprovalDialog, type ApprovalRequest } from "./components/ApprovalDialog";
 import PlanDialog, {
@@ -11,7 +10,6 @@ import PlanDialog, {
 } from "./components/PlanDialog";
 import { useThemeMode, type ThemeMode } from "./stores/theme";
 import { useSessionsStore } from "./stores/sessions";
-import { useOpenTabs, openTab } from "./stores/tabs";
 import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
 
@@ -117,17 +115,9 @@ class AppErrorBoundary extends Component<
 export default function App() {
   const [themeMode, setThemeMode] = useThemeMode();
   const currentId = useSessionsStore((s) => s.currentId);
-  const openTabs = useOpenTabs();
   const [approvalReq, setApprovalReq] = useState<ApprovalRequest | null>(null);
   // v0.6：plan mode
   const [planReq, setPlanReq] = useState<PlanRequest | null>(null);
-
-  // v1.1：自动同步 currentId 到 tab 列表
-  useEffect(() => {
-    if (currentId && !openTabs.includes(currentId)) {
-      openTab(currentId);
-    }
-  }, [currentId, openTabs]);
 
   // 跟随系统
   useEffect(() => {
@@ -268,7 +258,6 @@ export default function App() {
             <Composer sessionId={currentId} />
           </main>
         </div>
-        <StatusBar sessionId={currentId} />
         <ApprovalDialog
           request={approvalReq}
           onApprove={onApprove}

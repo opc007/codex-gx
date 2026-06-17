@@ -36,7 +36,8 @@ export function Composer({ sessionId }: Props) {
     result?: string | null;
     error?: string | null;
   }>>([]);
-  const [providers, setProviders] = useState<ProviderInfo[]>([]);
+  // _providers 是 Codex 模型列表的源 — v1.9 模型选择改为 inline prompt 弹窗，保留 state 以备未来 dropdown 切换使用
+  const [_providers, setProviders] = useState<ProviderInfo[]>([]);
   const [stages, setStages] = useState<Stage[]>([]);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
 
@@ -1249,6 +1250,45 @@ M3 / Claude / GPT 会自动调用：
       return;
     }
 
+    // v1.9.1: /mobile (Mobile Remote 管理)
+    if (trimmed === "/mobile" || trimmed.startsWith("/mobile ")) {
+      const arg = trimmed.slice(7).trim();
+      try {
+        if (arg === "" || arg === "status") {
+          const info = await invoke<{ token: string; createdAt: number; lastUsedAt: number | null; deviceCount: number; tokenPath: string }>("mobile_get_token");
+          const lastUsed = info.lastUsedAt ? new Date(info.lastUsedAt * 1000).toISOString() : "never";
+          appendMessage(sessionId, { id: crypto.randomUUID(), role: "assistant", createdAt: Date.now(), text: `📱 Mobile Remote 状态：\n\n  token:   \`${info.token.slice(0, 20)}...\`\n  created: ${new Date(info.createdAt * 1000).toISOString()}\n  used:    ${lastUsed}\n  devices: ${info.deviceCount}\n  path:    ${info.tokenPath}\n\n命令：/mobile regen | pair <name> <ios|android> | unpair <id> | list | call <action>` });
+        } else if (arg === "regen") {
+          const info = await invoke<{ token: string }>("mobile_regen_token");
+          appendMessage(sessionId, { id: crypto.randomUUID(), role: "assistant", createdAt: Date.now(), text: `🔄 Token 已重新生成：\n\n  \`${info.token}\`\n\n⚠️ 老 token 立即失效。请更新移动 App 配置。` });
+        } else if (arg.startsWith("pair ")) {
+          const m = arg.slice(5).match(/^(\S+)\s+(ios|android)$/);
+          if (!m) { appendMessage(sessionId, { id: crypto.randomUUID(), role: "assistant", createdAt: Date.now(), text: "❌ 用法: /mobile pair <name> <ios|android>" }); return; }
+          await invoke("mobile_pair_device", { args: { name: m[1], platform: m[2] } });
+          appendMessage(sessionId, { id: crypto.randomUUID(), role: "assistant", createdAt: Date.now(), text: `📱 配对成功：**${m[1]}** (${m[2]})` });
+        } else if (arg.startsWith("unpair ")) {
+          const id = arg.slice(7).trim();
+          const ok = await invoke<boolean>("mobile_unpair_device", { id });
+          appendMessage(sessionId, { id: crypto.randomUUID(), role: "assistant", createdAt: Date.now(), text: ok ? `📱 解除配对：${id}` : `❌ 没找到：${id}` });
+        } else if (arg === "list") {
+          const devs = await invoke<Array<{ id: string; name: string; platform: string; pairedAt: number; lastSeenAt: number | null }>>("mobile_list_devices");
+          if (devs.length === 0) { appendMessage(sessionId, { id: crypto.randomUUID(), role: "assistant", createdAt: Date.now(), text: "📱 还没配对任何设备" }); return; }
+          const txt = devs.map((d) => `  ${d.platform === "ios" ? "🍎" : "🤖"} **${d.name}** — ${d.id}\n    paired: ${new Date(d.pairedAt * 1000).toISOString()}`).join("\n");
+          appendMessage(sessionId, { id: crypto.randomUUID(), role: "assistant", createdAt: Date.now(), text: `📱 配对设备 (${devs.length})：\n\n${txt}` });
+        } else if (arg.startsWith("call ")) {
+          const action = arg.slice(5).trim();
+          const info = await invoke<{ token: string }>("mobile_get_token");
+          const r = await invoke<{ status: string; data: any }>("mobile_call", { req: { action, token: info.token } });
+          appendMessage(sessionId, { id: crypto.randomUUID(), role: "assistant", createdAt: Date.now(), text: `📱 API 调用 [${action}]：\n\n  status: ${r.status}\n  data:   \`\`\`json\n${JSON.stringify(r.data, null, 2)}\n\`\`\`` });
+        } else {
+          appendMessage(sessionId, { id: crypto.randomUUID(), role: "assistant", createdAt: Date.now(), text: "❌ 用法: /mobile status | regen | pair <name> <ios|android> | unpair <id> | list | call <action>" });
+        }
+      } catch (e) {
+        appendMessage(sessionId, { id: crypto.randomUUID(), role: "assistant", createdAt: Date.now(), text: `❌ /mobile 失败: ${e}` });
+      }
+      return;
+    }
+
     // v1.9: /screenshot
     if (trimmed === "/screenshot" || trimmed === "/ss" || trimmed.startsWith("/screenshot ")) {
       try {
@@ -1373,6 +1413,8 @@ M3 / Claude / GPT 会自动调用：
           "ps", "stop", "bg", "background", "fork", "side", "voice",
           // v1.9
           "screenshot", "ss", "coord", "perm",
+          // v1.9.1
+          "mobile",
         ]);
         if (!known.has(name)) {
           try {
@@ -1806,151 +1848,73 @@ ${diff.diff.slice(0, 5000)}${diff.truncated ? "\n... [truncated, view full in gi
 
   return (
     <div className="composer">
-      {slashMenu}
-      {stages.length > 0 && <StageTimeline stages={stages} />}
-      {subagents.length > 0 && (
-        <div className="composer-subagents">
-          {subagents.map((sa) => (
-            <div key={sa.id} className={`subagent-card subagent-${sa.status}`}>
-              <span className="subagent-icon">
-                {sa.role === "researcher" ? "🔍" : sa.role === "coder" ? "💻" : sa.role === "reviewer" ? "👀" : "🤖"}
+      <div className="composer-inner">
+        {slashMenu}
+        {stages.length > 0 && <StageTimeline stages={stages} />}
+        {subagents.length > 0 && (
+          <div className="composer-subagents">
+            {subagents.map((sa) => (
+              <div key={sa.id} className={`subagent-card subagent-${sa.status}`}>
+                <span className="subagent-icon">
+                  {sa.role === "researcher" ? "🔍" : sa.role === "coder" ? "💻" : sa.role === "reviewer" ? "👀" : "🤖"}
+                </span>
+                <span className="subagent-role">{sa.role}</span>
+                <span className="subagent-task">{sa.task.slice(0, 60)}{sa.task.length > 60 ? "…" : ""}</span>
+                <span className={`subagent-status subagent-status-${sa.status}`}>
+                  {sa.status === "started" ? "启动中" : sa.status === "running" ? "运行中" : sa.status === "done" ? "✓ 完成" : sa.status === "error" ? "✗ 错误" : sa.status}
+                </span>
+                {sa.result && (
+                  <details className="subagent-result">
+                    <summary>查看结果</summary>
+                    <pre>{sa.result.slice(0, 2000)}{sa.result.length > 2000 ? "\n... [truncated]" : ""}</pre>
+                  </details>
+                )}
+                {sa.error && (
+                  <div className="subagent-error">❌ {sa.error}</div>
+                )}
+              </div>
+            ))}
+          </div>
+        )}
+        {(recording || voiceHint) && (
+          <div className="composer-voice-status">
+            {recording && "🔴 正在录音… 再次点击结束"}
+            {voiceHint && !recording && `🔊 ${voiceHint}`}
+          </div>
+        )}
+        {attachedImages.length > 0 && (
+          <div className="composer-attachments">
+            {attachedImages.map((img, i) => (
+              <span key={i} className="composer-attachment-chip" title={img.path}>
+                🖼 {img.name}
+                <button
+                  className="chip-remove"
+                  onClick={() => setAttachedImages((prev) => prev.filter((_, j) => j !== i))}
+                >×</button>
               </span>
-              <span className="subagent-role">{sa.role}</span>
-              <span className="subagent-task">{sa.task.slice(0, 60)}{sa.task.length > 60 ? "…" : ""}</span>
-              <span className={`subagent-status subagent-status-${sa.status}`}>
-                {sa.status === "started" ? "启动中" : sa.status === "running" ? "运行中" : sa.status === "done" ? "✓ 完成" : sa.status === "error" ? "✗ 错误" : sa.status}
-              </span>
-              {sa.result && (
-                <details className="subagent-result">
-                  <summary>查看结果</summary>
-                  <pre>{sa.result.slice(0, 2000)}{sa.result.length > 2000 ? "\n... [truncated]" : ""}</pre>
-                </details>
-              )}
-              {sa.error && (
-                <div className="subagent-error">❌ {sa.error}</div>
-              )}
-            </div>
-          ))}
-        </div>
-      )}
-      <div className="composer-toolbar">
-        <select
-          className="composer-model"
-          value={model}
-          onChange={(e) => setModel(e.target.value)}
-          disabled={busy}
-        >
-          {/* v0.7：auto 路由 */}
-          <option value="auto">🧭 Auto 路由（按任务选 model）</option>
-          {providers.length === 0 && (
-            <option value="MiniMax-M3">MiniMax M3 · $0.60/M</option>
-          )}
-          {providers.flatMap((p) =>
-            p.models.map((m) => (
-              <option key={m} value={m}>
-                {m} · {p.name}
-              </option>
-            ))
-          )}
-        </select>
-        <button className="composer-attachment" title="附件 (v0.4)" disabled>
-          📎
-        </button>
-        <button
-          className={`composer-attachment composer-voice ${recording ? "recording" : ""} ${voiceBusy ? "busy" : ""}`}
-          title={
-            recording
-              ? "点击停止录音"
-              : voiceBusy
-                ? "转写中…"
-                : "语音输入（v1.2：本地 Whisper）"
-          }
-          disabled={voiceBusy}
-          onClick={() => {
-            if (recording) stopRecording();
-            else void startRecording();
-          }}
-        >
-          {recording ? "⏹" : voiceBusy ? "⏳" : "🎙"}
-        </button>
-      </div>
-      {(recording || voiceHint) && (
-        <div className="composer-voice-status">
-          {recording && "🔴 正在录音… 再次点击结束"}
-          {voiceHint && !recording && `🔊 ${voiceHint}`}
-        </div>
-      )}
-      {attachedImages.length > 0 && (
-        <div className="composer-attachments">
-          {attachedImages.map((img, i) => (
-            <span key={i} className="composer-attachment-chip" title={img.path}>
-              🖼 {img.name}
-              <button
-                className="chip-remove"
-                onClick={() => setAttachedImages((prev) => prev.filter((_, j) => j !== i))}
-              >×</button>
-            </span>
-          ))}
-        </div>
-      )}
-      <textarea
-        ref={textareaRef}
-        className="composer-input"
-        placeholder={sessionId ? t.placeholder : t.noSessionPlaceholder}
-        value={text}
-        onChange={(e) => setText(e.target.value)}
-        onKeyDown={onKeyDown}
-        disabled={!sessionId || busy}
-        rows={1}
-        onDragOver={(e) => { e.preventDefault(); }}
-        onDrop={async (e) => {
-          e.preventDefault();
-          // Tauri 2 webview drop 通常给的是 file path
-          // @ts-ignore — DataTransferItem 在 webview 中带 path
-          const items = e.dataTransfer?.files;
-          if (!items) return;
-          for (let i = 0; i < items.length; i++) {
-            const f = items[i] as File & { path?: string };
-            // Tauri 提供 .path 字段（绝对路径）
-            const p = (f as any).path ?? "";
-            if (!p) continue;
-            const lower = p.toLowerCase();
-            const mime = lower.endsWith(".png") ? "image/png"
-              : lower.endsWith(".jpg") || lower.endsWith(".jpeg") ? "image/jpeg"
-              : lower.endsWith(".gif") ? "image/gif"
-              : lower.endsWith(".webp") ? "image/webp" : "image/png";
-            const name = p.split("/").pop() || p;
-            setAttachedImages((prev) => [...prev, { path: p, mime, name }]);
-          }
-        }}
-      />
-      <div className="composer-footer">
-        <span className="composer-hint">
-          {busy ? "正在生成（可能含工具调用）..." : `${text.length} 字符`}
-        </span>
-        <span className={`composer-approval ${requireApproval ? "approval-on" : "approval-off"}`}
-              title="工具调用审批模式（点击切换）"
-              onClick={() => setRequireApproval(!requireApproval)}>
-          {requireApproval ? t.approvalOn : t.approvalOff}
-        </span>
-        {/* v0.6：plan mode 切换 */}
-        <span className={`composer-plan ${planMode ? "plan-on" : "plan-off"}`}
-              title={t.planOn}
-              onClick={() => setPlanMode(!planMode)}>
-          {planMode ? "📋 " + t.planOn : "📋"}
-        </span>
-        {/* v0.9：附件按钮 */}
-        <span
-          className="composer-attach"
-          title="添加图片 (也支持拖放)"
-          onClick={async () => {
-            try {
-              const selected = await openDialog({
-                multiple: true,
-                filters: [{ name: "Image", extensions: ["png", "jpg", "jpeg", "gif", "webp"] }],
-              });
-              if (Array.isArray(selected)) {
-                for (const p of selected) {
+            ))}
+          </div>
+        )}
+        <div className="composer-box">
+          <div className="composer-input-row">
+            <textarea
+              ref={textareaRef}
+              className="composer-input"
+              placeholder={sessionId ? t.placeholder : t.noSessionPlaceholder}
+              value={text}
+              onChange={(e) => setText(e.target.value)}
+              onKeyDown={onKeyDown}
+              disabled={!sessionId || busy}
+              rows={1}
+              onDragOver={(e) => { e.preventDefault(); }}
+              onDrop={async (e) => {
+                e.preventDefault();
+                const items = e.dataTransfer?.files;
+                if (!items) return;
+                for (let i = 0; i < items.length; i++) {
+                  const f = items[i] as File & { path?: string };
+                  const p = (f as any).path ?? "";
+                  if (!p) continue;
                   const lower = p.toLowerCase();
                   const mime = lower.endsWith(".png") ? "image/png"
                     : lower.endsWith(".jpg") || lower.endsWith(".jpeg") ? "image/jpeg"
@@ -1959,34 +1923,107 @@ ${diff.diff.slice(0, 5000)}${diff.truncated ? "\n... [truncated, view full in gi
                   const name = p.split("/").pop() || p;
                   setAttachedImages((prev) => [...prev, { path: p, mime, name }]);
                 }
+              }}
+            />
+          </div>
+          <div className="composer-bottom-row">
+            <button
+              className="composer-model-chip"
+              title="切换模型"
+              disabled={busy}
+              onClick={() => {
+                // Cycle through providers — keep simple: open settings menu / approval panel
+                const sel = window.prompt(
+                  "输入模型 id (留空切到 Auto 路由)：\n\n当前: " + model,
+                  model === "auto" ? "" : model,
+                );
+                if (sel === null) return;
+                setModel(sel.trim() || "auto");
+              }}
+            >
+              <span style={{ fontSize: 12 }}>🧠</span>
+              <span style={{ fontSize: 12, fontWeight: 500 }}>
+                {model === "auto" ? "Auto" : model}
+              </span>
+              <span style={{ fontSize: 10, opacity: 0.6 }}>▾</span>
+            </button>
+            <button
+              className="composer-icon-btn"
+              title="添加图片"
+              onClick={async () => {
+                try {
+                  const selected = await openDialog({
+                    multiple: true,
+                    filters: [{ name: "Image", extensions: ["png", "jpg", "jpeg", "gif", "webp"] }],
+                  });
+                  if (Array.isArray(selected)) {
+                    for (const p of selected) {
+                      const lower = p.toLowerCase();
+                      const mime = lower.endsWith(".png") ? "image/png"
+                        : lower.endsWith(".jpg") || lower.endsWith(".jpeg") ? "image/jpeg"
+                        : lower.endsWith(".gif") ? "image/gif"
+                        : lower.endsWith(".webp") ? "image/webp" : "image/png";
+                      const name = p.split("/").pop() || p;
+                      setAttachedImages((prev) => [...prev, { path: p, mime, name }]);
+                    }
+                  }
+                } catch (e) {
+                  console.warn("attach failed:", e);
+                }
+              }}
+            >
+              📎
+            </button>
+            <button
+              className={`composer-icon-btn ${recording ? "recording" : ""} ${voiceBusy ? "busy" : ""}`}
+              title={
+                recording
+                  ? "点击停止录音"
+                  : voiceBusy
+                    ? "转写中…"
+                    : "语音输入（本地 Whisper）"
               }
-            } catch (e) {
-              console.warn("attach failed:", e);
-            }
-          }}
-        >📎 {attachedImages.length > 0 ? `${attachedImages.length}` : ""}</span>
-        {busy ? (
-          <button
-            className="composer-cancel"
-            onClick={async () => {
-              try {
-                await invoke("cancel_chat", { sessionId });
-              } catch (e) {
-                console.warn("cancel failed:", e);
-              }
-            }}
-          >
-            ⏹ 停止
-          </button>
-        ) : (
-          <button
-            className="composer-send"
-            disabled={!sessionId || !text.trim()}
-            onClick={onSend}
-          >
-            发送 ⏎
-          </button>
-        )}
+              disabled={voiceBusy}
+              onClick={() => {
+                if (recording) stopRecording();
+                else void startRecording();
+              }}
+            >
+              {recording ? "⏹" : voiceBusy ? "⏳" : "🎙"}
+            </button>
+            {busy ? (
+              <button
+                className="composer-cancel-btn"
+                onClick={async () => {
+                  try {
+                    await invoke("cancel_chat", { sessionId });
+                  } catch (e) {
+                    console.warn("cancel failed:", e);
+                  }
+                }}
+              >
+                ⏹ 停止
+              </button>
+            ) : (
+              <button
+                className="composer-send-btn"
+                disabled={!sessionId || !text.trim()}
+                onClick={onSend}
+                title="发送 (Enter)"
+                aria-label="发送"
+              >
+                ↑
+              </button>
+            )}
+          </div>
+        </div>
+        <div className="composer-hint">
+          {busy
+            ? "正在生成（可能含工具调用）…"
+            : sessionId
+              ? `${text.length} 字符 · Enter 发送 · Shift+Enter 换行`
+              : "请先在左侧创建或选择会话"}
+        </div>
       </div>
     </div>
   );

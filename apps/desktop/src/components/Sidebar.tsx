@@ -1,8 +1,9 @@
 import { useSessionsStore, type SessionMeta, type PersistedMessage } from "../stores/sessions";
 import { exportSession, type ExportFormat } from "../lib/export";
 import { useState, useEffect } from "react";
-import { useOpenTabs, openTab, closeTab, closeOtherTabs, closeAllTabs } from "../stores/tabs";
+import { closeTab } from "../stores/tabs";
 import { useCurrentWorkspaceId } from "../stores/workspace";
+import { useCurrentUser } from "../stores/users";
 import { invoke } from "@tauri-apps/api/core";
 
 export function Sidebar() {
@@ -13,18 +14,17 @@ export function Sidebar() {
   const remove = useSessionsStore((s) => s.remove);
   const messages = useSessionsStore((s) => s.messages);
   const setMessages = useSessionsStore((s) => s.setMessages);
-  const openTabs = useOpenTabs();
   const currentWorkspace = useCurrentWorkspaceId();
-  // v1.3：按 workspace 过滤
-  const sessions = allSessions.filter(
-    (sess) => (sess.workspaceId ?? "default") === currentWorkspace,
-  );
+  const currentUser = useCurrentUser();
+
+  const sessions = allSessions
+    .filter((sess) => (sess.workspaceId ?? "default") === currentWorkspace)
+    .slice()
+    .sort((a, b) => b.updatedAt - a.updatedAt);
 
   const [exportOpen, setExportOpen] = useState<string | null>(null);
-  const [tabMenuOpen, setTabMenuOpen] = useState(false);
   const [redactOnExport, setRedactOnExport] = useState(true);
 
-  // v1.2：vault 加密
   const [encryptedSet, setEncryptedSet] = useState<Set<string>>(new Set());
   const [vaultPrompt, setVaultPrompt] = useState<null | {
     sessionId: string;
@@ -38,8 +38,8 @@ export function Sidebar() {
     try {
       const list = await invoke<{ session_id: string }[]>("vault_list_encrypted");
       setEncryptedSet(new Set(list.map((l) => l.session_id)));
-    } catch (e) {
-      // 后端未启动等
+    } catch {
+      // backend not ready
     }
   };
 
@@ -63,91 +63,51 @@ export function Sidebar() {
     }
   };
 
-  const tabSessions = openTabs
-    .map((id) => sessions.find((s) => s.id === id))
-    .filter((s): s is SessionMeta => Boolean(s));
+  const handleNewChat = () => {
+    const s = create();
+    setCurrent(s.id);
+  };
+
+  const handleDelete = (id: string, title: string) => {
+    if (!confirm(`删除会话 "${title}"？`)) return;
+    remove(id);
+    closeTab(id);
+  };
 
   return (
     <aside className="sidebar">
-      {/* v1.1：标签栏 */}
-      {tabSessions.length > 0 && (
-        <div className="tab-bar">
-          <div className="tab-list">
-            {tabSessions.map((s) => (
-              <div
-                key={s.id}
-                className={`tab ${s.id === currentId ? "active" : ""}`}
-                onClick={() => setCurrent(s.id)}
-                title={s.title}
-              >
-                <span className="tab-title">
-                  {s.title.length > 12 ? s.title.slice(0, 12) + "…" : s.title}
-                </span>
-                <button
-                  className="tab-close"
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    closeTab(s.id);
-                  }}
-                  title="关闭标签"
-                >
-                  ×
-                </button>
-              </div>
-            ))}
-          </div>
-          <div className="tab-menu-wrap">
-            <button
-              className="tab-menu-btn"
-              onClick={() => setTabMenuOpen(!tabMenuOpen)}
-              title="标签管理"
-            >
-              ⋯
-            </button>
-            {tabMenuOpen && (
-              <div className="tab-menu" onClick={() => setTabMenuOpen(false)}>
-                {currentId && (
-                  <button onClick={() => closeOtherTabs(currentId)}>
-                    关闭其他
-                  </button>
-                )}
-                <button onClick={closeAllTabs}>关闭所有</button>
-              </div>
-            )}
-          </div>
-        </div>
-      )}
-
-      <div className="sidebar-header">
-        <span>会话 ({sessions.length})</span>
+      <div className="sidebar-top">
         <button
-          className="sidebar-new"
-          onClick={() => {
-            const s = create();
-            openTab(s.id);
-          }}
-          title="新建会话 (并打开标签)"
+          className="sidebar-new-chat"
+          onClick={handleNewChat}
+          title="新建会话"
         >
-          +
+          <span className="new-chat-icon">＋</span>
+          <span>New chat</span>
         </button>
       </div>
-      <ul className="session-list">
+
+      <div className="sidebar-section-label">
+        <span>Chats</span>
+        <span className="count">{sessions.length}</span>
+      </div>
+
+      <div className="sidebar-list">
         {sessions.length === 0 && (
-          <li className="session-empty">还没有会话</li>
+          <div className="sidebar-empty">还没有会话</div>
         )}
         {sessions.map((s) => (
-          <li
+          <div
             key={s.id}
-            className={`session-item ${s.id === currentId ? "active" : ""} ${
-              openTabs.includes(s.id) ? "tabbed" : ""
-            }`}
-            onClick={() => {
-              setCurrent(s.id);
-              openTab(s.id); // 点击侧边栏自动 pin 到 tab
-            }}
+            className={`session-item ${s.id === currentId ? "active" : ""}`}
+            onClick={() => setCurrent(s.id)}
+            title={s.title}
           >
-            <span className="session-title">{s.title}</span>
-            <div className="session-actions">
+            <span className="session-item-icon">
+              {s.side ? "💬" : s.parentId ? "↳" : "💭"}
+            </span>
+            <span className="session-item-title">{s.title}</span>
+            <div className="session-item-actions">
               {encryptedSet.has(s.id) ? (
                 <button
                   className="session-vault-locked"
@@ -189,10 +149,7 @@ export function Sidebar() {
                 className="session-del"
                 onClick={(e) => {
                   e.stopPropagation();
-                  if (confirm(`删除 "${s.title}"？`)) {
-                    remove(s.id);
-                    closeTab(s.id);
-                  }
+                  handleDelete(s.id, s.title);
                 }}
                 title="删除"
               >
@@ -214,9 +171,30 @@ export function Sidebar() {
                 <button onClick={() => doExport(s, "json")}>📦 JSON</button>
               </div>
             )}
-          </li>
+          </div>
         ))}
-      </ul>
+      </div>
+
+      <div className="sidebar-bottom">
+        <div
+          className="sidebar-user"
+          onClick={() => {
+            window.dispatchEvent(new CustomEvent("open-user-menu"));
+          }}
+          title={`${currentUser.displayName} · ${currentUser.role}`}
+        >
+          <div
+            className="team-avatar small"
+            style={{ background: currentUser.color }}
+          >
+            {currentUser.emoji}
+          </div>
+          <div style={{ flex: 1, minWidth: 0 }}>
+            <div className="sidebar-user-name">{currentUser.displayName}</div>
+            <div className="sidebar-user-role">{currentUser.role}</div>
+          </div>
+        </div>
+      </div>
 
       {vaultPrompt && (
         <div className="update-dialog-overlay" onClick={() => setVaultPrompt(null)}>
@@ -225,7 +203,7 @@ export function Sidebar() {
               <h2>
                 {vaultPrompt.mode === "encrypt" ? "🔒 加密 Session" : "🔓 解锁 Session"}
               </h2>
-              <button className="update-cancel" onClick={() => setVaultPrompt(null)}>×</button>
+              <button className="update-close" onClick={() => setVaultPrompt(null)}>×</button>
             </div>
             <div className="update-dialog-body">
               <p style={{ fontSize: 13, color: "var(--text-muted)" }}>
@@ -269,7 +247,6 @@ export function Sidebar() {
                       setVaultPrompt(null);
                       setVaultPassword("");
                     } else {
-                      // 解密 — 把解密后的 JSON 写回 messages
                       const text = await invoke<string>("vault_decrypt_session", {
                         args: {
                           session_id: vaultPrompt.sessionId,

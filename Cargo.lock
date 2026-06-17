@@ -466,6 +466,7 @@ dependencies = [
  "marketplace",
  "mcp",
  "memory",
+ "mobile_remote",
  "p2p",
  "patch",
  "personality",
@@ -2307,6 +2308,18 @@ dependencies = [
  "libc",
  "wasi",
  "windows-sys 0.61.2",
+]
+
+[[package]]
+name = "mobile_remote"
+version = "0.1.0-alpha"
+dependencies = [
+ "chrono",
+ "rand 0.8.6",
+ "serde",
+ "serde_json",
+ "thiserror 1.0.69",
+ "uuid",
 ]
 
 [[package]]

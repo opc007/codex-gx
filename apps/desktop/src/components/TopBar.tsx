@@ -34,6 +34,7 @@ import {
   useUserList,
   switchUser,
 } from "../stores/users";
+import { useSessionsStore } from "../stores/sessions";
 
 type UpdateInfo = {
   currentVersion: string;
@@ -172,14 +173,20 @@ export function TopBar({ themeMode, setThemeMode }: Props) {
     }
   };
 
+  const currentSession = useSessionsStore((s) =>
+    s.sessions.find((x) => x.id === s.currentId)
+  );
+
   return (
     <>
     <header className="topbar">
       <div className="topbar-left">
         <span className="topbar-logo" aria-hidden="true">✦</span>
-        <strong>Codex gx</strong>
-        <span className="topbar-version">v1.9.0</span>
+        <span className="topbar-title">Codex gx</span>
         <WorkspaceSelector />
+      </div>
+      <div className="topbar-center">
+        {currentSession ? currentSession.title : "Codex"}
       </div>
       <div className="topbar-right">
         <button
