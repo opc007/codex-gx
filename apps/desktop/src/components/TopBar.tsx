@@ -17,6 +17,7 @@ import { DevicesPanel } from "./DevicesPanel";
 import { LearningPanel } from "./LearningPanel";
 import { SkillsLibraryDialog } from "./SkillsLibraryDialog";
 import { TtsPanel } from "./TtsPanel";
+import { FlowGraphView } from "./FlowGraphView";
 import {
   useCurrentWorkspaceId,
   useWorkspaceList,
@@ -70,6 +71,7 @@ export function TopBar({ themeMode, setThemeMode, onLicenseClick }: Props) {
   const [learningOpen, setLearningOpen] = useState(false);
   const [skillsOpen, setSkillsOpen] = useState(false);
   const [ttsOpen, setTtsOpen] = useState(false);
+  const [flowOpen, setFlowOpen] = useState(false);
   const { locale, setLocale } = useLocaleSwitcher();
 
   const refreshLicense = async () => {
@@ -225,6 +227,13 @@ export function TopBar({ themeMode, setThemeMode, onLicenseClick }: Props) {
         >
           🔊
         </button>
+        <button
+          className="topbar-btn"
+          onClick={() => setFlowOpen(true)}
+          title="Agent 流程图 (v1.5)"
+        >
+          🕸️
+        </button>
         <UserMenu
           open={userMenuOpen}
           onToggle={() => setUserMenuOpen(!userMenuOpen)}
@@ -347,6 +356,9 @@ export function TopBar({ themeMode, setThemeMode, onLicenseClick }: Props) {
 
       {/* v1.5: TTS 弹窗 */}
       {ttsOpen && <TtsPanel onClose={() => setTtsOpen(false)} />}
+
+      {/* v1.5: Flow Graph 弹窗 */}
+      {flowOpen && <FlowGraphView onClose={() => setFlowOpen(false)} />}
     </header>
   );
 }

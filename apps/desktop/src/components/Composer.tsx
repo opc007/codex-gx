@@ -251,6 +251,18 @@ export function Composer({ sessionId }: Props) {
         return;
       }
     }
+    // v1.5：流程图
+    if (trimmed === "/flow") {
+      window.dispatchEvent(new CustomEvent("open-flow-panel"));
+      appendMessage(sessionId, {
+        id: crypto.randomUUID(),
+        role: "assistant",
+        text: "🕸️ 已触发：打开流程图（请点 TopBar 🕸️）",
+        createdAt: Date.now(),
+      });
+      return;
+    }
+
     // v1.5：TTS 设置
     if (trimmed === "/tts") {
       window.dispatchEvent(new CustomEvent("open-tts-panel"));
@@ -772,6 +784,7 @@ M3 / Claude / GPT 会自动调用：
 - /local [ollama_url]   - 探测本机 Ollama 模型
 - /tts                  - 打开 TTS 语音输出设置
 - /speak <text>         - 朗读一段文本（需先在 TopBar 🔊 启用 TTS）
+- /flow                 - 打开 Agent 流程图（v1.5）
 - Top bar 🏠 打开模型管理 UI
 - 模型 ID 格式：ollama:<name> / llamacpp:<name>
 - 自动 discover Ollama (http://127.0.0.1:11434) 和 llama.cpp server

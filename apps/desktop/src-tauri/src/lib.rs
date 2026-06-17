@@ -10,6 +10,7 @@ mod desktop_cua;
 mod mcp_tool;
 mod skills;
 mod tts;
+mod graph;
 mod subagent_tool;
 mod tools;
 mod voice_tauri;
@@ -180,6 +181,8 @@ pub fn run() {
             tts_save_config, // v1.5
             tts_speak, // v1.5
             tts_speak_with, // v1.5
+            graph_from_plan, // v1.5
+            graph_to_mermaid, // v1.5
             compress_session, // v1.0
             check_update, // v1.0
             voice_tauri::voice_check, // v1.2
@@ -1059,6 +1062,26 @@ async fn tts_speak_with(text: String, config: tts::TtsConfig) -> Result<(), Stri
     }
     tts::speak(text, config);
     Ok(())
+}
+
+// =============================================================================
+// v1.5 Graph 流程图命令
+// =============================================================================
+
+/// 从 plan markdown 文本生成图
+#[tauri::command]
+async fn graph_from_plan(plan: String, title: Option<String>) -> Result<graph::Graph, String> {
+    let mut g = graph::from_plan(&plan);
+    if let Some(t) = title {
+        g.title = Some(t);
+    }
+    Ok(g)
+}
+
+/// 输出 Mermaid 字符串
+#[tauri::command]
+async fn graph_to_mermaid(g: graph::Graph) -> Result<String, String> {
+    Ok(g.to_mermaid())
 }
 
 // ============================================================

@@ -557,6 +557,16 @@ kbd {
 .msg-speak:hover { opacity: 1; }
 .msg-speak:disabled { opacity: 0.3; cursor: not-allowed; }
 
+/* v1.5: flow graph */
+.flow-toolbar { display: flex; gap: 6px; align-items: flex-start; margin-bottom: 12px; flex-wrap: wrap; }
+.flow-toolbar textarea { flex: 1; min-width: 240px; font-size: 12px; }
+.flow-tabs { display: flex; gap: 4px; }
+.flow-svg-wrap { overflow: auto; max-height: 60vh; border: 1px solid var(--border); border-radius: 6px; padding: 8px; background: var(--bg); }
+.flow-mermaid { background: var(--bg); border: 1px solid var(--border); border-radius: 6px; padding: 12px; font-size: 11px; max-height: 60vh; overflow: auto; white-space: pre; }
+.flow-detail { padding: 10px 12px; background: var(--bg-secondary); border-radius: 6px; margin-top: 10px; }
+.flow-detail h4 { margin: 0 0 4px 0; font-size: 13px; }
+.flow-detail pre { background: var(--bg); padding: 6px; border-radius: 3px; max-height: 200px; overflow: auto; font-size: 11px; margin: 4px 0 0 0; }
+
 /* v1.1：标签栏 */
 .tab-bar {
   display: flex;
