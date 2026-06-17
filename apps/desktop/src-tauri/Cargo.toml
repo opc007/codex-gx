@@ -55,6 +55,8 @@ skills_md = { path = "../../../crates/skills_md" }
 goal = { path = "../../../crates/goal" }
 headless = { path = "../../../crates/headless" }
 background = { path = "../../../crates/background" }
+screenshot = { path = "../../../crates/screenshot" }
+desktop_perm = { path = "../../../crates/desktop_perm" }
 base64.workspace = true
 tokio.workspace = true
 async-trait.workspace = true

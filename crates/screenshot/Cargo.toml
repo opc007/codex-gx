@@ -1,0 +1,12 @@
+[package]
+name = "screenshot"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+description = "AgentShell v1.9 截图 + 相对坐标协议 (M3 0.0-1.0 float)"
+
+[dependencies]
+serde.workspace = true
+serde_json.workspace = true
+thiserror.workspace = true

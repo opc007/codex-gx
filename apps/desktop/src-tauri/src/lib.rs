@@ -15,6 +15,8 @@ mod personality_tauri;
 mod skills_md_tauri;
 mod goal_tauri;
 mod background_tauri;
+mod screenshot_tauri;
+mod desktop_perm_tauri;
 mod lint_tauri;
 mod local_tauri;
 mod marketplace_tauri;
@@ -126,6 +128,7 @@ pub fn run() {
         .manage::<skills_md_tauri::SkillIndexState>(skills_md_tauri::build_state())
         .manage::<goal_tauri::GoalState>(goal_tauri::build_state())
         .manage::<background_tauri::BackgroundState>(background_tauri::build_state())
+        .manage::<desktop_perm_tauri::PermListState>(desktop_perm_tauri::build_state())
         .setup(|app| {
             // v1.3：安装 panic hook
             if let Some(state) = app.try_state::<BugReportState>() {
@@ -228,6 +231,19 @@ pub fn run() {
             background_tauri::bg_tail,                  // v1.8 Background
             voice_tauri::voice_duplex_start,             // v1.8 5.26 Voice
             voice_tauri::voice_duplex_status,            // v1.8 5.26 Voice
+            screenshot_tauri::screen_list,                // v1.9 5.27 Screenshot
+            screenshot_tauri::screen_primary,             // v1.9 5.27 Screenshot
+            screenshot_tauri::screen_to_absolute,         // v1.9 5.27 Screenshot
+            screenshot_tauri::screen_screenshot,          // v1.9 5.27 Screenshot
+            screenshot_tauri::screen_protocol_prompt,     // v1.9 5.27 Screenshot
+            screenshot_tauri::screen_multi_to_absolute,   // v1.9 5.27 Screenshot
+            desktop_perm_tauri::perm_get_list,              // v1.9 5.28 Permission
+            desktop_perm_tauri::perm_add_allow,             // v1.9 5.28 Permission
+            desktop_perm_tauri::perm_add_deny,              // v1.9 5.28 Permission
+            desktop_perm_tauri::perm_clear_allow,           // v1.9 5.28 Permission
+            desktop_perm_tauri::perm_decide,                // v1.9 5.28 Permission
+            desktop_perm_tauri::perm_is_blacklisted,        // v1.9 5.28 Permission
+            desktop_perm_tauri::perm_decide_request,        // v1.9 5.28 Permission
             get_ide_context,
             get_git_diff,
             list_git_branches,

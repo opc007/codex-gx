@@ -456,6 +456,7 @@ dependencies = [
  "chrono",
  "computer-use",
  "context",
+ "desktop_perm",
  "futures",
  "goal",
  "headless",
@@ -473,6 +474,7 @@ dependencies = [
  "queue",
  "reqwest 0.12.28",
  "sandbox",
+ "screenshot",
  "serde",
  "serde_json",
  "skills_md",
@@ -767,6 +769,16 @@ dependencies = [
  "quote",
  "rustc_version",
  "syn 2.0.117",
+]
+
+[[package]]
+name = "desktop_perm"
+version = "0.1.0-alpha"
+dependencies = [
+ "dirs 5.0.1",
+ "serde",
+ "serde_json",
+ "thiserror 1.0.69",
 ]
 
 [[package]]
@@ -3574,6 +3586,15 @@ name = "scopeguard"
 version = "1.2.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "94143f37725109f92c262ed2cf5e59bce7498c01bcc1502d7b9afe439a4e9f49"
+
+[[package]]
+name = "screenshot"
+version = "0.1.0-alpha"
+dependencies = [
+ "serde",
+ "serde_json",
+ "thiserror 1.0.69",
+]
 
 [[package]]
 name = "selectors"

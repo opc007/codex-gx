@@ -1249,6 +1249,73 @@ M3 / Claude / GPT 会自动调用：
       return;
     }
 
+    // v1.9: /screenshot
+    if (trimmed === "/screenshot" || trimmed === "/ss" || trimmed.startsWith("/screenshot ")) {
+      try {
+        const meta = await invoke<{ width: number; height: number; scale: number; displayId: string; dataBase64: string; format: string }>("screen_screenshot");
+        appendMessage(sessionId, { id: crypto.randomUUID(), role: "assistant", createdAt: Date.now(), text: `📸 截图完成：\n\n  display: ${meta.displayId}\n  size:    ${meta.width}×${meta.height} (scale ${meta.scale})\n  format:  ${meta.format}\n  data:    ${meta.dataBase64.length} bytes (base64)\n\n（小提示：M3 用 0.0-1.0 相对坐标，不是 0-1000 整数。AgentShell 已自动换算）` });
+      } catch (e) {
+        appendMessage(sessionId, { id: crypto.randomUUID(), role: "assistant", createdAt: Date.now(), text: `❌ /screenshot 失败: ${e}` });
+      }
+      return;
+    }
+
+    // v1.9: /coord (相对坐标换算)
+    if (trimmed.startsWith("/coord ") || trimmed === "/coord") {
+      const arg = trimmed.slice(6).trim();
+      if (!arg) {
+        const screens = await invoke<Array<{ displayId: string; physicalWidth: number; physicalHeight: number; scale: number }>>("screen_list");
+        const txt = screens.map((s) => `  **${s.displayId}** ${s.physicalWidth}×${s.physicalHeight} (scale ${s.scale})`).join("\n");
+        appendMessage(sessionId, { id: crypto.randomUUID(), role: "assistant", createdAt: Date.now(), text: `🖥️ Screens：\n\n${txt || "（无）"}\n\n用法：/coord <x> <y>  (0.0-1.0 相对坐标)` });
+        return;
+      }
+      const m = arg.match(/^([\d.]+)\s+([\d.]+)$/);
+      if (!m) {
+        appendMessage(sessionId, { id: crypto.randomUUID(), role: "assistant", createdAt: Date.now(), text: "❌ 用法: /coord <x> <y>  (0.0-1.0)" });
+        return;
+      }
+      try {
+        const abs = await invoke<{ logicalX: number; logicalY: number; physicalX: number; physicalY: number; displayId: string }>("screen_to_absolute", { args: { x: parseFloat(m[1]), y: parseFloat(m[2]) } });
+        appendMessage(sessionId, { id: crypto.randomUUID(), role: "assistant", createdAt: Date.now(), text: `🎯 (${m[1]}, ${m[2]}) →\n\n  display:   ${abs.displayId}\n  physical:  (${abs.physicalX}, ${abs.physicalY})\n  logical:   (${abs.logicalX}, ${abs.logicalY})` });
+      } catch (e) {
+        appendMessage(sessionId, { id: crypto.randomUUID(), role: "assistant", createdAt: Date.now(), text: `❌ /coord 失败: ${e}` });
+      }
+      return;
+    }
+
+    // v1.9: /perm (权限管理)
+    if (trimmed === "/perm" || trimmed.startsWith("/perm ")) {
+      const arg = trimmed.slice(5).trim();
+      try {
+        if (arg === "" || arg === "list") {
+          const l = await invoke<{ alwaysAllow: string[]; alwaysAsk: string[]; denied: string[]; usageCount: Record<string, number> }>("perm_get_list");
+          const aa = l.alwaysAllow.map((a) => `  ✅ ${a}${l.usageCount[a] ? ` (${l.usageCount[a]}次)` : ""}`).join("\n");
+          const ask = l.alwaysAsk.map((a) => `  ❓ ${a}`).join("\n");
+          const d = l.denied.map((a) => `  ⛔ ${a}`).join("\n");
+          appendMessage(sessionId, { id: crypto.randomUUID(), role: "assistant", createdAt: Date.now(), text: `🔐 Desktop 权限列表：\n\n**Always allow (${l.alwaysAllow.length})**:\n${aa || "  (无)"}\n\n**Always ask (${l.alwaysAsk.length})**:\n${ask || "  (无)"}\n\n**Denied (${l.denied.length})**:\n${d || "  (无)"}\n\n**强制黑名单**：银行 / 支付 / 证券 / 密码管理 / 2FA（不可移除）\n\n命令：/perm allow <name> | /perm deny <name> | /perm clear` });
+        } else if (arg === "clear") {
+          await invoke("perm_clear_allow");
+          appendMessage(sessionId, { id: crypto.randomUUID(), role: "assistant", createdAt: Date.now(), text: "🧹 Always allow 列表已清空" });
+        } else if (arg.startsWith("allow ")) {
+          const key = arg.slice(6).trim();
+          await invoke("perm_add_allow", { key });
+          appendMessage(sessionId, { id: crypto.randomUUID(), role: "assistant", createdAt: Date.now(), text: `✅ **${key}** 已加入 always_allow` });
+        } else if (arg.startsWith("deny ")) {
+          const key = arg.slice(5).trim();
+          await invoke("perm_add_deny", { key });
+          appendMessage(sessionId, { id: crypto.randomUUID(), role: "assistant", createdAt: Date.now(), text: `⛔ **${key}** 已加入 denied` });
+        } else if (arg === "protocol") {
+          const prompt = await invoke<string>("screen_protocol_prompt");
+          appendMessage(sessionId, { id: crypto.randomUUID(), role: "assistant", createdAt: Date.now(), text: `📋 M3 Computer Use 协议（注入 system prompt）：\n\n\`\`\`\n${prompt}\n\`\`\`` });
+        } else {
+          appendMessage(sessionId, { id: crypto.randomUUID(), role: "assistant", createdAt: Date.now(), text: "❌ 用法: /perm list | allow <name> | deny <name> | clear | protocol" });
+        }
+      } catch (e) {
+        appendMessage(sessionId, { id: crypto.randomUUID(), role: "assistant", createdAt: Date.now(), text: `❌ /perm 失败: ${e}` });
+      }
+      return;
+    }
+
     if (trimmed === "/skills" || trimmed.startsWith("/skills ")) {
       try {
         const list = await invoke<Array<{ name: string; description: string }>>("list_skills");
@@ -1304,6 +1371,8 @@ M3 / Claude / GPT 会自动调用：
           "usage", "ide", "diff", "review",
           // v1.8
           "ps", "stop", "bg", "background", "fork", "side", "voice",
+          // v1.9
+          "screenshot", "ss", "coord", "perm",
         ]);
         if (!known.has(name)) {
           try {

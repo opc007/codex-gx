@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
 import type { ThemeMode } from "../stores/theme";
@@ -63,7 +63,6 @@ type Props = {
 };
 
 export function TopBar({ themeMode, setThemeMode }: Props) {
-  const [busy, setBusy] = useState(false);
   const [license, setLicense] = useState<LicenseSummary | null>(null);
   const [updateInfo, setUpdateInfo] = useState<UpdateInfo | null>(null);
   const [updateBusy, setUpdateBusy] = useState(false);
@@ -73,6 +72,7 @@ export function TopBar({ themeMode, setThemeMode }: Props) {
   const [bugOpen, setBugOpen] = useState(false);
   const [teamOpen, setTeamOpen] = useState(false);
   const [userMenuOpen, setUserMenuOpen] = useState(false);
+  const [settingsOpen, setSettingsOpen] = useState(false);
   const [localOpen, setLocalOpen] = useState(false);
   const [reviewOpen, setReviewOpen] = useState(false);
   const [queueOpen, setQueueOpen] = useState(false);
@@ -85,6 +85,8 @@ export function TopBar({ themeMode, setThemeMode }: Props) {
   const [pluginOpen, setPluginOpen] = useState(false);
   const [licenseOpen, setLicenseOpen] = useState(false);
   const { locale, setLocale } = useLocaleSwitcher();
+
+  const settingsRef = useRef<HTMLDivElement | null>(null);
 
   const refreshLicense = async () => {
     try {
@@ -120,21 +122,53 @@ export function TopBar({ themeMode, setThemeMode }: Props) {
     };
   }, []);
 
+  // v1.8：settings 菜单外部点击关闭
+  useEffect(() => {
+    if (!settingsOpen) return;
+    const onDocClick = (e: MouseEvent) => {
+      if (!settingsRef.current) return;
+      if (!settingsRef.current.contains(e.target as Node)) {
+        setSettingsOpen(false);
+      }
+    };
+    const onEsc = (e: KeyboardEvent) => {
+      if (e.key === "Escape") setSettingsOpen(false);
+    };
+    document.addEventListener("mousedown", onDocClick);
+    document.addEventListener("keydown", onEsc);
+    return () => {
+      document.removeEventListener("mousedown", onDocClick);
+      document.removeEventListener("keydown", onEsc);
+    };
+  }, [settingsOpen]);
+
+  // v1.8：Cycle theme helper (used in settings menu)
   const cycleTheme = () => {
     const next: ThemeMode =
       themeMode === "light" ? "dark" : themeMode === "dark" ? "system" : "light";
     setThemeMode(next);
   };
 
+  // v1.8：Ping backend (used in settings menu)
   const pingBackend = async () => {
-    setBusy(true);
     try {
       const v = await invoke<string>("ping");
       alert(`Rust 后端回应：${v}`);
     } catch (e) {
       alert(`错误: ${e}`);
+    }
+  };
+
+  // v1.8: Check for updates
+  const checkUpdate = async () => {
+    setUpdateBusy(true);
+    try {
+      const info = await invoke<UpdateInfo>("check_update");
+      setUpdateInfo(info);
+    } catch (e) {
+      alert(`检查更新失败：${e}`);
     } finally {
-      setBusy(false);
+      setUpdateBusy(false);
     }
   };
 
@@ -142,141 +176,58 @@ export function TopBar({ themeMode, setThemeMode }: Props) {
     <>
     <header className="topbar">
       <div className="topbar-left">
+        <span className="topbar-logo" aria-hidden="true">✦</span>
         <strong>Codex gx</strong>
-        <span className="topbar-version">v1.8.0</span>
+        <span className="topbar-version">v1.9.0</span>
         <WorkspaceSelector />
       </div>
       <div className="topbar-right">
         <button
-          className="topbar-btn"
-          onClick={async () => {
-            setUpdateBusy(true);
-            try {
-              const info = await invoke<UpdateInfo>("check_update");
-              setUpdateInfo(info);
-            } catch (e) {
-              alert(`检查更新失败：${e}`);
-            } finally {
-              setUpdateBusy(false);
-            }
-          }}
-          disabled={updateBusy}
-          title="检查更新"
-        >
-          {updateBusy ? "..." : updateInfo?.updateAvailable ? "🆕" : "🔄"}
-        </button>
-        <button
-          className="topbar-btn"
+          className="topbar-btn license-badge"
           onClick={() => setLicenseOpen(true)}
           title="License 授权"
         >
-          🔑 {formatLicenseBadge(license)}
+          🔑 <span className="license-badge-text">{formatLicenseBadge(license)}</span>
         </button>
-        <button
-          className="topbar-btn"
-          onClick={() => setMarketplaceOpen(true)}
-          title="Plugin marketplace (v1.2)"
-        >
-          🧩
-        </button>
-        <button
-          className="topbar-btn"
-          onClick={() => setThemeStudioOpen(true)}
-          title="主题市场 (v1.3)"
-        >
-          🎨
-        </button>
-        <button
-          className="topbar-btn"
-          onClick={() => setRoutingOpen(true)}
-          title="路由策略 (v1.3)"
-        >
-          🧭
-        </button>
-        <button
-          className="topbar-btn"
-          onClick={() => setBugOpen(true)}
-          title="Bug 报告 (v1.3)"
-        >
-          🐞
-        </button>
-        <button
-          className="topbar-btn"
-          onClick={() => setTeamOpen(true)}
-          title="团队 / 用户管理 (v1.3)"
-        >
-          👥
-        </button>
-        <button
-          className="topbar-btn"
-          onClick={() => setLocalOpen(true)}
-          title="本地 LLM (v1.4)"
-        >
-          🏠
-        </button>
-        <button
-          className="topbar-btn"
-          onClick={() => setReviewOpen(true)}
-          title="代码 review / 静态分析 (v1.4)"
-        >
-          🔍
-        </button>
-        <button
-          className="topbar-btn"
-          onClick={() => setQueueOpen(true)}
-          title="任务队列 (v1.4)"
-        >
-          📋
-        </button>
-        <button
-          className="topbar-btn"
-          onClick={() => setDevicesOpen(true)}
-          title="P2P 设备协同 (v1.4)"
-        >
-          📡
-        </button>
-        <button
-          className="topbar-btn"
-          onClick={() => setLearningOpen(true)}
-          title="Agent 学习 / 个性化 (v1.4)"
-        >
-          🧠
-        </button>
-        <button
-          className="topbar-btn"
-          onClick={() => setSkillsOpen(true)}
-          title="Skills 库 / 模板市场 (v1.5)"
-        >
-          📚
-        </button>
-        <button
-          className="topbar-btn"
-          onClick={() => setTtsOpen(true)}
-          title="语音输出 TTS (v1.5)"
-        >
-          🔊
-        </button>
-        <button
-          className="topbar-btn"
-          onClick={() => setFlowOpen(true)}
-          title="Agent 流程图 (v1.5)"
-        >
-          🕸️
-        </button>
-        <button
-          className="topbar-btn"
-          onClick={() => setSyncOpen(true)}
-          title="Session 同步 (v1.5)"
-        >
-          ☁️
-        </button>
-        <button
-          className="topbar-btn"
-          onClick={() => setPluginOpen(true)}
-          title="插件热加载 (v1.5)"
-        >
-          🧩
-        </button>
+        <div className="settings-menu-wrap" ref={settingsRef}>
+          <button
+            className="topbar-btn icon-btn"
+            onClick={() => setSettingsOpen((v) => !v)}
+            title="设置"
+            aria-haspopup="menu"
+            aria-expanded={settingsOpen}
+          >
+            ⋯
+          </button>
+          {settingsOpen && (
+            <SettingsMenu
+              locale={locale}
+              onChangeLocale={(l) => setLocale(l)}
+              themeMode={themeMode}
+              onCycleTheme={cycleTheme}
+              onCheckUpdate={checkUpdate}
+              updateBusy={updateBusy}
+              onClose={() => setSettingsOpen(false)}
+              onOpenMarketplace={() => { setSettingsOpen(false); setMarketplaceOpen(true); }}
+              onOpenThemeStudio={() => { setSettingsOpen(false); setThemeStudioOpen(true); }}
+              onOpenRouting={() => { setSettingsOpen(false); setRoutingOpen(true); }}
+              onOpenBug={() => { setSettingsOpen(false); setBugOpen(true); }}
+              onOpenTeam={() => { setSettingsOpen(false); setTeamOpen(true); }}
+              onOpenLocal={() => { setSettingsOpen(false); setLocalOpen(true); }}
+              onOpenReview={() => { setSettingsOpen(false); setReviewOpen(true); }}
+              onOpenQueue={() => { setSettingsOpen(false); setQueueOpen(true); }}
+              onOpenDevices={() => { setSettingsOpen(false); setDevicesOpen(true); }}
+              onOpenLearning={() => { setSettingsOpen(false); setLearningOpen(true); }}
+              onOpenSkills={() => { setSettingsOpen(false); setSkillsOpen(true); }}
+              onOpenTts={() => { setSettingsOpen(false); setTtsOpen(true); }}
+              onOpenFlow={() => { setSettingsOpen(false); setFlowOpen(true); }}
+              onOpenSync={() => { setSettingsOpen(false); setSyncOpen(true); }}
+              onOpenPlugins={() => { setSettingsOpen(false); setPluginOpen(true); }}
+              onOpenLicense={() => { setSettingsOpen(false); setLicenseOpen(true); }}
+              onPing={() => { setSettingsOpen(false); void pingBackend(); }}
+            />
+          )}
+        </div>
         <UserMenu
           open={userMenuOpen}
           onToggle={() => setUserMenuOpen(!userMenuOpen)}
@@ -286,25 +237,6 @@ export function TopBar({ themeMode, setThemeMode }: Props) {
             setTeamOpen(true);
           }}
         />
-        <button className="topbar-btn" onClick={pingBackend} disabled={busy}>
-          {busy ? "..." : "Ping"}
-        </button>
-        <button className="topbar-btn" onClick={cycleTheme}>
-          {themeMode === "light" ? "☀️" : themeMode === "dark" ? "🌙" : "🖥️"}
-          <span style={{ marginLeft: 6 }}>
-            {themeMode === "system" ? "跟随" : themeMode === "light" ? "白天" : "夜晚"}
-          </span>
-        </button>
-        <select
-          className="topbar-select"
-          value={locale}
-          onChange={(e) => setLocale(e.target.value as Locale)}
-          title="Language"
-        >
-          {SUPPORTED_LOCALES.map((l) => (
-            <option key={l} value={l}>{LOCALE_LABELS[l]}</option>
-          ))}
-        </select>
       </div>
     </header>
 
@@ -378,7 +310,7 @@ export function TopBar({ themeMode, setThemeMode }: Props) {
           onUseModel={(id) => {
             navigator.clipboard.writeText(id).catch(() => {});
             alert(
-              `模型 ID: ${id}\n\n已复制到剪贴板。\n\n在 Top bar 模型下拉 / 路由策略里用此 ID。`,
+              `模型 ID: ${id}\n\n已复制到剪贴板。\n\n在 Composer 模型下拉 / 路由策略里用此 ID。`,
             );
           }}
         />
@@ -435,6 +367,115 @@ function formatLicenseBadge(license: LicenseSummary | null): string {
     case "invalid":
       return "异常";
   }
+}
+
+// ------------------ v1.8: Settings menu (Codex style) ------------------
+
+type SettingsMenuProps = {
+  locale: Locale;
+  onChangeLocale: (l: Locale) => void;
+  themeMode: ThemeMode;
+  onCycleTheme: () => void;
+  onCheckUpdate: () => void;
+  updateBusy: boolean;
+  onClose: () => void;
+  onOpenMarketplace: () => void;
+  onOpenThemeStudio: () => void;
+  onOpenRouting: () => void;
+  onOpenBug: () => void;
+  onOpenTeam: () => void;
+  onOpenLocal: () => void;
+  onOpenReview: () => void;
+  onOpenQueue: () => void;
+  onOpenDevices: () => void;
+  onOpenLearning: () => void;
+  onOpenSkills: () => void;
+  onOpenTts: () => void;
+  onOpenFlow: () => void;
+  onOpenSync: () => void;
+  onOpenPlugins: () => void;
+  onOpenLicense: () => void;
+  onPing: () => void;
+};
+
+function SettingsMenu(props: SettingsMenuProps) {
+  const themeLabel =
+    props.themeMode === "system" ? "跟随系统" : props.themeMode === "light" ? "白天" : "夜晚";
+  const themeIcon = props.themeMode === "light" ? "☀️" : props.themeMode === "dark" ? "🌙" : "🖥️";
+
+  return (
+    <div className="settings-menu" role="menu">
+      <div className="settings-menu-section">能力</div>
+      <MenuItem icon="🧩" label="插件市场" onClick={props.onOpenMarketplace} />
+      <MenuItem icon="🎨" label="主题工作室" onClick={props.onOpenThemeStudio} />
+      <MenuItem icon="🧭" label="路由策略" onClick={props.onOpenRouting} />
+      <MenuItem icon="👥" label="团队 / 用户" onClick={props.onOpenTeam} />
+
+      <div className="settings-menu-section">开发</div>
+      <MenuItem icon="🏠" label="本地 LLM" onClick={props.onOpenLocal} />
+      <MenuItem icon="🔍" label="代码 review" onClick={props.onOpenReview} />
+      <MenuItem icon="📋" label="任务队列" onClick={props.onOpenQueue} />
+      <MenuItem icon="📡" label="设备协同 (P2P)" onClick={props.onOpenDevices} />
+      <MenuItem icon="🧠" label="Agent 学习" onClick={props.onOpenLearning} />
+      <MenuItem icon="📚" label="Skills 库" onClick={props.onOpenSkills} />
+      <MenuItem icon="🔊" label="语音输出 TTS" onClick={props.onOpenTts} />
+      <MenuItem icon="🕸️" label="流程图" onClick={props.onOpenFlow} />
+      <MenuItem icon="☁️" label="Session 同步" onClick={props.onOpenSync} />
+      <MenuItem icon="🧩" label="插件热加载" onClick={props.onOpenPlugins} />
+      <MenuItem icon="🐞" label="Bug 报告" onClick={props.onOpenBug} />
+
+      <div className="settings-menu-section">系统</div>
+      <MenuItem icon="🔐" label="License 授权" onClick={props.onOpenLicense} />
+      <MenuItem
+        icon="🆕"
+        label={props.updateBusy ? "检查更新…" : "检查更新"}
+        onClick={props.onCheckUpdate}
+      />
+      <button
+        className="settings-menu-item"
+        onClick={props.onCycleTheme}
+        role="menuitem"
+      >
+        <span className="settings-menu-icon">{themeIcon}</span>
+        <span>主题</span>
+        <span className="settings-menu-extra">{themeLabel}</span>
+      </button>
+      <div className="settings-menu-locale">
+        <span className="settings-menu-icon">🌐</span>
+        <span style={{ flex: 1 }}>语言</span>
+        <select
+          className="topbar-select"
+          value={props.locale}
+          onChange={(e) => props.onChangeLocale(e.target.value as Locale)}
+          onClick={(e) => e.stopPropagation()}
+        >
+          {SUPPORTED_LOCALES.map((l) => (
+            <option key={l} value={l}>{LOCALE_LABELS[l]}</option>
+          ))}
+        </select>
+      </div>
+      {import.meta.env.DEV && (
+        <MenuItem icon="🛠" label="Ping 后端 (dev)" onClick={props.onPing} />
+      )}
+    </div>
+  );
+}
+
+function MenuItem({
+  icon,
+  label,
+  onClick,
+}: {
+  icon: string;
+  label: string;
+  onClick: () => void;
+}) {
+  return (
+    <button className="settings-menu-item" onClick={onClick} role="menuitem">
+      <span className="settings-menu-icon">{icon}</span>
+      <span>{label}</span>
+    </button>
+  );
 }
 
 // ------------------ v1.3：Workspace selector ------------------

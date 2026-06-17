@@ -1,0 +1,13 @@
+[package]
+name = "desktop_perm"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+description = "AgentShell v1.9 App 白名单 + 权限系统 (对齐 Codex)"
+
+[dependencies]
+serde.workspace = true
+serde_json.workspace = true
+thiserror.workspace = true
+dirs = "5"
