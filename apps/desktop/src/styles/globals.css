@@ -398,6 +398,40 @@ kbd {
 .local-help ul { margin: 0; }
 .local-help a { color: var(--primary); }
 
+/* v1.4：code review / lint */
+.lint-path-row { display: flex; align-items: center; gap: 8px; margin-bottom: 12px; }
+.lint-path-row label { min-width: 80px; font-size: 12px; color: var(--text-muted); }
+.lint-path-row .vault-password-input { flex: 1; }
+
+.lint-stats { display: flex; gap: 8px; margin-bottom: 12px; }
+.lint-stat { flex: 1; padding: 8px 12px; background: var(--bg-secondary); border-radius: 6px; text-align: center; }
+.lint-stat-n { display: block; font-size: 22px; font-weight: 600; }
+.lint-stat-l { display: block; font-size: 11px; color: var(--text-muted); }
+.lint-sev-error { color: var(--danger); }
+.lint-sev-warn { color: #f59e0b; }
+.lint-sev-info { color: var(--text-muted); }
+
+.lint-filter { display: flex; gap: 6px; margin-bottom: 12px; }
+
+.lint-reports { display: flex; flex-direction: column; gap: 10px; }
+.lint-report { border: 1px solid var(--border); border-radius: 6px; padding: 10px; background: var(--bg-secondary); }
+.lint-report-head { display: flex; align-items: center; gap: 12px; margin-bottom: 6px; font-size: 13px; }
+.lint-checker-name { font-weight: 600; }
+.lint-checker-summary { color: var(--text-muted); }
+.lint-checker-time { color: var(--text-muted); font-family: ui-monospace, monospace; font-size: 11px; }
+.lint-checker-skip { color: var(--text-muted); font-size: 11px; }
+
+.lint-issue-list { display: flex; flex-direction: column; gap: 2px; }
+.lint-issue { display: flex; align-items: baseline; gap: 8px; padding: 3px 6px; border-radius: 3px; font-size: 12px; flex-wrap: wrap; }
+.lint-issue:hover { background: var(--bg-hover); }
+.lint-issue-file { font-family: ui-monospace, monospace; font-size: 11px; color: var(--text-muted); min-width: 200px; }
+.lint-issue-code { font-family: ui-monospace, monospace; font-size: 10px; padding: 1px 4px; background: var(--bg); border-radius: 3px; color: var(--primary); }
+.lint-issue-msg { color: var(--text); flex: 1; min-width: 200px; word-break: break-word; }
+
+.lint-help { padding: 12px; background: var(--bg-secondary); border-radius: 6px; margin-top: 16px; }
+.lint-help h4 { margin: 0 0 8px 0; font-size: 13px; }
+.lint-help ul { margin: 0; }
+
 /* v1.1：标签栏 */
 .tab-bar {
   display: flex;

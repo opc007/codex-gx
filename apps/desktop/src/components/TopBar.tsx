@@ -11,6 +11,7 @@ import { RoutingEditorDialog } from "./RoutingEditorDialog";
 import { BugReportDialog } from "./BugReportDialog";
 import { TeamPanel } from "./TeamPanel";
 import { LocalModelDialog } from "./LocalModelDialog";
+import { CodeReviewDialog } from "./CodeReviewDialog";
 import {
   useCurrentWorkspaceId,
   useWorkspaceList,
@@ -58,6 +59,7 @@ export function TopBar({ themeMode, setThemeMode, onLicenseClick }: Props) {
   const [teamOpen, setTeamOpen] = useState(false);
   const [userMenuOpen, setUserMenuOpen] = useState(false);
   const [localOpen, setLocalOpen] = useState(false);
+  const [reviewOpen, setReviewOpen] = useState(false);
   const { locale, setLocale } = useLocaleSwitcher();
 
   const refreshLicense = async () => {
@@ -171,6 +173,13 @@ export function TopBar({ themeMode, setThemeMode, onLicenseClick }: Props) {
         >
           🏠
         </button>
+        <button
+          className="topbar-btn"
+          onClick={() => setReviewOpen(true)}
+          title="代码 review / 静态分析 (v1.4)"
+        >
+          🔍
+        </button>
         <UserMenu
           open={userMenuOpen}
           onToggle={() => setUserMenuOpen(!userMenuOpen)}
@@ -275,6 +284,9 @@ export function TopBar({ themeMode, setThemeMode, onLicenseClick }: Props) {
           }}
         />
       )}
+
+      {/* v1.4: Code Review 弹窗 */}
+      {reviewOpen && <CodeReviewDialog onClose={() => setReviewOpen(false)} />}
     </header>
   );
 }

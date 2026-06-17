@@ -13,6 +13,7 @@ members = [
     "crates/voice",
     "crates/marketplace",
     "crates/vault",
+    "crates/lint",
     "apps/desktop/src-tauri",
 ]
 
@@ -86,6 +87,10 @@ license = { path = "crates/license" }
 voice = { path = "crates/voice" }
 marketplace = { path = "crates/marketplace" }
 vault = { path = "crates/vault" }
+lint = { path = "crates/lint" }
+
+# regex
+regex-lite = "0.1"
 
 [profile.dev]
 opt-level = 0

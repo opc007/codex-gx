@@ -241,6 +241,65 @@ export function Composer({ sessionId }: Props) {
         return;
       }
     }
+    // v1.4：代码 review
+    if (trimmed.startsWith("/lint ") || trimmed === "/lint") {
+      const args = trimmed.slice(5).trim() || ".";
+      try {
+        const s = await invoke<{
+          total_errors: number;
+          total_warnings: number;
+          total_infos: number;
+          total_ms: number;
+          reports: Array<{
+            checker: string;
+            summary: string;
+            duration_ms: number;
+            skipped_reason: string | null;
+            issues: Array<{
+              file: string;
+              line: number | null;
+              severity: "error" | "warning" | "info";
+              code: string | null;
+              message: string;
+            }>;
+          }>;
+        }>("lint_run_summary", { path: args });
+        let text = `🔍 **代码 review (${args})**\n\n`;
+        text += `❌ error: ${s.total_errors}  ⚠️ warning: ${s.total_warnings}  ℹ️ info: ${s.total_infos}  (${(s.total_ms / 1000).toFixed(1)}s)\n\n`;
+        for (const r of s.reports) {
+          text += `**${r.checker}** — ${r.summary}`;
+          if (r.skipped_reason) text += ` ⏭️ ${r.skipped_reason}`;
+          text += `\n`;
+          for (const i of r.issues.slice(0, 8)) {
+            const icon = i.severity === "error" ? "❌" : i.severity === "warning" ? "⚠️" : "ℹ️";
+            const loc = i.line ? `:${i.line}` : "";
+            text += `  ${icon} ${i.file.split("/").slice(-2).join("/")}${loc} ${i.code ?? ""} ${i.message.slice(0, 60)}\n`;
+          }
+          if (r.issues.length > 8) {
+            text += `  …还有 ${r.issues.length - 8} 项\n`;
+          }
+          text += `\n`;
+        }
+        text += `💡 Top bar 🔍 打开完整 UI`;
+        appendMessage(sessionId, {
+          id: crypto.randomUUID(),
+          role: "assistant",
+          text,
+          createdAt: Date.now(),
+        });
+        setText("");
+        return;
+      } catch (e) {
+        appendMessage(sessionId, {
+          id: crypto.randomUUID(),
+          role: "assistant",
+          text: `❌ 失败: ${e}`,
+          createdAt: Date.now(),
+        });
+        setText("");
+        return;
+      }
+    }
     // v1.3：路由测试
     if (trimmed.startsWith("/route ") || trimmed === "/route") {
       const args = trimmed.slice(6).trim();

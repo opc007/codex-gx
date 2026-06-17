@@ -19,6 +19,7 @@ mod routing;
 mod routing_tauri;
 mod bugreport_tauri;
 mod local_tauri;
+mod lint_tauri;
 
 use agent_core::tool::ToolRegistry;
 use serde::{Deserialize, Serialize};
@@ -175,6 +176,8 @@ pub fn run() {
             local_tauri::local_discover, // v1.4
             local_tauri::local_list_models, // v1.4
             local_tauri::local_ping, // v1.4
+            lint_tauri::lint_run, // v1.4
+            lint_tauri::lint_run_summary, // v1.4
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
