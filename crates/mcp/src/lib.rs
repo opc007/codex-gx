@@ -25,4 +25,6 @@ pub use message::{
     Implementation, Capabilities, Content,
 };
 pub use transport::stdio::StdioTransport;
+pub use transport::http::{HttpEndpoint, HttpTransport};
+pub use transport::pool::{Backend, McpPool, TransportConfig};
 pub use client::McpClient;

@@ -1,6 +1,8 @@
 import { useEffect, useRef, useState } from "react";
 import { invoke } from "@tauri-apps/api/core";
+import { open as openDialog } from "@tauri-apps/plugin-dialog";
 import { useSessionsStore, getSessionsState, setSessionsState, type PersistedMessage } from "../stores/sessions";
+import { useTranslation, setLocale as i18nSetLocale } from "../i18n";
 import { sendChatStream } from "../lib/chat";
 import { loadProviders, type ProviderInfo } from "../lib/providers";
 import { StageTimeline, type Stage } from "./StageTimeline";
@@ -10,6 +12,7 @@ type Props = {
 };
 
 export function Composer({ sessionId }: Props) {
+  const t = useTranslation();
   const appendMessage = useSessionsStore((s) => s.appendMessage);
   const setMessages = useSessionsStore((s) => s.setMessages);
 
@@ -17,6 +20,8 @@ export function Composer({ sessionId }: Props) {
   const [busy, setBusy] = useState(false);
   const [model, setModel] = useState("MiniMax-M3");
   const [requireApproval, setRequireApproval] = useState(true);
+  // v0.9：附件图片
+  const [attachedImages, setAttachedImages] = useState<Array<{ path: string; mime: string; name: string }>>([]);
   // v0.6：plan mode
   const [planMode, setPlanMode] = useState(false);
   // v0.7：sub-agents
@@ -82,6 +87,28 @@ export function Composer({ sessionId }: Props) {
     const trimmed = text.trim();
     if (trimmed === "/clear") {
       setMessages(sessionId, []);
+      setText("");
+      return;
+    }
+    // v0.9：i18n 切换
+    if (trimmed.startsWith("/lang ") || trimmed === "/lang") {
+      const arg = trimmed.slice(5).trim();
+      if (arg === "zh" || arg === "en") {
+        i18nSetLocale(arg);
+        appendMessage(sessionId, {
+          id: crypto.randomUUID(),
+          role: "assistant",
+          text: arg === "zh" ? "🌐 已切换到中文" : "🌐 Switched to English",
+          createdAt: Date.now(),
+        });
+      } else {
+        appendMessage(sessionId, {
+          id: crypto.randomUUID(),
+          role: "assistant",
+          text: "🌐 用法: /lang zh | /lang en  (或在 Top bar 切换)",
+          createdAt: Date.now(),
+        });
+      }
       setText("");
       return;
     }
@@ -676,12 +703,17 @@ ${diff.diff.slice(0, 5000)}${diff.truncated ? "\n... [truncated, view full in gi
       appendMessage(sessionId, placeholder);
       streamingAssistantId = assistantId;
 
+      // v0.9：附件随本次消息发送
+      const imagesToSend = attachedImages.map((img) => ({ path: img.path, mime: img.mime }));
+      setAttachedImages([]);
+
       const { stream } = await sendChatStream({
         sessionId,
         userMessage: trimmed,
         model,
         requireApproval,
         planMode,
+        images: imagesToSend,
       });
 
       for await (const evt of stream) {
@@ -926,19 +958,49 @@ ${diff.diff.slice(0, 5000)}${diff.truncated ? "\n... [truncated, view full in gi
           🖥️
         </button>
       </div>
+      {attachedImages.length > 0 && (
+        <div className="composer-attachments">
+          {attachedImages.map((img, i) => (
+            <span key={i} className="composer-attachment-chip" title={img.path}>
+              🖼 {img.name}
+              <button
+                className="chip-remove"
+                onClick={() => setAttachedImages((prev) => prev.filter((_, j) => j !== i))}
+              >×</button>
+            </span>
+          ))}
+        </div>
+      )}
       <textarea
         ref={textareaRef}
         className="composer-input"
-        placeholder={
-          sessionId
-            ? "输入消息，Enter 发送，Shift+Enter 换行，/ 命令..."
-            : "请先创建会话"
-        }
+        placeholder={sessionId ? t.placeholder : t.cancel}
         value={text}
         onChange={(e) => setText(e.target.value)}
         onKeyDown={onKeyDown}
         disabled={!sessionId || busy}
         rows={1}
+        onDragOver={(e) => { e.preventDefault(); }}
+        onDrop={async (e) => {
+          e.preventDefault();
+          // Tauri 2 webview drop 通常给的是 file path
+          // @ts-ignore — DataTransferItem 在 webview 中带 path
+          const items = e.dataTransfer?.files;
+          if (!items) return;
+          for (let i = 0; i < items.length; i++) {
+            const f = items[i] as File & { path?: string };
+            // Tauri 提供 .path 字段（绝对路径）
+            const p = (f as any).path ?? "";
+            if (!p) continue;
+            const lower = p.toLowerCase();
+            const mime = lower.endsWith(".png") ? "image/png"
+              : lower.endsWith(".jpg") || lower.endsWith(".jpeg") ? "image/jpeg"
+              : lower.endsWith(".gif") ? "image/gif"
+              : lower.endsWith(".webp") ? "image/webp" : "image/png";
+            const name = p.split("/").pop() || p;
+            setAttachedImages((prev) => [...prev, { path: p, mime, name }]);
+          }
+        }}
       />
       <div className="composer-footer">
         <span className="composer-hint">
@@ -951,10 +1013,36 @@ ${diff.diff.slice(0, 5000)}${diff.truncated ? "\n... [truncated, view full in gi
         </span>
         {/* v0.6：plan mode 切换 */}
         <span className={`composer-plan ${planMode ? "plan-on" : "plan-off"}`}
-              title="Plan Mode：先让模型输出执行计划再批准"
+              title={t.planOn}
               onClick={() => setPlanMode(!planMode)}>
-          {planMode ? "📋 Plan" : "📋"}
+          {planMode ? "📋 " + t.planOn : "📋"}
         </span>
+        {/* v0.9：附件按钮 */}
+        <span
+          className="composer-attach"
+          title="添加图片 (也支持拖放)"
+          onClick={async () => {
+            try {
+              const selected = await openDialog({
+                multiple: true,
+                filters: [{ name: "Image", extensions: ["png", "jpg", "jpeg", "gif", "webp"] }],
+              });
+              if (Array.isArray(selected)) {
+                for (const p of selected) {
+                  const lower = p.toLowerCase();
+                  const mime = lower.endsWith(".png") ? "image/png"
+                    : lower.endsWith(".jpg") || lower.endsWith(".jpeg") ? "image/jpeg"
+                    : lower.endsWith(".gif") ? "image/gif"
+                    : lower.endsWith(".webp") ? "image/webp" : "image/png";
+                  const name = p.split("/").pop() || p;
+                  setAttachedImages((prev) => [...prev, { path: p, mime, name }]);
+                }
+              }
+            } catch (e) {
+              console.warn("attach failed:", e);
+            }
+          }}
+        >📎 {attachedImages.length > 0 ? `${attachedImages.length}` : ""}</span>
         {busy ? (
           <button
             className="composer-cancel"

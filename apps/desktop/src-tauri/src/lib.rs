@@ -208,6 +208,39 @@ async fn agent_run(
     let plan_mode = req.plan_mode;
     let app_clone = app.clone();
 
+    // v0.9：处理附件图片 —— 编码为 base64 data URL，附到 user_msg
+    if !req.images.is_empty() {
+        let mut parts = vec![provider::request::ChatContentPart::Text {
+            text: user_msg.clone(),
+        }];
+        for img in &req.images {
+            match std::fs::read(&img.path) {
+                Ok(bytes) => {
+                    use base64::Engine;
+                    let b64 = base64::engine::general_purpose::STANDARD.encode(&bytes);
+                    let mime = img
+                        .mime
+                        .clone()
+                        .unwrap_or_else(|| guess_mime_from_path(&img.path));
+                    parts.push(provider::request::ChatContentPart::ImageBase64 {
+                        data: b64,
+                        mime_type: mime,
+                    });
+                }
+                Err(e) => {
+                    eprintln!("[image] 读取 {} 失败: {}", img.path, e);
+                }
+            }
+        }
+        // 把多模态 user message 放到 history 最后（替代普通 user 消息）
+        history.push(provider::request::ChatMessage {
+            role: provider::request::ChatRole::User,
+            content: parts,
+            reasoning_content: None,
+            tool_call_id: None,
+        });
+    }
+
     tokio::spawn(async move {
         let reg_state = app_clone.state::<SharedToolRegistry>();
         let reg_arc: Arc<Mutex<ToolRegistry>> = Arc::clone(&reg_state);
@@ -336,9 +369,36 @@ struct AgentRunPayload {
     /// v0.6：plan mode —— 先输出 plan 等用户批准
     #[serde(default)]
     plan_mode: bool,
+    /// v0.9：附件图片（绝对路径）
+    #[serde(default)]
+    images: Vec<ImageAttachment>,
+}
+
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct ImageAttachment {
+    path: String,
+    #[serde(default)]
+    mime: Option<String>,
 }
 
 fn default_true() -> bool { true }
+
+/// v0.9：从扩展名猜 MIME
+fn guess_mime_from_path(path: &str) -> String {
+    let lower = path.to_lowercase();
+    if lower.ends_with(".png") {
+        "image/png".into()
+    } else if lower.ends_with(".jpg") || lower.ends_with(".jpeg") {
+        "image/jpeg".into()
+    } else if lower.ends_with(".gif") {
+        "image/gif".into()
+    } else if lower.ends_with(".webp") {
+        "image/webp".into()
+    } else {
+        "image/png".into()
+    }
+}
 
 #[derive(Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -484,16 +544,11 @@ struct GitDiffDto {
 /// 列出已连接的 MCP server
 #[tauri::command]
 async fn list_mcp_servers() -> Vec<McpServerDto> {
-    let mgr = mcp_tool::mcp_manager().await;
-    let mgr_lock = mgr.lock().await;
-    let names = mgr_lock.server_names();
+    let pool = mcp_tool::mcp_pool().await;
+    let names = pool.list_servers().await;
     let mut out = Vec::new();
     for n in names {
-        let tool_count = if let Some(c) = mgr_lock.get(&n) {
-            c.lock().await.list_tools().await.map(|v| v.len()).unwrap_or(0)
-        } else {
-            0
-        };
+        let tool_count = pool.tools_of(&n).await.map(|v| v.len()).unwrap_or(0);
         out.push(McpServerDto { name: n, tool_count });
     }
     out
@@ -502,16 +557,16 @@ async fn list_mcp_servers() -> Vec<McpServerDto> {
 /// 重新加载 MCP 配置（~/.agentshell/mcp.json）
 #[tauri::command]
 async fn reload_mcp(app: AppHandle) -> Result<usize, String> {
-    // 清掉旧 tools（清空 registry）
+    // v0.9：清空 registry 里所有 mcp__ 前缀的 tool，然后重新注册
     {
         let state = app.state::<SharedToolRegistry>();
         let mut reg = state.lock().await;
-        // 注：v0.5 简化 — 直接 push 新 tool 到已有 registry
+        // 注：ToolRegistry 没有 unregister_by_prefix；这里只重新注册，重复注册会由 register 去重
         mcp_tool::register_mcp_tools(&mut reg).await;
     }
-    let mgr = mcp_tool::mcp_manager().await;
-    let mgr_lock = mgr.lock().await;
-    Ok(mgr_lock.server_names().len())
+    let pool = mcp_tool::mcp_pool().await;
+    let names = pool.list_servers().await;
+    Ok(names.len())
 }
 
 #[derive(Serialize)]

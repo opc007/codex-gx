@@ -2,6 +2,8 @@ import { useEffect, useState } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
 import type { ThemeMode } from "../stores/theme";
+import { useLocaleSwitcher, SUPPORTED_LOCALES, LOCALE_LABELS } from "../i18n";
+import type { Locale } from "../i18n";
 
 type LicenseStatus = {
   active: boolean;
@@ -19,6 +21,7 @@ type Props = {
 export function TopBar({ themeMode, setThemeMode, onLicenseClick }: Props) {
   const [busy, setBusy] = useState(false);
   const [license, setLicense] = useState<LicenseStatus | null>(null);
+  const { locale, setLocale } = useLocaleSwitcher();
 
   const refreshLicense = async () => {
     try {
@@ -79,6 +82,16 @@ export function TopBar({ themeMode, setThemeMode, onLicenseClick }: Props) {
             {themeMode === "system" ? "跟随" : themeMode === "light" ? "白天" : "夜晚"}
           </span>
         </button>
+        <select
+          className="topbar-select"
+          value={locale}
+          onChange={(e) => setLocale(e.target.value as Locale)}
+          title="Language"
+        >
+          {SUPPORTED_LOCALES.map((l) => (
+            <option key={l} value={l}>{LOCALE_LABELS[l]}</option>
+          ))}
+        </select>
       </div>
     </header>
   );

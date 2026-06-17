@@ -1,0 +1,92 @@
+import type { Dict } from "./types";
+
+export const en: Dict = {
+  appName: "Codex gx",
+  send: "Send",
+  stop: "Stop",
+  cancel: "Cancel",
+  confirm: "OK",
+  deny: "Deny",
+  approve: "Approve",
+  reject: "Reject",
+  edit: "Edit",
+  save: "Save",
+  loading: "Loading…",
+  error: "Error",
+  retry: "Retry",
+  newSession: "New session",
+  settings: "Settings",
+
+  model: "Model",
+  auto: "Auto",
+  autoRoute: "Auto route (pick model by task)",
+
+  approvalOn: "Approval: on",
+  approvalOff: "Approval: off",
+  planOn: "Plan: on",
+  planOff: "Plan: off",
+
+  placeholder: "Type a message, Enter to send, Shift+Enter for newline",
+  inputHint: "💡 / starts a slash command",
+
+  emptyHint: "👋 Hi, I'm Codex gx",
+  emptySubHint: "Ask me anything, or try /help",
+
+  sendError: "Send failed",
+
+  cmdHelp: "/help",
+  cmdStatus: "/status",
+  cmdApproval: "/approval",
+  cmdPlan: "/plan",
+  cmdRoute: "/route",
+  cmdRemember: "/remember",
+  cmdMemories: "/memories",
+  cmdRecall: "/recall",
+  cmdForget: "/forget",
+  cmdSkills: "/skills",
+  cmdUsage: "/usage",
+  cmdIde: "/ide",
+  cmdDiff: "/diff",
+  cmdReview: "/review",
+
+  thinking: "Thinking",
+  planning: "Planning",
+  acting: "Acting",
+  verifying: "Verifying",
+  done: "Done",
+
+  memoryAdded: "🧠 Remembered",
+  memoryEmpty: "🧠 No memories yet. Use `/remember <content>`.",
+  memoryListed: "🧠 Long-term memory",
+  memoryRecalled: "🧠 Recall results",
+  memoryForgotten: "🧠 Forgotten",
+  memoryNoMatch: "🧠 No related memories found.",
+
+  skillsEmpty: "🛠 No custom skills",
+  skillsLoaded: "🛠 Loaded",
+  skillNotFound: "skill not defined",
+  skillExample: "Example",
+  skillCallHint: "Usage",
+
+  toolRunning: "Running",
+  toolDone: "Done",
+  toolFailed: "Failed",
+  toolReplay: "🔁 Replay",
+
+  approvalTitle: "Tool call approval",
+  approvalMessage: (tool) => `Agent wants to call tool: \`${tool}\``,
+  approvalCountdown: (sec) => `Auto-deny in ${sec}s`,
+  approvalRiskLow: "Low risk",
+  approvalRiskMid: "Medium risk",
+  approvalRiskHigh: "High risk",
+
+  planTitle: "Execution plan",
+  planEditHint: "Edit before approving",
+  planApprove: "✓ Approve",
+  planDeny: "✗ Deny",
+
+  subagentStarted: "started",
+  subagentRunning: "running",
+  subagentDone: "done",
+  subagentError: "error",
+};

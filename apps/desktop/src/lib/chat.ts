@@ -84,6 +84,8 @@ export type SendChatParams = {
   requireApproval?: boolean;
   /** v0.6：plan mode — 先输出 plan 等用户批准 */
   planMode?: boolean;
+  /** v0.9：附件图片 */
+  images?: Array<{ path: string; mime?: string }>;
 };
 
 /**
@@ -135,6 +137,7 @@ export async function sendChatStream(
       messages: params.history || [],
       requireApproval: params.requireApproval ?? true,
       planMode: params.planMode ?? false, // v0.6
+      images: params.images || [], // v0.9
     },
   });
 

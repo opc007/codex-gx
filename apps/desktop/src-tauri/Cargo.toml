@@ -30,6 +30,7 @@ sandbox = { path = "../../../crates/sandbox" }
 computer-use = { path = "../../../crates/computer-use" }
 license = { path = "../../../crates/license" }
 memory = { path = "../../../crates/memory" }
+base64.workspace = true
 tokio.workspace = true
 async-trait.workspace = true
 serde.workspace = true

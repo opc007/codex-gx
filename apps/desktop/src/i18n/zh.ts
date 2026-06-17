@@ -1,0 +1,92 @@
+import type { Dict } from "./types";
+
+export const zh: Dict = {
+  appName: "Codex gx",
+  send: "发送",
+  stop: "停止",
+  cancel: "取消",
+  confirm: "确定",
+  deny: "拒绝",
+  approve: "批准",
+  reject: "拒绝",
+  edit: "编辑",
+  save: "保存",
+  loading: "加载中…",
+  error: "出错了",
+  retry: "重试",
+  newSession: "新会话",
+  settings: "设置",
+
+  model: "模型",
+  auto: "Auto",
+  autoRoute: "Auto 路由（按任务选 model）",
+
+  approvalOn: "审批：开",
+  approvalOff: "审批：关",
+  planOn: "Plan：开",
+  planOff: "Plan：关",
+
+  placeholder: "输入消息，Enter 发送，Shift+Enter 换行",
+  inputHint: "💡 / 开头是 slash 命令",
+
+  emptyHint: "👋 嗨，我是 Codex gx",
+  emptySubHint: "问我任何问题，或试试 /help",
+
+  sendError: "发送失败",
+
+  cmdHelp: "/help",
+  cmdStatus: "/status",
+  cmdApproval: "/approval",
+  cmdPlan: "/plan",
+  cmdRoute: "/route",
+  cmdRemember: "/remember",
+  cmdMemories: "/memories",
+  cmdRecall: "/recall",
+  cmdForget: "/forget",
+  cmdSkills: "/skills",
+  cmdUsage: "/usage",
+  cmdIde: "/ide",
+  cmdDiff: "/diff",
+  cmdReview: "/review",
+
+  thinking: "思考中",
+  planning: "规划中",
+  acting: "执行中",
+  verifying: "验证中",
+  done: "完成",
+
+  memoryAdded: "🧠 已记住",
+  memoryEmpty: "🧠 还没有任何长期记忆。用 `/remember <内容>` 添加。",
+  memoryListed: "🧠 长期记忆",
+  memoryRecalled: "🧠 检索结果",
+  memoryForgotten: "🧠 已遗忘",
+  memoryNoMatch: "🧠 没有找到相关记忆。",
+
+  skillsEmpty: "🛠 还没有自定义 skill",
+  skillsLoaded: "🛠 已加载",
+  skillNotFound: "skill 未定义",
+  skillExample: "示例",
+  skillCallHint: "调用方式",
+
+  toolRunning: "运行中",
+  toolDone: "完成",
+  toolFailed: "失败",
+  toolReplay: "🔁 回放",
+
+  approvalTitle: "工具调用审批",
+  approvalMessage: (tool) => `Agent 想调用工具：\`${tool}\``,
+  approvalCountdown: (sec) => `${sec} 秒后自动拒绝`,
+  approvalRiskLow: "低风险",
+  approvalRiskMid: "中等风险",
+  approvalRiskHigh: "高风险",
+
+  planTitle: "执行计划",
+  planEditHint: "可编辑后批准",
+  planApprove: "✓ 批准执行",
+  planDeny: "✗ 拒绝",
+
+  subagentStarted: "已启动",
+  subagentRunning: "运行中",
+  subagentDone: "完成",
+  subagentError: "失败",
+};

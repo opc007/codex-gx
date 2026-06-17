@@ -10,8 +10,11 @@ pub enum McpError {
     #[error("jsonrpc error: {0}")]
     JsonRpc(i32, String),
 
-    #[error("parse error: {0}")]
-    Parse(#[from] serde_json::Error),
+    #[error("json error: {0}")]
+    Json(#[from] serde_json::Error),
+
+    #[error("http error: {0}")]
+    Http(#[from] reqwest::Error),
 
     #[error("transport closed")]
     TransportClosed,
@@ -21,6 +24,9 @@ pub enum McpError {
 
     #[error("internal: {0}")]
     Internal(String),
+
+    #[error("transport error: {0}")]
+    Transport(String),
 }
 
 pub type Result<T> = std::result::Result<T, McpError>;

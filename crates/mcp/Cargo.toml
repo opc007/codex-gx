@@ -17,6 +17,7 @@ tracing.workspace = true
 futures.workspace = true
 uuid.workspace = true
 chrono.workspace = true
+reqwest.workspace = true
 
 [dev-dependencies]
 tokio = { workspace = true, features = ["full", "test-util", "macros"] }
