@@ -513,6 +513,34 @@ kbd {
 .learning-actions { display: flex; align-items: center; gap: 8px; margin-top: 16px; padding: 12px; background: var(--bg-secondary); border-radius: 6px; }
 .learning-actions .btn.danger { background: var(--danger); color: white; }
 
+/* v1.5：skills library */
+.skills-toolbar { display: flex; align-items: center; gap: 6px; margin-bottom: 12px; flex-wrap: wrap; }
+.skills-tabs { display: flex; gap: 4px; }
+.skills-search { flex: 1; min-width: 180px; }
+
+.skills-import { padding: 12px; background: var(--bg-secondary); border-radius: 6px; margin-bottom: 12px; }
+.skills-import h4 { margin: 0 0 6px 0; font-size: 13px; }
+.skills-import textarea { width: 100%; font-family: ui-monospace, monospace; font-size: 11px; resize: vertical; }
+
+.skills-grouped { display: flex; flex-direction: column; gap: 16px; max-height: 60vh; overflow-y: auto; }
+.skills-group h4 { margin: 0 0 8px 0; font-size: 13px; color: var(--text-muted); }
+.skills-market { display: flex; flex-direction: column; gap: 12px; max-height: 60vh; overflow-y: auto; }
+
+.skill-row { border: 1px solid var(--border); border-radius: 6px; padding: 10px; background: var(--bg-secondary); margin-bottom: 6px; }
+.skill-disabled { opacity: 0.55; }
+.skill-row-head { display: flex; align-items: center; gap: 6px; font-size: 12px; flex-wrap: wrap; }
+.skill-icon { font-size: 14px; }
+.skill-name { font-family: ui-monospace, monospace; font-weight: 600; font-size: 13px; }
+.skill-tag { font-size: 10px; padding: 1px 6px; background: var(--bg); border-radius: 3px; color: var(--text-muted); }
+.skill-tag-soft { font-size: 10px; padding: 1px 6px; background: transparent; color: var(--text-muted); }
+.skill-desc { font-size: 12px; color: var(--text); margin-top: 4px; }
+.skill-author { font-size: 10px; color: var(--text-muted); margin-top: 2px; }
+.skill-detail summary { font-size: 11px; color: var(--text-muted); cursor: pointer; margin-top: 4px; }
+.skill-detail pre { background: var(--bg); padding: 6px; border-radius: 3px; max-height: 100px; overflow: auto; font-size: 10px; margin: 4px 0 0 0; }
+
+.market-item { border: 1px solid var(--border); border-radius: 6px; padding: 10px; background: var(--bg-secondary); }
+.market-meta { display: flex; align-items: center; gap: 8px; font-size: 11px; color: var(--text-muted); margin-top: 6px; padding-top: 6px; border-top: 1px solid var(--border); }
+
 /* v1.1：标签栏 */
 .tab-bar {
   display: flex;

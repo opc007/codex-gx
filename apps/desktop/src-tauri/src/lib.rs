@@ -166,6 +166,14 @@ pub fn run() {
             clear_memories, // v0.8
             list_skills, // v0.8
             run_skill, // v0.8
+            list_skills_grouped, // v1.5
+            skill_market, // v1.5
+            skill_export, // v1.5
+            skill_import, // v1.5
+            skill_toggle, // v1.5
+            skill_remove, // v1.5
+            skill_reset_builtin, // v1.5
+            skill_chain, // v1.5
             compress_session, // v1.0
             check_update, // v1.0
             voice_tauri::voice_check, // v1.2
@@ -937,6 +945,13 @@ async fn list_skills() -> Result<Vec<skills::SkillInfo>, String> {
         .collect())
 }
 
+/// v1.5：列出全部 skill（含 builtin / 禁用 / 非 shell），按 category 分组
+#[tauri::command]
+async fn list_skills_grouped() -> Result<std::collections::HashMap<String, Vec<skills::Skill>>, String> {
+    let file = skills::load_skills();
+    Ok(skills::list_grouped(&file))
+}
+
 #[tauri::command]
 async fn run_skill(name: String, arg: String) -> Result<String, String> {
     let file = skills::load_skills();
@@ -944,6 +959,62 @@ async fn run_skill(name: String, arg: String) -> Result<String, String> {
         Some(s) => skills::execute_skill(s, &arg),
         None => Err(format!("skill `{}` 未定义。检查 ~/.agentshell/skills.json", name)),
     }
+}
+
+/// v1.5：模板市场
+#[tauri::command]
+async fn skill_market() -> Result<Vec<skills::SkillTemplate>, String> {
+    Ok(skills::template_market())
+}
+
+/// v1.5：导出单个 skill 为 JSON
+#[tauri::command]
+async fn skill_export(name: String) -> Result<String, String> {
+    let file = skills::load_skills();
+    match skills::find_skill_any(&file, &name) {
+        Some(s) => skills::export_skill(s),
+        None => Err(format!("skill `{name}` 不存在")),
+    }
+}
+
+/// v1.5：从 JSON 导入 skill
+#[tauri::command]
+async fn skill_import(json: String) -> Result<String, String> {
+    let s = skills::import_skill(&json)?;
+    let name = s.name.clone();
+    skills::upsert_skill(s)?;
+    Ok(name)
+}
+
+/// v1.5：启用 / 禁用一个 skill（builtin 也可禁，但不能删）
+#[tauri::command]
+async fn skill_toggle(name: String, enabled: bool) -> Result<(), String> {
+    let file = skills::load_skills();
+    let s = skills::find_skill_any(&file, &name)
+        .ok_or_else(|| format!("skill `{name}` 不存在"))?
+        .clone();
+    let mut s = s;
+    s.enabled = enabled;
+    skills::upsert_skill(s)
+}
+
+/// v1.5：删除一个 user skill（不会删 builtin）
+#[tauri::command]
+async fn skill_remove(name: String) -> Result<(), String> {
+    skills::remove_skill(&name)
+}
+
+/// v1.5：重置 builtin（删 user skills.json）
+#[tauri::command]
+async fn skill_reset_builtin() -> Result<(), String> {
+    skills::reset_builtin()
+}
+
+/// v1.5：执行 chain
+#[tauri::command]
+async fn skill_chain(names: Vec<String>, arg: String) -> Result<Vec<(String, Result<String, String>)>, String> {
+    let file = skills::load_skills();
+    Ok(skills::chain_skills(&file, &names, &arg))
 }
 
 // ============================================================
