@@ -9,6 +9,7 @@ import { MarketplaceDialog } from "./MarketplaceDialog";
 import { ThemeStudioDialog } from "./ThemeStudioDialog";
 import { RoutingEditorDialog } from "./RoutingEditorDialog";
 import { BugReportDialog } from "./BugReportDialog";
+import { TeamPanel } from "./TeamPanel";
 import {
   useCurrentWorkspaceId,
   useWorkspaceList,
@@ -17,6 +18,11 @@ import {
   deleteWorkspace,
   renameWorkspace,
 } from "../stores/workspace";
+import {
+  useCurrentUser,
+  useUserList,
+  switchUser,
+} from "../stores/users";
 
 type UpdateInfo = {
   currentVersion: string;
@@ -48,6 +54,8 @@ export function TopBar({ themeMode, setThemeMode, onLicenseClick }: Props) {
   const [themeStudioOpen, setThemeStudioOpen] = useState(false);
   const [routingOpen, setRoutingOpen] = useState(false);
   const [bugOpen, setBugOpen] = useState(false);
+  const [teamOpen, setTeamOpen] = useState(false);
+  const [userMenuOpen, setUserMenuOpen] = useState(false);
   const { locale, setLocale } = useLocaleSwitcher();
 
   const refreshLicense = async () => {
@@ -90,7 +98,7 @@ export function TopBar({ themeMode, setThemeMode, onLicenseClick }: Props) {
     <header className="topbar">
       <div className="topbar-left">
         <strong>AgentShell</strong>
-        <span className="topbar-version">v1.2.1</span>
+        <span className="topbar-version">v1.3.0</span>
         <WorkspaceSelector />
       </div>
       <div className="topbar-right">
@@ -147,6 +155,22 @@ export function TopBar({ themeMode, setThemeMode, onLicenseClick }: Props) {
         >
           🐞
         </button>
+        <button
+          className="topbar-btn"
+          onClick={() => setTeamOpen(true)}
+          title="团队 / 用户管理 (v1.3)"
+        >
+          👥
+        </button>
+        <UserMenu
+          open={userMenuOpen}
+          onToggle={() => setUserMenuOpen(!userMenuOpen)}
+          onClose={() => setUserMenuOpen(false)}
+          onOpenTeam={() => {
+            setUserMenuOpen(false);
+            setTeamOpen(true);
+          }}
+        />
         <button className="topbar-btn" onClick={pingBackend} disabled={busy}>
           {busy ? "..." : "Ping"}
         </button>
@@ -226,6 +250,9 @@ export function TopBar({ themeMode, setThemeMode, onLicenseClick }: Props) {
 
       {/* v1.3: Bug Report 弹窗 */}
       {bugOpen && <BugReportDialog onClose={() => setBugOpen(false)} />}
+
+      {/* v1.3: Team Panel 弹窗 */}
+      {teamOpen && <TeamPanel onClose={() => setTeamOpen(false)} />}
     </header>
   );
 }
@@ -337,6 +364,83 @@ function WorkspaceSelector() {
             </div>
           </div>
         </div>
+      )}
+    </div>
+  );
+}
+
+// ------------------ v1.3: User Menu ------------------
+
+type UserMenuProps = {
+  open: boolean;
+  onToggle: () => void;
+  onClose: () => void;
+  onOpenTeam: () => void;
+};
+
+function UserMenu({ open, onToggle, onClose, onOpenTeam }: UserMenuProps) {
+  const current = useCurrentUser();
+  const list = useUserList();
+  return (
+    <div className="user-menu-wrap">
+      <button
+        className="user-avatar-btn"
+        onClick={onToggle}
+        title={`当前用户: ${current.displayName}`}
+        style={{ background: current.color }}
+      >
+        <span>{current.emoji}</span>
+      </button>
+      {open && (
+        <>
+          <div className="user-menu-mask" onClick={onClose} />
+          <div className="user-menu">
+            <div className="user-menu-current">
+              <div
+                className="team-avatar"
+                style={{ background: current.color }}
+              >
+                {current.emoji}
+              </div>
+              <div>
+                <div style={{ fontWeight: 500 }}>{current.displayName}</div>
+                <div style={{ fontSize: 11, color: "var(--text-muted)" }}>
+                  {current.role}
+                </div>
+              </div>
+            </div>
+            <div className="user-menu-section">切换用户</div>
+            {list.map((u) => (
+              <button
+                key={u.id}
+                className={`user-menu-item ${u.id === current.id ? "active" : ""}`}
+                onClick={() => {
+                  switchUser(u.id);
+                  onClose();
+                }}
+              >
+                <span
+                  className="team-avatar small"
+                  style={{ background: u.color }}
+                >
+                  {u.emoji}
+                </span>
+                <span>{u.displayName}</span>
+                {u.id === current.id && <span className="check">✓</span>}
+              </button>
+            ))}
+            <div className="user-menu-section" />
+            <button
+              className="user-menu-item"
+              onClick={() => {
+                onClose();
+                onOpenTeam();
+              }}
+            >
+              ⚙️ 团队管理...
+            </button>
+          </div>
+        </>
       )}
     </div>
   );

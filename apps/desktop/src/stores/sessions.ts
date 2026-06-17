@@ -2,6 +2,7 @@
 import { useSyncExternalStore } from "react";
 import { LazyStore } from "@tauri-apps/plugin-store";
 import { getCurrentWorkspaceId } from "./workspace";
+import { getCurrentUserId } from "./users";
 
 export type SessionMeta = {
   id: string;
@@ -10,6 +11,8 @@ export type SessionMeta = {
   updatedAt: number;
   /// v1.3：所属 workspace id（默认 "default"）
   workspaceId?: string;
+  /// v1.3：所属 user id（默认当前用户）
+  ownerId?: string;
 };
 
 export type PersistedMessage = {
@@ -160,10 +163,12 @@ async function load(): Promise<{
   if (!s) return { sessions: [], currentId: null, messages: {} };
   try {
     const rawSessions = (await s.get<SessionMeta[]>("sessions")) || [];
-    // v1.3 迁移：老 session 没有 workspaceId 字段 → 标为 "default"
+    // v1.3 迁移：老 session 没有 workspaceId / ownerId 字段 → 标为 "default" / 当前 user
+    const currentUser = getCurrentUserId();
     const sessions: SessionMeta[] = rawSessions.map((sess) => ({
       ...sess,
       workspaceId: sess.workspaceId ?? "default",
+      ownerId: sess.ownerId ?? currentUser,
     }));
     const currentId = (await s.get<string | null>("currentId")) || null;
     const messages: Record<string, PersistedMessage[]> = {};
@@ -207,6 +212,7 @@ let state: SessionsStore = {
       createdAt: now,
       updatedAt: now,
       workspaceId: getCurrentWorkspaceId(),
+      ownerId: getCurrentUserId(),
     };
     state = {
       ...state,
