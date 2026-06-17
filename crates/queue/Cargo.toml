@@ -1,0 +1,15 @@
+[package]
+name = "queue"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+description = "AgentShell v1.4 任务队列：后台并发执行 / 取消 / 进度事件"
+
+[dependencies]
+serde.workspace = true
+serde_json.workspace = true
+async-trait.workspace = true
+tokio.workspace = true
+uuid.workspace = true
+lint = { path = "../lint" }

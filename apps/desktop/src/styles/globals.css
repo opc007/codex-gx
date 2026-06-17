@@ -432,6 +432,35 @@ kbd {
 .lint-help h4 { margin: 0 0 8px 0; font-size: 13px; }
 .lint-help ul { margin: 0; }
 
+/* v1.4：queue panel */
+.queue-toolbar { display: flex; align-items: center; gap: 6px; margin-bottom: 12px; flex-wrap: wrap; }
+.queue-filter { display: flex; gap: 4px; }
+
+.queue-list { display: flex; flex-direction: column; gap: 8px; max-height: 60vh; overflow-y: auto; }
+.queue-item { border: 1px solid var(--border); border-radius: 6px; padding: 10px; background: var(--bg-secondary); }
+.queue-pending { opacity: 0.7; }
+.queue-running { border-left: 3px solid var(--primary); }
+.queue-completed { border-left: 3px solid var(--success); }
+.queue-failed { border-left: 3px solid var(--danger); }
+.queue-cancelled { border-left: 3px solid var(--text-muted); opacity: 0.6; }
+
+.queue-item-head { display: flex; align-items: center; gap: 6px; font-size: 13px; }
+.queue-item-icon { font-size: 14px; }
+.queue-item-kind { font-size: 14px; }
+.queue-item-title { font-weight: 500; flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.queue-item-id { font-family: ui-monospace, monospace; font-size: 10px; color: var(--text-muted); }
+
+.queue-progress { display: flex; align-items: center; gap: 8px; margin: 6px 0; }
+.queue-progress-bar { height: 6px; background: var(--primary); border-radius: 3px; transition: width 0.3s; }
+.queue-progress-text { font-size: 11px; color: var(--text-muted); font-family: ui-monospace, monospace; }
+.queue-progress { background: var(--bg); border-radius: 3px; }
+
+.queue-item-desc { font-size: 11px; color: var(--text-muted); margin-top: 4px; }
+.queue-item-log, .queue-item-result { font-size: 11px; margin-top: 6px; }
+.queue-item-log pre, .queue-item-result pre { background: var(--bg); padding: 6px; border-radius: 3px; max-height: 200px; overflow: auto; font-size: 10px; margin: 4px 0 0 0; }
+.queue-item-error { font-size: 11px; color: var(--danger); margin-top: 6px; }
+.queue-item-meta { font-size: 10px; color: var(--text-muted); margin-top: 6px; }
+
 /* v1.1：标签栏 */
 .tab-bar {
   display: flex;

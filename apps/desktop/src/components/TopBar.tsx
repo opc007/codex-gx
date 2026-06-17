@@ -12,6 +12,7 @@ import { BugReportDialog } from "./BugReportDialog";
 import { TeamPanel } from "./TeamPanel";
 import { LocalModelDialog } from "./LocalModelDialog";
 import { CodeReviewDialog } from "./CodeReviewDialog";
+import { QueuePanel } from "./QueuePanel";
 import {
   useCurrentWorkspaceId,
   useWorkspaceList,
@@ -60,6 +61,7 @@ export function TopBar({ themeMode, setThemeMode, onLicenseClick }: Props) {
   const [userMenuOpen, setUserMenuOpen] = useState(false);
   const [localOpen, setLocalOpen] = useState(false);
   const [reviewOpen, setReviewOpen] = useState(false);
+  const [queueOpen, setQueueOpen] = useState(false);
   const { locale, setLocale } = useLocaleSwitcher();
 
   const refreshLicense = async () => {
@@ -180,6 +182,13 @@ export function TopBar({ themeMode, setThemeMode, onLicenseClick }: Props) {
         >
           🔍
         </button>
+        <button
+          className="topbar-btn"
+          onClick={() => setQueueOpen(true)}
+          title="任务队列 (v1.4)"
+        >
+          📋
+        </button>
         <UserMenu
           open={userMenuOpen}
           onToggle={() => setUserMenuOpen(!userMenuOpen)}
@@ -287,6 +296,9 @@ export function TopBar({ themeMode, setThemeMode, onLicenseClick }: Props) {
 
       {/* v1.4: Code Review 弹窗 */}
       {reviewOpen && <CodeReviewDialog onClose={() => setReviewOpen(false)} />}
+
+      {/* v1.4: Queue Panel 弹窗 */}
+      {queueOpen && <QueuePanel onClose={() => setQueueOpen(false)} />}
     </header>
   );
 }

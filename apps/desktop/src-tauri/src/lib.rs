@@ -20,6 +20,7 @@ mod routing_tauri;
 mod bugreport_tauri;
 mod local_tauri;
 mod lint_tauri;
+mod queue_tauri;
 
 use agent_core::tool::ToolRegistry;
 use serde::{Deserialize, Serialize};
@@ -100,10 +101,15 @@ pub fn run() {
             crate::routing::RoutingEngine::load_or_default(),
         )))
         .manage::<BugReportState>(Arc::new(bugreport_tauri::BugReportState::new()))
+        .manage::<queue_tauri::QueueState>(queue_tauri::build_state())
         .setup(|app| {
             // v1.3：安装 panic hook
             if let Some(state) = app.try_state::<BugReportState>() {
                 bugreport_tauri::install_panic_hook(state.inner().clone());
+            }
+            // v1.4：启动队列事件 forwarder
+            if let Some(state) = app.try_state::<queue_tauri::QueueState>() {
+                queue_tauri::spawn_event_forwarder(app.handle().clone(), state.inner().clone());
             }
             // v0.8：异步初始化 memory manager
             let app_handle = app.handle().clone();
@@ -178,6 +184,11 @@ pub fn run() {
             local_tauri::local_ping, // v1.4
             lint_tauri::lint_run, // v1.4
             lint_tauri::lint_run_summary, // v1.4
+            queue_tauri::queue_list, // v1.4
+            queue_tauri::queue_get, // v1.4
+            queue_tauri::queue_enqueue, // v1.4
+            queue_tauri::queue_cancel, // v1.4
+            queue_tauri::queue_clear_finished, // v1.4
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

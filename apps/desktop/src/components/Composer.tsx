@@ -300,6 +300,65 @@ export function Composer({ sessionId }: Props) {
         return;
       }
     }
+    // v1.4：任务队列
+    if (trimmed.startsWith("/queue ") || trimmed === "/queue") {
+      const args = trimmed.slice(6).trim();
+      try {
+        if (args) {
+          // 入队命令
+          const id = await invoke<string>("queue_enqueue", {
+            args: {
+              kind: "command",
+              title: args.slice(0, 40),
+              input: { cmd: args },
+              sessionId: sessionId,
+              description: null,
+            },
+          });
+          appendMessage(sessionId, {
+            id: crypto.randomUUID(),
+            role: "assistant",
+            text: `📋 任务已入队: \`${id.slice(0, 8)}\`\n\n$ ${args}\n\n💡 Top bar 📋 打开队列面板看进度`,
+            createdAt: Date.now(),
+          });
+          setText("");
+          return;
+        } else {
+          // 列出
+          const list = await invoke<Array<{
+            id: string;
+            status: string;
+            kind: string;
+            title: string;
+            progress: number;
+          }>>("queue_list");
+          let text = `📋 **任务队列** (${list.length})\n\n`;
+          for (const t of list.slice(-15)) {
+            const icon = t.status === "completed" ? "✅" : t.status === "running" ? "▶️" : t.status === "failed" ? "❌" : t.status === "cancelled" ? "🚫" : "⏳";
+            text += `${icon} \`${t.id.slice(0, 8)}\` ${t.kind} — ${t.title} (${Math.round(t.progress * 100)}%)\n`;
+          }
+          if (list.length === 0) text += `（空）\n`;
+          text += `\n💡 用法: \`/queue <shell 命令>\`  — 后台跑命令不阻塞当前 chat`;
+          appendMessage(sessionId, {
+            id: crypto.randomUUID(),
+            role: "assistant",
+            text,
+            createdAt: Date.now(),
+          });
+          setText("");
+          return;
+        }
+      } catch (e) {
+        appendMessage(sessionId, {
+          id: crypto.randomUUID(),
+          role: "assistant",
+          text: `❌ 失败: ${e}`,
+          createdAt: Date.now(),
+        });
+        setText("");
+        return;
+      }
+    }
     // v1.3：路由测试
     if (trimmed.startsWith("/route ") || trimmed === "/route") {
       const args = trimmed.slice(6).trim();

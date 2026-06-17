@@ -71,11 +71,13 @@ dependencies = [
  "context",
  "futures",
  "license",
+ "lint",
  "marketplace",
  "mcp",
  "memory",
  "patch",
  "provider",
+ "queue",
  "reqwest 0.12.28",
  "sandbox",
  "serde",
@@ -2896,6 +2898,18 @@ dependencies = [
  "tracing",
  "uuid",
  "wiremock",
+]
+
+[[package]]
+name = "queue"
+version = "0.1.0-alpha"
+dependencies = [
+ "async-trait",
+ "lint",
+ "serde",
+ "serde_json",
+ "tokio",
+ "uuid",
 ]
 
 [[package]]

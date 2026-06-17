@@ -34,6 +34,7 @@ voice = { path = "../../../crates/voice" }
 marketplace = { path = "../../../crates/marketplace" }
 vault = { path = "../../../crates/vault" }
 lint = { path = "../../../crates/lint" }
+queue = { path = "../../../crates/queue" }
 base64.workspace = true
 tokio.workspace = true
 async-trait.workspace = true
