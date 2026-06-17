@@ -8,6 +8,7 @@ mod agent;
 mod cu_tool;
 mod desktop_cua;
 mod mcp_tool;
+mod subagent_tool;
 mod tools;
 
 use agent_core::tool::ToolRegistry;
@@ -70,6 +71,7 @@ pub fn run() {
             list_git_branches,
             list_mcp_servers,
             reload_mcp,
+            route_model_cmd, // v0.7
         ])
         .setup(|_app| Ok(()))
         .run(tauri::generate_context!())
@@ -111,10 +113,17 @@ async fn agent_run(
     app: AppHandle,
     req: AgentRunPayload,
 ) -> Result<String, String> {
-    let provider = create_provider(&req.model).await?;
+    // v0.7：auto 模型路由
+    let model_name = if req.model == "auto" {
+        route_model(&req.message)
+    } else {
+        req.model.clone()
+    };
+    let provider = create_provider(&model_name).await?;
     let provider_arc: Arc<dyn Model> = Arc::from(provider);
 
     // 确保 tool registry 已初始化
+    let reg_arc_for_subagent: Arc<Mutex<ToolRegistry>>;
     {
         let state = app.state::<SharedToolRegistry>();
         let mut reg = state.lock().await;
@@ -125,6 +134,19 @@ async fn agent_run(
             desktop_cua::register_desktop_cua(&mut reg); // v0.6
             mcp_tool::register_mcp_tools(&mut reg).await;
         }
+        reg_arc_for_subagent = Arc::clone(&state);
+    }
+
+    // v0.7：注册 spawn_agent 工具（需要 provider + 全 registry）
+    {
+        let state = app.state::<SharedToolRegistry>();
+        let mut reg = state.lock().await;
+        subagent_tool::register_subagent_tool(
+            &mut reg,
+            app.clone(),
+            provider_arc.clone(),
+            reg_arc_for_subagent.clone(),
+        );
     }
 
     // 构造 history
@@ -576,7 +598,46 @@ fn build_chat_request(model: &str, message: &str, stream: bool) -> ChatRequest {
 }
 
 /// 按 model id 创建对应 provider
+/// v0.7：根据任务内容自动选 model
+fn route_model(message: &str) -> String {
+    let lower = message.to_lowercase();
+    // 代码相关 → DeepSeek（便宜 + 代码强）
+    let code_kw = ["code", "function", "fn ", "impl ", "bug", "debug", "error", "rust", "python", "javascript", "typescript", "compile", "refactor", "重构", "编译", "报错", "代码", "写一个", "函数", "bug"];
+    // 中文对话 / 创意 → MiniMax-M3
+    let m3_kw = ["你好", "请问", "聊聊", "故事", "创作", "诗", "翻译", "总结"];
+    // 规划 / 复杂推理 → Claude
+    let claude_kw = ["plan", "分析", "规划", "策略", "compare", "tradeoff", "复杂", "深度", "reasoning", "compare"];
+
+    let code_score = code_kw.iter().filter(|k| lower.contains(**k)).count();
+    let m3_score = m3_kw.iter().filter(|k| lower.contains(**k)).count();
+    let claude_score = claude_kw.iter().filter(|k| lower.contains(**k)).count();
+
+    if code_score >= 2 && code_score > m3_score {
+        return "deepseek-chat".to_string();
+    }
+    if claude_score >= 2 {
+        return "claude-sonnet-4-5".to_string();
+    }
+    if m3_score >= 2 {
+        return "MiniMax-M3".to_string();
+    }
+    // 默认 MiniMax M3
+    "MiniMax-M3".to_string()
+}
+
+/// v0.7：model routing Tauri 命令
+#[tauri::command]
+async fn route_model_cmd(message: String) -> Result<String, String> {
+    Ok(route_model(&message))
+}
+
 async fn create_provider(model: &str) -> Result<Box<dyn Model>, String> {
+    // v0.7：模型路由 — "auto" 根据任务自动选 model
+    if model == "auto" {
+        return Err(
+            "auto 路由需要在 agent_run 前先用 route_model 计算实际模型".to_string(),
+        );
+    }
     match model {
         "MiniMax-M3" | "m3" => {
             let key = std::env::var("MINIMAX_API_KEY")

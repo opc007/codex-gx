@@ -19,6 +19,15 @@ export function Composer({ sessionId }: Props) {
   const [requireApproval, setRequireApproval] = useState(true);
   // v0.6：plan mode
   const [planMode, setPlanMode] = useState(false);
+  // v0.7：sub-agents
+  const [subagents, setSubagents] = useState<Array<{
+    id: string;
+    role: string;
+    status: string;
+    task: string;
+    result?: string | null;
+    error?: string | null;
+  }>>([]);
   const [providers, setProviders] = useState<ProviderInfo[]>([]);
   const [stages, setStages] = useState<Stage[]>([]);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
@@ -36,6 +45,13 @@ export function Composer({ sessionId }: Props) {
       // 1.5s 后清空 stages
       const t = setTimeout(() => setStages([]), 1500);
       return () => clearTimeout(t);
+    }
+  }, [busy]);
+
+  // v0.7：busy 开始时清空 subagents
+  useEffect(() => {
+    if (busy) {
+      setSubagents([]);
     }
   }, [busy]);
 
@@ -177,6 +193,44 @@ M3 / Claude / GPT 会自动调用：
           text: `📋 当前 plan mode：**${planMode ? "on" : "off"}**\n\n切换：/plan on | /plan off`,
           createdAt: Date.now(),
         });
+      }
+      setText("");
+      return;
+    }
+    // v0.7：测试模型路由
+    if (trimmed.startsWith("/route ")) {
+      const query = trimmed.slice(7).trim();
+      if (!query) {
+        appendMessage(sessionId, {
+          id: crypto.randomUUID(),
+          role: "assistant",
+          text: "🧭 用法：`/route <任务描述>`\n例如：`/route 写一个 Python 函数计算 fib`",
+          createdAt: Date.now(),
+        });
+      } else {
+        try {
+          const routed = await invoke<string>("route_model_cmd", { message: query });
+          const reason = routed.includes("deepseek")
+            ? "检测到代码任务 → DeepSeek（便宜 + 代码强）"
+            : routed.includes("claude")
+            ? "检测到规划/分析任务 → Claude Sonnet 4.5"
+            : routed.includes("MiniMax") || routed.includes("m3")
+            ? "默认对话/创意任务 → MiniMax M3"
+            : "默认 → MiniMax M3";
+          appendMessage(sessionId, {
+            id: crypto.randomUUID(),
+            role: "assistant",
+            text: `🧭 路由结果：**${routed}**\n${reason}`,
+            createdAt: Date.now(),
+          });
+        } catch (e) {
+          appendMessage(sessionId, {
+            id: crypto.randomUUID(),
+            role: "assistant",
+            text: `🧭 路由失败：${e}`,
+            createdAt: Date.now(),
+          });
+        }
       }
       setText("");
       return;
@@ -461,6 +515,35 @@ ${diff.diff.slice(0, 5000)}${diff.truncated ? "\n... [truncated, view full in gi
             }
             return newStages;
           });
+        } else if (evt.kind === "subagent" && evt.subagent) {
+          // v0.7：更新 subagent 状态
+          setSubagents((prev) => {
+            const existing = prev.find((s) => s.id === evt.subagent!.subagentId);
+            if (existing) {
+              return prev.map((s) =>
+                s.id === evt.subagent!.subagentId
+                  ? {
+                      ...s,
+                      status: evt.subagent!.status,
+                      result: evt.subagent!.result ?? s.result,
+                      error: evt.subagent!.error ?? s.error,
+                    }
+                  : s
+              );
+            } else {
+              return [
+                ...prev,
+                {
+                  id: evt.subagent!.subagentId,
+                  role: evt.subagent!.role,
+                  status: evt.subagent!.status,
+                  task: evt.subagent!.task,
+                  result: evt.subagent!.result,
+                  error: evt.subagent!.error,
+                },
+              ];
+            }
+          });
         } else if (evt.kind === "done") {
           if (evt.usage) {
             inputTokens = evt.usage.inputTokens;
@@ -557,6 +640,31 @@ ${diff.diff.slice(0, 5000)}${diff.truncated ? "\n... [truncated, view full in gi
     <div className="composer">
       {slashMenu}
       {stages.length > 0 && <StageTimeline stages={stages} />}
+      {subagents.length > 0 && (
+        <div className="composer-subagents">
+          {subagents.map((sa) => (
+            <div key={sa.id} className={`subagent-card subagent-${sa.status}`}>
+              <span className="subagent-icon">
+                {sa.role === "researcher" ? "🔍" : sa.role === "coder" ? "💻" : sa.role === "reviewer" ? "👀" : "🤖"}
+              </span>
+              <span className="subagent-role">{sa.role}</span>
+              <span className="subagent-task">{sa.task.slice(0, 60)}{sa.task.length > 60 ? "…" : ""}</span>
+              <span className={`subagent-status subagent-status-${sa.status}`}>
+                {sa.status === "started" ? "启动中" : sa.status === "running" ? "运行中" : sa.status === "done" ? "✓ 完成" : sa.status === "error" ? "✗ 错误" : sa.status}
+              </span>
+              {sa.result && (
+                <details className="subagent-result">
+                  <summary>查看结果</summary>
+                  <pre>{sa.result.slice(0, 2000)}{sa.result.length > 2000 ? "\n... [truncated]" : ""}</pre>
+                </details>
+              )}
+              {sa.error && (
+                <div className="subagent-error">❌ {sa.error}</div>
+              )}
+            </div>
+          ))}
+        </div>
+      )}
       <div className="composer-toolbar">
         <select
           className="composer-model"
@@ -564,6 +672,8 @@ ${diff.diff.slice(0, 5000)}${diff.truncated ? "\n... [truncated, view full in gi
           onChange={(e) => setModel(e.target.value)}
           disabled={busy}
         >
+          {/* v0.7：auto 路由 */}
+          <option value="auto">🧭 Auto 路由（按任务选 model）</option>
           {providers.length === 0 && (
             <option value="MiniMax-M3">MiniMax M3 · $0.60/M</option>
           )}

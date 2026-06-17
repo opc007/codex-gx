@@ -33,6 +33,7 @@ export type AgentEvent = {
     | "stage"
     | "approval_request"
     | "plan"        // v0.6
+    | "subagent"    // v0.7
     | "usage"
     | "done"
     | "error";
@@ -61,6 +62,16 @@ export type AgentEvent = {
     plan: string;
     planId: string;
   } | null; // v0.6
+  subagent: {
+    subagentId: string;
+    role: string;
+    status: "started" | "running" | "done" | "error";
+    task: string;
+    result: string | null;
+    error: string | null;
+    content?: string; // v0.7：增量内容
+    step?: number;
+  } | null; // v0.7
 };
 
 export type SendChatParams = {
