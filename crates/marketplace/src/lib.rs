@@ -161,16 +161,15 @@ impl MarketplaceManager {
     pub fn new() -> Result<Self> {
         let home = dirs_home();
         let agentshell_dir = home.join(".agentshell");
-        let installed_file = agentshell_dir
-            .join("marketplace")
-            .join("installed.json");
+        let installed_file = agentshell_dir.join("marketplace").join("installed.json");
         std::fs::create_dir_all(agentshell_dir.join("marketplace"))?;
         std::fs::create_dir_all(agentshell_dir.join("skills"))?;
         std::fs::create_dir_all(agentshell_dir.join("tools"))?;
         Ok(Self {
             agentshell_dir,
             installed_file,
-            index_url: "https://raw.githubusercontent.com/opc007/codex-gx-plugins/main/index.json".to_string(),
+            index_url: "https://raw.githubusercontent.com/opc007/codex-gx-plugins/main/index.json"
+                .to_string(),
         })
     }
 
@@ -224,19 +223,14 @@ impl MarketplaceManager {
     }
 
     /// 安装插件（下载 + 校验 + 落盘 + 记录）
-    pub async fn install(
-        &self,
-        manifest: &PluginManifest,
-    ) -> Result<InstalledPlugin> {
+    pub async fn install(&self, manifest: &PluginManifest) -> Result<InstalledPlugin> {
         // 检查平台匹配
         let my_platform = current_platform();
         let my_arch = current_arch();
         let artifact = self.pick_artifact(manifest, &my_platform, &my_arch)?;
 
         // 下载到临时文件
-        let bytes = self
-            .download_artifact(artifact)
-            .await?;
+        let bytes = self.download_artifact(artifact).await?;
 
         // 校验
         if let Some(expected) = &artifact.sha256 {
@@ -252,12 +246,16 @@ impl MarketplaceManager {
         // 按类型落盘
         let local_path = match manifest.plugin_type {
             PluginType::Skill => {
-                let p = self.agentshell_dir.join("skills").join(format!("{}.json", manifest.name));
+                let p = self
+                    .agentshell_dir
+                    .join("skills")
+                    .join(format!("{}.json", manifest.name));
                 if let Some(filename) = &artifact.filename {
-                    let p2 = self
-                        .agentshell_dir
-                        .join("skills")
-                        .join(format!("{}.{}", manifest.name, extension_of(filename)));
+                    let p2 = self.agentshell_dir.join("skills").join(format!(
+                        "{}.{}",
+                        manifest.name,
+                        extension_of(filename)
+                    ));
                     std::fs::write(&p2, &bytes)?;
                     p2
                 } else {
@@ -345,8 +343,7 @@ impl MarketplaceManager {
         arch: &str,
     ) -> Result<&'a PluginArtifact> {
         for a in &manifest.artifacts {
-            let platform_ok = a.platforms.is_empty()
-                || a.platforms.iter().any(|p| p == platform);
+            let platform_ok = a.platforms.is_empty() || a.platforms.iter().any(|p| p == platform);
             let arch_ok = a.archs.is_empty() || a.archs.iter().any(|p| p == arch);
             if platform_ok && arch_ok {
                 return Ok(a);
@@ -475,7 +472,10 @@ mod tests {
     #[test]
     fn manager_init() {
         let m = fresh_manager("init");
-        assert!(m.installed_file.to_string_lossy().contains("installed.json"));
+        assert!(m
+            .installed_file
+            .to_string_lossy()
+            .contains("installed.json"));
     }
 
     #[test]
@@ -581,7 +581,9 @@ mod tests {
             ]
         }))
         .unwrap();
-        let a = m.pick_artifact(&manifest, "windows", "x86_64").expect("pick");
+        let a = m
+            .pick_artifact(&manifest, "windows", "x86_64")
+            .expect("pick");
         assert_eq!(a.url, "https://a.com/win");
     }
 

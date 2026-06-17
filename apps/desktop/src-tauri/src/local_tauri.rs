@@ -29,10 +29,7 @@ pub fn local_list_models(discovery: LocalDiscovery) -> Vec<LocalModelSummary> {
             id: format!("ollama:{}", m.name),
             name: m.name.clone(),
             size: m.size,
-            param_size: m
-                .details
-                .as_ref()
-                .and_then(|d| d.parameter_size.clone()),
+            param_size: m.details.as_ref().and_then(|d| d.parameter_size.clone()),
         });
     }
     for m in discovery.llamacpp_models {

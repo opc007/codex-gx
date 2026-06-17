@@ -118,7 +118,9 @@ mod tests {
     #[test]
     fn risk_patterns_non_empty() {
         assert!(!DEFAULT_BASH_RISK_PATTERNS.is_empty());
-        assert!(DEFAULT_BASH_RISK_PATTERNS.iter().any(|p| p.contains("sudo")));
+        assert!(DEFAULT_BASH_RISK_PATTERNS
+            .iter()
+            .any(|p| p.contains("sudo")));
     }
 
     #[test]

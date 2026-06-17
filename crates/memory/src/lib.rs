@@ -104,9 +104,7 @@ impl MemoryManager {
     /// 默认路径 ~/.agentshell/memory.json
     pub async fn default_path() -> Result<Self> {
         let home = std::env::var("HOME").unwrap_or_else(|_| ".".to_string());
-        let path = PathBuf::from(home)
-            .join(".agentshell")
-            .join("memory.json");
+        let path = PathBuf::from(home).join(".agentshell").join("memory.json");
         Self::load_or_new(path).await
     }
 

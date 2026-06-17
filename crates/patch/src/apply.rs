@@ -47,10 +47,7 @@ impl PatchResult {
 }
 
 /// 应用单个 patch 操作
-pub fn apply_op(
-    root: &Path,
-    op: &PatchOperation,
-) -> Result<FileResult, PatchApplyError> {
+pub fn apply_op(root: &Path, op: &PatchOperation) -> Result<FileResult, PatchApplyError> {
     match op {
         PatchOperation::Add { path, content } => {
             let full = root.join(path);
@@ -86,7 +83,10 @@ pub fn apply_op(
                 hunks_applied += 1;
             }
             let new_content = lines.join("\n");
-            let final_str: String = if had_trailing_newline && !new_content.is_empty() && !new_content.ends_with('\n') {
+            let final_str: String = if had_trailing_newline
+                && !new_content.is_empty()
+                && !new_content.ends_with('\n')
+            {
                 format!("{}\n", new_content)
             } else {
                 new_content
@@ -111,8 +111,7 @@ pub fn apply_op(
         }
         PatchOperation::Delete { path } => {
             let full = root.join(path);
-            std::fs::remove_file(&full)
-                .map_err(|_| PatchApplyError::FileNotFound(path.clone()))?;
+            std::fs::remove_file(&full).map_err(|_| PatchApplyError::FileNotFound(path.clone()))?;
             Ok(FileResult {
                 path: path.clone(),
                 action: "deleted".into(),
@@ -256,8 +255,8 @@ pub fn apply_to_dir(root: &Path, patch: &Patch) -> Result<PatchResult, PatchAppl
 
 /// 应用 patch 字符串到目录
 pub fn apply_patch(root: &Path, patch_text: &str) -> Result<PatchResult, PatchApplyError> {
-    let patch = crate::parser::parse_patch(patch_text)
-        .map_err(|e| PatchApplyError::InvalidHunk {
+    let patch =
+        crate::parser::parse_patch(patch_text).map_err(|e| PatchApplyError::InvalidHunk {
             file: "?".into(),
             msg: format!("parse error: {}", e),
         })?;
@@ -276,7 +275,8 @@ mod tests {
     #[test]
     fn test_apply_add() {
         let dir = tempdir().unwrap();
-        let patch_text = "*** Begin Patch\n*** Add File: hello.txt\n+hello world\n+second line\n*** End Patch\n";
+        let patch_text =
+            "*** Begin Patch\n*** Add File: hello.txt\n+hello world\n+second line\n*** End Patch\n";
         let r = apply_patch(dir.path(), patch_text).unwrap();
         assert_eq!(r.files.len(), 1);
         assert_eq!(r.files[0].action, "created");
@@ -308,7 +308,8 @@ mod tests {
     fn test_context_mismatch() {
         let dir = tempdir().unwrap();
         std::fs::write(dir.path().join("foo.txt"), "actual content\n").unwrap();
-        let patch_text = "*** Begin Patch\n*** Update File: foo.txt\n@@\n-wrong content\n+new\n*** End Patch\n";
+        let patch_text =
+            "*** Begin Patch\n*** Update File: foo.txt\n@@\n-wrong content\n+new\n*** End Patch\n";
         let r = apply_patch(dir.path(), patch_text);
         assert!(r.is_err());
     }
@@ -322,7 +323,8 @@ mod tests {
             "skip me\nskip me\ntarget\nskip me\n",
         )
         .unwrap();
-        let patch_text = "*** Begin Patch\n*** Update File: foo.txt\n@@\n-target\n+replaced\n*** End Patch\n";
+        let patch_text =
+            "*** Begin Patch\n*** Update File: foo.txt\n@@\n-target\n+replaced\n*** End Patch\n";
         let r = apply_patch(dir.path(), patch_text).unwrap();
         let content = std::fs::read_to_string(dir.path().join("foo.txt")).unwrap();
         assert_eq!(content, "skip me\nskip me\nreplaced\nskip me\n");
@@ -331,12 +333,9 @@ mod tests {
     #[test]
     fn test_multi_hunks() {
         let dir = tempdir().unwrap();
-        std::fs::write(
-            dir.path().join("f.txt"),
-            "a\nb\nc\nd\ne\nf\n",
-        )
-        .unwrap();
-        let patch_text = "*** Begin Patch\n*** Update File: f.txt\n@@\n-b\n+B\n@@\n-e\n+E\n*** End Patch\n";
+        std::fs::write(dir.path().join("f.txt"), "a\nb\nc\nd\ne\nf\n").unwrap();
+        let patch_text =
+            "*** Begin Patch\n*** Update File: f.txt\n@@\n-b\n+B\n@@\n-e\n+E\n*** End Patch\n";
         let r = apply_patch(dir.path(), patch_text).unwrap();
         assert_eq!(r.files[0].hunks_applied, 2);
         let content = std::fs::read_to_string(dir.path().join("f.txt")).unwrap();
@@ -347,7 +346,8 @@ mod tests {
     fn test_pure_add_hunk() {
         let dir = tempdir().unwrap();
         std::fs::write(dir.path().join("f.txt"), "a\nb\nc\n").unwrap();
-        let patch_text = "*** Begin Patch\n*** Update File: f.txt\n@@\n b\n+INSERTED\n*** End Patch\n";
+        let patch_text =
+            "*** Begin Patch\n*** Update File: f.txt\n@@\n b\n+INSERTED\n*** End Patch\n";
         let r = apply_patch(dir.path(), patch_text).unwrap();
         let content = std::fs::read_to_string(dir.path().join("f.txt")).unwrap();
         assert_eq!(content, "a\nb\nINSERTED\nc\n");

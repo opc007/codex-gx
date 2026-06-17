@@ -104,7 +104,11 @@ impl Task {
 pub enum TaskEvent {
     Added(Task),
     Started(Task),
-    Progress { id: String, progress: f32, log: Option<String> },
+    Progress {
+        id: String,
+        progress: f32,
+        log: Option<String>,
+    },
     Completed(Task),
     Failed(Task),
     Cancelled(Task),
@@ -161,11 +165,7 @@ impl Queue {
     where
         F: FnOnce(BoxFuture<'static, ()>),
     {
-        let rx = self
-            .receiver
-            .lock()
-            .ok()
-            .and_then(|mut g| g.take());
+        let rx = self.receiver.lock().ok().and_then(|mut g| g.take());
         if let Some(receiver) = rx {
             let q_clone = self.clone();
             let concurrency = self.concurrency;
@@ -240,7 +240,10 @@ impl Queue {
             let keep = tasks
                 .get(id)
                 .map(|t| {
-                    let s = t.try_lock().map(|t| t.status).unwrap_or(TaskStatus::Running);
+                    let s = t
+                        .try_lock()
+                        .map(|t| t.status)
+                        .unwrap_or(TaskStatus::Running);
                     matches!(s, TaskStatus::Pending | TaskStatus::Running)
                 })
                 .unwrap_or(false);
@@ -494,7 +497,11 @@ mod tests {
 
     #[test]
     fn task_new_fields() {
-        let t = Task::new(TaskKind::Command, "echo hi", serde_json::json!({"cmd": "echo hi"}));
+        let t = Task::new(
+            TaskKind::Command,
+            "echo hi",
+            serde_json::json!({"cmd": "echo hi"}),
+        );
         assert_eq!(t.title, "echo hi");
         assert_eq!(t.kind, TaskKind::Command);
         assert_eq!(t.status, TaskStatus::Pending);
@@ -515,9 +522,11 @@ mod tests {
     async fn queue_enqueue_and_list() {
         let q = Queue::new(2);
         let id = q
-            .enqueue(
-                Task::new(TaskKind::Command, "noop", serde_json::json!({"cmd": "true"})),
-            )
+            .enqueue(Task::new(
+                TaskKind::Command,
+                "noop",
+                serde_json::json!({"cmd": "true"}),
+            ))
             .await;
         let list = q.list().await;
         assert_eq!(list.len(), 1);
@@ -528,9 +537,11 @@ mod tests {
     async fn queue_cancel_existing() {
         let q = Queue::new(1);
         let id = q
-            .enqueue(
-                Task::new(TaskKind::Command, "long", serde_json::json!({"cmd": "sleep 5"})),
-            )
+            .enqueue(Task::new(
+                TaskKind::Command,
+                "long",
+                serde_json::json!({"cmd": "sleep 5"}),
+            ))
             .await;
         // 给调度器一点时间启动
         tokio::time::sleep(std::time::Duration::from_millis(100)).await;
@@ -549,9 +560,11 @@ mod tests {
         let q = Queue::new(1);
         q.start();
         let _id = q
-            .enqueue(
-                Task::new(TaskKind::Command, "echo done", serde_json::json!({"cmd": "echo done"})),
-            )
+            .enqueue(Task::new(
+                TaskKind::Command,
+                "echo done",
+                serde_json::json!({"cmd": "echo done"}),
+            ))
             .await;
         // 轮询等待完成（避免固定 sleep 在慢机器上 flaky）
         let deadline = tokio::time::Instant::now() + std::time::Duration::from_secs(5);

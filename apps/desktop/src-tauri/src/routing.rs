@@ -379,9 +379,7 @@ impl RoutingEngine {
 
 fn routing_file_path() -> PathBuf {
     let home = std::env::var("HOME").unwrap_or_else(|_| "/tmp".to_string());
-    PathBuf::from(home)
-        .join(".agentshell")
-        .join("routing.json")
+    PathBuf::from(home).join(".agentshell").join("routing.json")
 }
 
 #[cfg(test)]

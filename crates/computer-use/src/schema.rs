@@ -11,7 +11,10 @@ pub struct ViewportSize {
 
 impl Default for ViewportSize {
     fn default() -> Self {
-        Self { width: 1280, height: 720 }
+        Self {
+            width: 1280,
+            height: 720,
+        }
     }
 }
 
@@ -47,22 +50,13 @@ pub enum BrowserAction {
         delay_ms: Option<u32>,
     },
     /// 双击
-    DoubleClick {
-        selector: String,
-    },
+    DoubleClick { selector: String },
     /// 悬停
-    Hover {
-        selector: String,
-    },
+    Hover { selector: String },
     /// 输入文本
-    Type {
-        selector: String,
-        text: String,
-    },
+    Type { selector: String, text: String },
     /// 按键
-    Press {
-        key: String,
-    },
+    Press { key: String },
     /// 滚动
     Scroll {
         /// X delta
@@ -85,13 +79,9 @@ pub enum BrowserAction {
         selector: Option<String>,
     },
     /// 提取文本
-    GetText {
-        selector: String,
-    },
+    GetText { selector: String },
     /// 执行 JS
-    Evaluate {
-        script: String,
-    },
+    Evaluate { script: String },
     /// 等待元素
     WaitFor {
         selector: String,

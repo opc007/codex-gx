@@ -60,13 +60,11 @@ impl Default for SandboxPolicy {
     fn default() -> Self {
         Self {
             network: NetworkRule::DenyAll,
-            filesystem: vec![
-                FilesystemRule {
-                    path: "/tmp/**".into(),
-                    allow: true,
-                    writable: true,
-                },
-            ],
+            filesystem: vec![FilesystemRule {
+                path: "/tmp/**".into(),
+                allow: true,
+                writable: true,
+            }],
             cwd_writable: true,
             allow_subprocesses: true,
         }
@@ -215,20 +213,35 @@ mod tests {
     #[test]
     fn test_can_write() {
         let p = SandboxPolicy::default();
-        assert_eq!(p.can_write(std::path::Path::new("/tmp/foo")), Decision::Allow);
-        assert_eq!(p.can_write(std::path::Path::new("/etc/passwd")), Decision::Deny);
-        assert_eq!(p.can_write(std::path::Path::new("/var/log/foo")), Decision::Deny);
+        assert_eq!(
+            p.can_write(std::path::Path::new("/tmp/foo")),
+            Decision::Allow
+        );
+        assert_eq!(
+            p.can_write(std::path::Path::new("/etc/passwd")),
+            Decision::Deny
+        );
+        assert_eq!(
+            p.can_write(std::path::Path::new("/var/log/foo")),
+            Decision::Deny
+        );
     }
 
     #[test]
     fn test_glob_double_star() {
-        assert!(matches_glob("/tmp/**", std::path::Path::new("/tmp/foo/bar")));
+        assert!(matches_glob(
+            "/tmp/**",
+            std::path::Path::new("/tmp/foo/bar")
+        ));
         assert!(matches_glob("/tmp/**", std::path::Path::new("/tmp/x")));
     }
 
     #[test]
     fn test_glob_single_star() {
         assert!(matches_glob("/tmp/*", std::path::Path::new("/tmp/foo")));
-        assert!(!matches_glob("/tmp/*", std::path::Path::new("/tmp/foo/bar")));
+        assert!(!matches_glob(
+            "/tmp/*",
+            std::path::Path::new("/tmp/foo/bar")
+        ));
     }
 }

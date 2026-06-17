@@ -21,16 +21,16 @@
 #![warn(clippy::all)]
 
 pub mod code;
-pub mod verify;
-pub mod storage;
-pub mod provider;
 pub mod manager;
+pub mod provider;
+pub mod storage;
+pub mod verify;
 
-pub use code::{LicenseCode, LicenseTier, LicensePayload, DeviceFingerprint};
-pub use verify::{verify_code, VerifyResult, VerifyError, generate_license};
-pub use storage::{LicenseStorage, StoredLicense, StorageError};
+pub use code::{DeviceFingerprint, LicenseCode, LicensePayload, LicenseTier};
+pub use manager::{LicenseManager, LicenseSummary};
 pub use provider::{
     ActivationCodeProvider, CommunityProvider, EnterpriseProvider, LicenseError, LicenseProvider,
     LicenseStatus, TrialProvider,
 };
-pub use manager::{LicenseManager, LicenseSummary};
+pub use storage::{LicenseStorage, StorageError, StoredLicense};
+pub use verify::{generate_license, verify_code, VerifyError, VerifyResult};

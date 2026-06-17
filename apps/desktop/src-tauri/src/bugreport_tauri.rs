@@ -13,7 +13,7 @@ use std::sync::Mutex;
 pub struct CrashEntry {
     pub id: String,
     pub timestamp: u64,
-    pub source: String, // "panic" | "frontend" | "promise" | "manual"
+    pub source: String,   // "panic" | "frontend" | "promise" | "manual"
     pub severity: String, // "fatal" | "error" | "warning"
     pub message: String,
     pub stack: Option<String>,
@@ -132,7 +132,9 @@ pub fn bug_report_list(state: tauri::State<'_, std::sync::Arc<BugReportState>>) 
 }
 
 #[tauri::command]
-pub fn bug_report_clear(state: tauri::State<'_, std::sync::Arc<BugReportState>>) -> Result<(), String> {
+pub fn bug_report_clear(
+    state: tauri::State<'_, std::sync::Arc<BugReportState>>,
+) -> Result<(), String> {
     let mut g = state.reports.lock().unwrap();
     g.clear();
     Ok(())
@@ -277,10 +279,7 @@ mod tests {
             urlencoding_encode("hello world"),
             "hello%20world".to_string()
         );
-        assert_eq!(
-            urlencoding_encode("a+b=c"),
-            "a%2Bb%3Dc".to_string()
-        );
+        assert_eq!(urlencoding_encode("a+b=c"), "a%2Bb%3Dc".to_string());
     }
 
     #[test]

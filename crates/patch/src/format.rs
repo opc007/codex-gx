@@ -13,7 +13,11 @@ pub fn format_patch(patch: &Patch) -> String {
                     s.push_str(&format!("+{}\n", line));
                 }
             }
-            PatchOperation::Update { path, hunks, move_to } => {
+            PatchOperation::Update {
+                path,
+                hunks,
+                move_to,
+            } => {
                 s.push_str(&format!("*** Update File: {}\n", path));
                 if let Some(to) = move_to {
                     s.push_str(&format!("*** Move to: {}\n", to));

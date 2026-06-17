@@ -448,7 +448,10 @@ impl DesktopCua for WindowsDesktopCua {
 
     fn type_text(&self, text: &str) -> Result<String> {
         // PowerShell 字符串里需要转义双引号
-        let escaped = text.replace('"', "`\"").replace('`', "``").replace('$', "`$");
+        let escaped = text
+            .replace('"', "`\"")
+            .replace('`', "``")
+            .replace('$', "`$");
         let ps = format!(
             r#"
             Add-Type -AssemblyName System.Windows.Forms
@@ -749,7 +752,11 @@ impl Tool for DesktopListWindowsTool {
                 c.platform()
             )));
         }
-        let mut text = format!("🖥️ 平台 {} 可见窗口 ({} 个)：\n\n", c.platform(), wins.len());
+        let mut text = format!(
+            "🖥️ 平台 {} 可见窗口 ({} 个)：\n\n",
+            c.platform(),
+            wins.len()
+        );
         for (i, w) in wins.iter().enumerate().take(50) {
             text.push_str(&format!(
                 "{}. **{}** — `{}` (pid {})\n",

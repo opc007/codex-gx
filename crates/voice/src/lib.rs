@@ -139,11 +139,17 @@ impl VoiceManager {
         let tmp_dir = std::env::temp_dir().join("agentshell_voice");
         std::fs::create_dir_all(&models_dir)?;
         std::fs::create_dir_all(&tmp_dir)?;
-        Ok(Self { models_dir, tmp_dir })
+        Ok(Self {
+            models_dir,
+            tmp_dir,
+        })
     }
 
     pub fn with_dirs(models_dir: PathBuf, tmp_dir: PathBuf) -> Self {
-        Self { models_dir, tmp_dir }
+        Self {
+            models_dir,
+            tmp_dir,
+        }
     }
 
     pub fn tmp_dir_path(&self) -> PathBuf {
@@ -179,7 +185,11 @@ impl VoiceManager {
 
     pub fn find_downloaded_model(&self, name: &str) -> Option<PathBuf> {
         let p = self.models_dir.join(name);
-        if p.exists() { Some(p) } else { None }
+        if p.exists() {
+            Some(p)
+        } else {
+            None
+        }
     }
 
     pub fn default_model(&self) -> Option<ModelInfo> {
@@ -283,7 +293,8 @@ impl VoiceManager {
             }
         }
         Err(VoiceError::WhisperCliNotFound(
-            "请到 https://github.com/ggerganov/whisper.cpp 安装并把 main / whisper-cli 加到 PATH".into(),
+            "请到 https://github.com/ggerganov/whisper.cpp 安装并把 main / whisper-cli 加到 PATH"
+                .into(),
         ))
     }
 
@@ -425,7 +436,9 @@ mod tests {
         let m = VoiceManager::new().unwrap();
         let original = b"fake wav bytes";
         let b64 = base64::engine::general_purpose::STANDARD.encode(original);
-        let path = m.write_temp_audio("test_roundtrip.wav", &b64).expect("write");
+        let path = m
+            .write_temp_audio("test_roundtrip.wav", &b64)
+            .expect("write");
         let read = std::fs::read(&path).expect("read");
         assert_eq!(read, original);
         std::fs::remove_file(path).ok();

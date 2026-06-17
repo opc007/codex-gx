@@ -32,8 +32,7 @@ pub enum StreamChunk {
 }
 
 /// 流（Pin<Box<dyn Stream>>）
-pub type ChatStream =
-    Pin<Box<dyn Stream<Item = Result<StreamChunk>> + Send + Sync>>;
+pub type ChatStream = Pin<Box<dyn Stream<Item = Result<StreamChunk>> + Send + Sync>>;
 
 /// 流最终聚合
 #[derive(Debug, Default, Clone)]

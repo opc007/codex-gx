@@ -8,28 +8,28 @@
 #![warn(missing_docs)]
 #![warn(clippy::all)]
 
+pub mod anthropic;
+pub mod deepseek;
 pub mod error;
+pub mod local;
+pub mod minimax;
 pub mod model;
+pub mod openai_compat;
+pub mod registry;
 pub mod request;
 pub mod response;
 pub mod stream;
-pub mod openai_compat;
-pub mod minimax;
-pub mod anthropic;
-pub mod deepseek;
-pub mod local;
-pub mod registry;
 
-pub use error::{ProviderError, Result};
-pub use model::{Model, ModelCapabilities, ModelInfo, StopReason, Usage};
-pub use request::{ChatRequest, ChatMessage, ChatRole, ToolDefinition};
-pub use response::ChatResponse;
-pub use openai_compat::OpenAiCompatProvider;
-pub use minimax::MinimaxProvider;
 pub use anthropic::AnthropicProvider;
 pub use deepseek::DeepSeekProvider;
+pub use error::{ProviderError, Result};
 pub use local::{
-    discover_all, llama_cpp_info, LlamaCppEntry, LlamaCppProvider, LocalDiscovery, ollama_info,
+    discover_all, llama_cpp_info, ollama_info, LlamaCppEntry, LlamaCppProvider, LocalDiscovery,
     OllamaModelEntry, OllamaProvider,
 };
+pub use minimax::MinimaxProvider;
+pub use model::{Model, ModelCapabilities, ModelInfo, StopReason, Usage};
+pub use openai_compat::OpenAiCompatProvider;
 pub use registry::ProviderRegistry;
+pub use request::{ChatMessage, ChatRequest, ChatRole, ToolDefinition};
+pub use response::ChatResponse;

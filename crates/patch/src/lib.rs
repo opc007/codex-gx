@@ -26,10 +26,10 @@
 #![warn(missing_docs)]
 #![warn(clippy::all)]
 
-mod parser;
 mod apply;
 mod format;
+mod parser;
 
-pub use parser::{parse_patch, PatchParseError, PatchOperation, PatchHunk, PatchLine};
 pub use apply::{apply_patch, apply_to_dir, PatchApplyError, PatchResult};
 pub use format::{format_patch, summarize};
+pub use parser::{parse_patch, PatchHunk, PatchLine, PatchOperation, PatchParseError};

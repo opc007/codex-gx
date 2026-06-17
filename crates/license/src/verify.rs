@@ -42,17 +42,15 @@ pub fn verify_code(
     secret_key: &[u8],
 ) -> Result<VerifyResult, VerifyError> {
     // 1. 签名验证
-    let payload_bytes = serde_json::to_vec(&code.payload)
-        .map_err(|e| VerifyError::Invalid(e.to_string()))?;
-    let mut mac = HmacSha256::new_from_slice(secret_key)
-        .map_err(|e| VerifyError::Invalid(e.to_string()))?;
+    let payload_bytes =
+        serde_json::to_vec(&code.payload).map_err(|e| VerifyError::Invalid(e.to_string()))?;
+    let mut mac =
+        HmacSha256::new_from_slice(secret_key).map_err(|e| VerifyError::Invalid(e.to_string()))?;
     mac.update(&payload_bytes);
     let expected = mac.finalize().into_bytes();
-    let provided = base64::Engine::decode(
-        &base64::engine::general_purpose::STANDARD,
-        &code.signature,
-    )
-    .map_err(|e| VerifyError::Invalid(e.to_string()))?;
+    let provided =
+        base64::Engine::decode(&base64::engine::general_purpose::STANDARD, &code.signature)
+            .map_err(|e| VerifyError::Invalid(e.to_string()))?;
     if expected.as_slice() != provided.as_slice() {
         return Err(VerifyError::BadSignature);
     }
@@ -90,7 +88,9 @@ pub fn generate_license(
     let payload = LicensePayload {
         tier,
         activated_at: now,
-        expires_at: tier.duration_days().map(|d| now + chrono::Duration::days(d)),
+        expires_at: tier
+            .duration_days()
+            .map(|d| now + chrono::Duration::days(d)),
         device,
         issue_id: issue_id.into(),
         note: None,

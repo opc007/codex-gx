@@ -14,7 +14,7 @@ use serde::{Deserialize, Serialize};
 
 use crate::error::{ProviderError, Result};
 use crate::model::{Model, ModelCapabilities, ModelInfo, Usage};
-use crate::request::{ChatRequest, ChatMessage, ChatRole};
+use crate::request::{ChatMessage, ChatRequest, ChatRole};
 use crate::response::ChatResponse;
 use crate::stream::{ChatStream, StreamChunk};
 
@@ -59,10 +59,7 @@ impl OllamaProvider {
                 message: "ollama /api/tags failed".to_string(),
             });
         }
-        let body: OllamaTagsResponse = resp
-            .json()
-            .await
-            .map_err(|e| ProviderError::Http(e))?;
+        let body: OllamaTagsResponse = resp.json().await.map_err(|e| ProviderError::Http(e))?;
         Ok(body.models)
     }
 }
@@ -107,12 +104,12 @@ impl Model for OllamaProvider {
         if !resp.status().is_success() {
             let status = resp.status();
             let text = resp.text().await.unwrap_or_default();
-            return Err(ProviderError::Api { status: status.as_u16(), message: text.clone() });
+            return Err(ProviderError::Api {
+                status: status.as_u16(),
+                message: text.clone(),
+            });
         }
-        let parsed: OllamaChatResponse = resp
-            .json()
-            .await
-            .map_err(|e| ProviderError::Http(e))?;
+        let parsed: OllamaChatResponse = resp.json().await.map_err(|e| ProviderError::Http(e))?;
         let done = parsed.done;
         let prompt_eval_count = parsed.prompt_eval_count;
         let eval_count = parsed.eval_count;
@@ -160,7 +157,10 @@ impl Model for OllamaProvider {
         if !resp.status().is_success() {
             let status = resp.status();
             let text = resp.text().await.unwrap_or_default();
-            return Err(ProviderError::Api { status: status.as_u16(), message: text.clone() });
+            return Err(ProviderError::Api {
+                status: status.as_u16(),
+                message: text.clone(),
+            });
         }
         let model_id = self.info.id.clone();
         let byte_stream = resp.bytes_stream();
@@ -267,10 +267,7 @@ fn parse_ollama_ndjson(bytes: &[u8], _model_id: &str) -> Result<Option<StreamChu
                 .get("prompt_eval_count")
                 .and_then(|x| x.as_u64())
                 .unwrap_or(0) as u32;
-            let out_tok = v
-                .get("eval_count")
-                .and_then(|x| x.as_u64())
-                .unwrap_or(0) as u32;
+            let out_tok = v.get("eval_count").and_then(|x| x.as_u64()).unwrap_or(0) as u32;
             last_chunk = Some(StreamChunk::Usage(Usage {
                 input_tokens: in_tok,
                 output_tokens: out_tok,
@@ -340,10 +337,7 @@ impl LlamaCppProvider {
                 message: "llama.cpp /v1/models failed".to_string(),
             });
         }
-        let body: LlamaCppModelsResponse = resp
-            .json()
-            .await
-            .map_err(|e| ProviderError::Http(e))?;
+        let body: LlamaCppModelsResponse = resp.json().await.map_err(|e| ProviderError::Http(e))?;
         Ok(body.data.into_iter().map(|m| m.id).collect())
     }
 }
@@ -366,7 +360,10 @@ impl Model for LlamaCppProvider {
 
     async fn chat(&self, req: ChatRequest) -> Result<ChatResponse> {
         let body = llama_cpp_build_body(&self.info.id, &req, false);
-        let url = format!("{}/v1/chat/completions", self.base_url.trim_end_matches('/'));
+        let url = format!(
+            "{}/v1/chat/completions",
+            self.base_url.trim_end_matches('/')
+        );
         let resp = self
             .client
             .post(&url)
@@ -377,12 +374,12 @@ impl Model for LlamaCppProvider {
         if !resp.status().is_success() {
             let status = resp.status();
             let text = resp.text().await.unwrap_or_default();
-            return Err(ProviderError::Api { status: status.as_u16(), message: text.clone() });
+            return Err(ProviderError::Api {
+                status: status.as_u16(),
+                message: text.clone(),
+            });
         }
-        let v: serde_json::Value = resp
-            .json()
-            .await
-            .map_err(|e| ProviderError::Http(e))?;
+        let v: serde_json::Value = resp.json().await.map_err(|e| ProviderError::Http(e))?;
         let text = v
             .get("choices")
             .and_then(|c| c.get(0))
@@ -406,13 +403,16 @@ impl Model for LlamaCppProvider {
             .get("usage")
             .map(|u| Usage {
                 input_tokens: u.get("prompt_tokens").and_then(|x| x.as_u64()).unwrap_or(0) as u32,
-                output_tokens: u.get("completion_tokens").and_then(|x| x.as_u64()).unwrap_or(0)
-                    as u32,
+                output_tokens: u
+                    .get("completion_tokens")
+                    .and_then(|x| x.as_u64())
+                    .unwrap_or(0) as u32,
                 ..Default::default()
             })
             .unwrap_or_default();
         Ok(ChatResponse {
-            id: v.get("id")
+            id: v
+                .get("id")
                 .and_then(|x| x.as_str())
                 .unwrap_or("llamacpp")
                 .to_string(),
@@ -435,7 +435,10 @@ impl Model for LlamaCppProvider {
 
     async fn chat_stream(&self, req: ChatRequest) -> Result<ChatStream> {
         let body = llama_cpp_build_body(&self.info.id, &req, true);
-        let url = format!("{}/v1/chat/completions", self.base_url.trim_end_matches('/'));
+        let url = format!(
+            "{}/v1/chat/completions",
+            self.base_url.trim_end_matches('/')
+        );
         let resp = self
             .client
             .post(&url)
@@ -446,7 +449,10 @@ impl Model for LlamaCppProvider {
         if !resp.status().is_success() {
             let status = resp.status();
             let text = resp.text().await.unwrap_or_default();
-            return Err(ProviderError::Api { status: status.as_u16(), message: text.clone() });
+            return Err(ProviderError::Api {
+                status: status.as_u16(),
+                message: text.clone(),
+            });
         }
         let model_id = self.info.id.clone();
         let byte_stream = resp.bytes_stream();
@@ -539,9 +545,7 @@ pub fn ollama_info(name: &str) -> ModelInfo {
         capabilities: ModelCapabilities {
             tools: false,
             vision: name.contains("vision") || name.contains("llava") || name.contains("vl"),
-            reasoning: name.contains("r1")
-                || name.contains("qwq")
-                || name.contains("deepseek-r1"),
+            reasoning: name.contains("r1") || name.contains("qwq") || name.contains("deepseek-r1"),
             ..Default::default()
         },
         input_price_per_m: 0.0,
@@ -573,10 +577,7 @@ pub fn llama_cpp_info(name: &str) -> ModelInfo {
 }
 
 /// 探测本机可用的所有本地模型
-pub async fn discover_all(
-    ollama_url: Option<&str>,
-    llamacpp_url: Option<&str>,
-) -> LocalDiscovery {
+pub async fn discover_all(ollama_url: Option<&str>, llamacpp_url: Option<&str>) -> LocalDiscovery {
     let mut result = LocalDiscovery::default();
     if let Some(url) = ollama_url {
         match OllamaProvider::list_local(url).await {

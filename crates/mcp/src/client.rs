@@ -2,8 +2,8 @@
 
 use crate::error::Result;
 use crate::message::{
-    Capabilities, Implementation, InitializeParams, InitializeResult, ListToolsResult,
-    Tool, ToolCallParams, ToolCallResult,
+    Capabilities, Implementation, InitializeParams, InitializeResult, ListToolsResult, Tool,
+    ToolCallParams, ToolCallResult,
 };
 use crate::transport::stdio::StdioTransport;
 
@@ -44,7 +44,8 @@ impl McpClient {
             return Err(crate::error::McpError::JsonRpc(err.code, err.message));
         }
         let result: InitializeResult = serde_json::from_value(
-            resp.result.ok_or_else(|| crate::error::McpError::Protocol("no result".into()))?,
+            resp.result
+                .ok_or_else(|| crate::error::McpError::Protocol("no result".into()))?,
         )?;
         self.server_info = Some(result.server_info.clone());
         self.server_caps = Some(result.capabilities.clone());
@@ -65,13 +66,18 @@ impl McpClient {
             return Err(crate::error::McpError::JsonRpc(err.code, err.message));
         }
         let result: ListToolsResult = serde_json::from_value(
-            resp.result.ok_or_else(|| crate::error::McpError::Protocol("no result".into()))?,
+            resp.result
+                .ok_or_else(|| crate::error::McpError::Protocol("no result".into()))?,
         )?;
         Ok(result.tools)
     }
 
     /// 调用一个工具
-    pub async fn call_tool(&self, name: &str, arguments: serde_json::Value) -> Result<ToolCallResult> {
+    pub async fn call_tool(
+        &self,
+        name: &str,
+        arguments: serde_json::Value,
+    ) -> Result<ToolCallResult> {
         let params = ToolCallParams {
             name: name.into(),
             arguments,
@@ -84,7 +90,8 @@ impl McpClient {
             return Err(crate::error::McpError::JsonRpc(err.code, err.message));
         }
         let result: ToolCallResult = serde_json::from_value(
-            resp.result.ok_or_else(|| crate::error::McpError::Protocol("no result".into()))?,
+            resp.result
+                .ok_or_else(|| crate::error::McpError::Protocol("no result".into()))?,
         )?;
         Ok(result)
     }

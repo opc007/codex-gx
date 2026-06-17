@@ -262,11 +262,9 @@ pub struct LicenseCode {
 impl LicenseCode {
     /// 用户输入的码字符串（Base64 编码的 JSON）
     pub fn from_user_code(user_code: &str) -> Result<Self, String> {
-        let bytes = base64::Engine::decode(
-            &base64::engine::general_purpose::STANDARD,
-            user_code.trim(),
-        )
-        .map_err(|e| format!("base64 decode: {}", e))?;
+        let bytes =
+            base64::Engine::decode(&base64::engine::general_purpose::STANDARD, user_code.trim())
+                .map_err(|e| format!("base64 decode: {}", e))?;
         serde_json::from_slice(&bytes).map_err(|e| format!("json parse: {}", e))
     }
 

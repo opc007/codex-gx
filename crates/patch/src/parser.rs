@@ -25,13 +25,22 @@ pub struct PatchLine {
 
 impl PatchLine {
     pub fn context(s: impl Into<String>) -> Self {
-        Self { kind: PatchLineKind::Context, content: s.into() }
+        Self {
+            kind: PatchLineKind::Context,
+            content: s.into(),
+        }
     }
     pub fn add(s: impl Into<String>) -> Self {
-        Self { kind: PatchLineKind::Add, content: s.into() }
+        Self {
+            kind: PatchLineKind::Add,
+            content: s.into(),
+        }
     }
     pub fn remove(s: impl Into<String>) -> Self {
-        Self { kind: PatchLineKind::Remove, content: s.into() }
+        Self {
+            kind: PatchLineKind::Remove,
+            content: s.into(),
+        }
     }
 }
 
@@ -166,7 +175,10 @@ pub fn parse_patch(input: &str) -> Result<Patch, PatchParseError> {
                 if let Some(rest) = t.strip_prefix("@@") {
                     // 新 hunk（可选）
                     if !current_hunk.lines.is_empty() {
-                        hunks.push(std::mem::replace(&mut current_hunk, PatchHunk { lines: Vec::new() }));
+                        hunks.push(std::mem::replace(
+                            &mut current_hunk,
+                            PatchHunk { lines: Vec::new() },
+                        ));
                     }
                     // @@ 后是可选的 context label，跳过
                     let _ctx = rest.trim();
@@ -184,7 +196,10 @@ pub fn parse_patch(input: &str) -> Result<Patch, PatchParseError> {
                 hunks.push(current_hunk);
             }
             if hunks.is_empty() {
-                return Err(PatchParseError::InvalidLine(i + 1, format!("empty hunks for Update {}", path)));
+                return Err(PatchParseError::InvalidLine(
+                    i + 1,
+                    format!("empty hunks for Update {}", path),
+                ));
             }
             operations.push(PatchOperation::Update {
                 path,
@@ -226,7 +241,10 @@ pub fn parse_patch(input: &str) -> Result<Patch, PatchParseError> {
         } else if trimmed.is_empty() {
             i += 1;
         } else {
-            return Err(PatchParseError::UnknownOperation(trimmed.to_string(), i + 1));
+            return Err(PatchParseError::UnknownOperation(
+                trimmed.to_string(),
+                i + 1,
+            ));
         }
     }
 
@@ -252,7 +270,8 @@ mod tests {
 
     #[test]
     fn test_parse_update() {
-        let patch = "*** Begin Patch\n*** Update File: foo.txt\n@@\n-old\n+new\n context\n*** End Patch\n";
+        let patch =
+            "*** Begin Patch\n*** Update File: foo.txt\n@@\n-old\n+new\n context\n*** End Patch\n";
         let p = parse_patch(patch).unwrap();
         assert_eq!(p.operations.len(), 1);
         match &p.operations[0] {

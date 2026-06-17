@@ -18,6 +18,7 @@ pub type LicenseManagerState = Arc<LicenseManager>;
 
 /// 4 档 SKU 展示信息（前端用）
 #[derive(serde::Serialize)]
+#[serde(rename_all = "camelCase")]
 pub struct TierInfo {
     pub tier: String,
     pub display_name: &'static str,
@@ -66,11 +67,7 @@ pub fn tier_list() -> Vec<TierInfo> {
             display_name: "终身",
             duration_days: None,
             price_yuan: 299.0,
-            features: vec![
-                "年卡全部",
-                "永久免费升级 v1.x",
-                "团队/企业预留接口",
-            ],
+            features: vec!["年卡全部", "永久免费升级 v1.x", "团队/企业预留接口"],
             recommended: false,
         },
     ]
@@ -105,10 +102,11 @@ pub async fn license_activate(
 }
 
 #[tauri::command]
-pub async fn license_deactivate(
-    state: State<'_, LicenseManagerState>,
-) -> Result<(), String> {
-    state.deactivate().await.map_err(|e| format!("清除失败: {}", e))
+pub async fn license_deactivate(state: State<'_, LicenseManagerState>) -> Result<(), String> {
+    state
+        .deactivate()
+        .await
+        .map_err(|e| format!("清除失败: {}", e))
 }
 
 #[tauri::command]

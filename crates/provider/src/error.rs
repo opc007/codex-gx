@@ -11,10 +11,7 @@ pub enum ProviderError {
     Json(#[from] serde_json::Error),
 
     #[error("API returned error: status={status}, message={message}")]
-    Api {
-        status: u16,
-        message: String,
-    },
+    Api { status: u16, message: String },
 
     #[error("invalid API key")]
     InvalidApiKey,

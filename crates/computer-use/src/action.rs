@@ -58,10 +58,16 @@ impl Action {
                 None => "await page.content();".to_string(),
             },
             BrowserAction::GetText { selector } => {
-                format!(r#"await page.locator({}).textContent();"#, js_string(selector))
+                format!(
+                    r#"await page.locator({}).textContent();"#,
+                    js_string(selector)
+                )
             }
             BrowserAction::Evaluate { script } => script.clone(),
-            BrowserAction::WaitFor { selector, timeout_ms } => {
+            BrowserAction::WaitFor {
+                selector,
+                timeout_ms,
+            } => {
                 format!(
                     r#"await page.waitForSelector({}, {{ timeout: {} }});"#,
                     js_string(selector),

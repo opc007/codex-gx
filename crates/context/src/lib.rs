@@ -12,9 +12,9 @@
 #![warn(clippy::all)]
 
 pub mod agents_md;
-pub mod ide;
 pub mod compact;
 pub mod file_search;
+pub mod ide;
 
-pub use agents_md::{AgentsMd, load_agents_md};
-pub use compact::{compact_messages, CompactionStrategy, estimate_tokens};
+pub use agents_md::{load_agents_md, AgentsMd};
+pub use compact::{compact_messages, estimate_tokens, CompactionStrategy};

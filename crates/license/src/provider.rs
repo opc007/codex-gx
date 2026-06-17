@@ -31,15 +31,9 @@ pub enum LicenseStatus {
         expires_at: Option<i64>,
     },
     /// 临期（< 7 天）
-    Expiring {
-        tier: LicenseTier,
-        days_left: u32,
-    },
+    Expiring { tier: LicenseTier, days_left: u32 },
     /// 过期
-    Expired {
-        tier: LicenseTier,
-        expired_at: i64,
-    },
+    Expired { tier: LicenseTier, expired_at: i64 },
     /// 离线宽限期（> 7 天未联网）
     OfflineGrace { days_offline: u32 },
     /// 不可用
@@ -136,21 +130,12 @@ impl ActivationCodeProvider {
     /// 默认 demo provider（写到 `~/.agentshell/license.toml`，key 为 demo key）
     pub fn default_demo() -> Self {
         let home = std::env::var("HOME").unwrap_or_else(|_| "/tmp".into());
-        let path = PathBuf::from(home)
-            .join(".agentshell")
-            .join("license.toml");
-        Self::new(
-            path,
-            b"agentshell-demo-key-v0.1-DO-NOT-USE-IN-PRODUCTION",
-        )
+        let path = PathBuf::from(home).join(".agentshell").join("license.toml");
+        Self::new(path, b"agentshell-demo-key-v0.1-DO-NOT-USE-IN-PRODUCTION")
     }
 
     /// 生成测试 license（开发 / 自用）
-    pub fn generate_demo_code(
-        &self,
-        tier: LicenseTier,
-        device: &DeviceFingerprint,
-    ) -> LicenseCode {
+    pub fn generate_demo_code(&self, tier: LicenseTier, device: &DeviceFingerprint) -> LicenseCode {
         generate_license(
             tier,
             device.clone(),
@@ -172,8 +157,8 @@ impl LicenseProvider for ActivationCodeProvider {
         device: &DeviceFingerprint,
     ) -> Result<StoredLicense, LicenseError> {
         // 1. parse
-        let code = LicenseCode::from_user_code(code_str)
-            .map_err(|e| LicenseError::InvalidCode(e))?;
+        let code =
+            LicenseCode::from_user_code(code_str).map_err(|e| LicenseError::InvalidCode(e))?;
 
         // 2. verify
         let result: VerifyResult = verify_code(&code, device, &self.secret_key)?;
@@ -190,7 +175,9 @@ impl LicenseProvider for ActivationCodeProvider {
             installed_at: chrono::Utc::now().timestamp(),
             device_id: device.to_id(),
         };
-        self.storage.save(&stored).map_err(|e| LicenseError::Storage(e.to_string()))?;
+        self.storage
+            .save(&stored)
+            .map_err(|e| LicenseError::Storage(e.to_string()))?;
 
         // touch result
         let _ = result;
@@ -393,13 +380,18 @@ mod tests {
     #[test]
     fn test_status_can_write() {
         assert!(!LicenseStatus::Unactivated.can_write());
-        assert!(!LicenseStatus::Expired { tier: LicenseTier::Monthly, expired_at: 0 }.can_write());
+        assert!(!LicenseStatus::Expired {
+            tier: LicenseTier::Monthly,
+            expired_at: 0
+        }
+        .can_write());
         assert!(LicenseStatus::Valid {
             tier: LicenseTier::Yearly,
             remaining_days: Some(100),
             activated_at: 0,
             expires_at: None,
-        }.can_write());
+        }
+        .can_write());
     }
 
     #[test]

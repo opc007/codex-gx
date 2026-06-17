@@ -116,15 +116,19 @@ impl PoolEntry {
                     return Err(McpError::JsonRpc(err.code, err.message));
                 }
                 if let Some(result) = resp.result {
-                    if let Ok(info) =
-                        serde_json::from_value::<Implementation>(result.get("serverInfo").cloned().unwrap_or_default())
-                    {
+                    if let Ok(info) = serde_json::from_value::<Implementation>(
+                        result.get("serverInfo").cloned().unwrap_or_default(),
+                    ) {
                         self.server_info = Some(info);
                     }
-                    backend.send_notification("notifications/initialized", serde_json::json!({})).await?;
+                    backend
+                        .send_notification("notifications/initialized", serde_json::json!({}))
+                        .await?;
                 }
                 // list_tools
-                let resp = backend.send_request("tools/list", serde_json::json!({})).await?;
+                let resp = backend
+                    .send_request("tools/list", serde_json::json!({}))
+                    .await?;
                 if let Some(err) = resp.error {
                     return Err(McpError::JsonRpc(err.code, err.message));
                 }
@@ -255,7 +259,8 @@ impl McpPool {
                             return Err(McpError::JsonRpc(err.code, err.message));
                         }
                         if let Some(result) = resp.result {
-                            let parsed: crate::message::ToolCallResult = serde_json::from_value(result)?;
+                            let parsed: crate::message::ToolCallResult =
+                                serde_json::from_value(result)?;
                             entry.failed_calls = 0;
                             return Ok(parsed);
                         }

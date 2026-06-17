@@ -1,6 +1,6 @@
 //! v1.4：P2P 设备协同 tauri 命令
 
-use p2p::{DeviceInfo, Message, P2pEvent, P2pHost, P2pClient, PeerDevice, SessionSummary};
+use p2p::{DeviceInfo, Message, P2pClient, P2pEvent, P2pHost, PeerDevice, SessionSummary};
 use std::sync::Arc;
 use tauri::{AppHandle, Emitter};
 use tokio::sync::RwLock;
@@ -95,10 +95,7 @@ pub async fn p2p_start_host(
         async fn list_sessions(&self) -> Vec<SessionSummary> {
             vec![]
         }
-        async fn get_session_messages(
-            &self,
-            _id: &str,
-        ) -> Vec<p2p::SharedMessage> {
+        async fn get_session_messages(&self, _id: &str) -> Vec<p2p::SharedMessage> {
             vec![]
         }
     }
@@ -127,9 +124,7 @@ pub async fn p2p_stop_host(state: tauri::State<'_, P2pState>) -> Result<(), Stri
 }
 
 #[tauri::command]
-pub async fn p2p_generate_pairing(
-    state: tauri::State<'_, P2pState>,
-) -> Result<String, String> {
+pub async fn p2p_generate_pairing(state: tauri::State<'_, P2pState>) -> Result<String, String> {
     let h = state.host.read().await;
     let host = h.as_ref().ok_or("host not running")?;
     Ok(host.generate_pairing_code().await)
@@ -157,9 +152,7 @@ pub async fn p2p_reject_pairing(
 }
 
 #[tauri::command]
-pub async fn p2p_list_peers(
-    state: tauri::State<'_, P2pState>,
-) -> Result<Vec<PeerDevice>, String> {
+pub async fn p2p_list_peers(state: tauri::State<'_, P2pState>) -> Result<Vec<PeerDevice>, String> {
     let h = state.host.read().await;
     if let Some(host) = h.as_ref() {
         Ok(host.list_peers().await)

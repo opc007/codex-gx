@@ -79,7 +79,7 @@ export type SendChatParams = {
   userMessage: string;
   model: string;
   /** 历史消息（不含 tool_calls 的简化版） */
-  history?: Array<{ role: string; content: string; toolCallId?: string }>;
+  history?: Array<{ role: string; content: string; tool_call_id?: string }>;
   /** v0.4：是否需要用户批准 tool call */
   requireApproval?: boolean;
   /** v0.6：plan mode — 先输出 plan 等用户批准 */

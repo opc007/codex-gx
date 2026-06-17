@@ -52,10 +52,7 @@ impl PermissionConfig {
 
     /// 工具的最终权限级别
     pub fn resolve(&self, tool: &str, base: PermissionLevel) -> PermissionLevel {
-        self.tool_overrides
-            .get(tool)
-            .copied()
-            .unwrap_or(base)
+        self.tool_overrides.get(tool).copied().unwrap_or(base)
     }
 
     /// 命中已批准的 pattern？
@@ -101,13 +98,19 @@ mod tests {
         let mut c = PermissionConfig::default();
         c.tool_overrides
             .insert("bash".to_string(), PermissionLevel::Dangerous);
-        assert_eq!(c.resolve("bash", PermissionLevel::Safe), PermissionLevel::Dangerous);
+        assert_eq!(
+            c.resolve("bash", PermissionLevel::Safe),
+            PermissionLevel::Dangerous
+        );
     }
 
     #[test]
     fn resolve_uses_base_when_no_override() {
         let c = PermissionConfig::default();
-        assert_eq!(c.resolve("read_file", PermissionLevel::Safe), PermissionLevel::Safe);
+        assert_eq!(
+            c.resolve("read_file", PermissionLevel::Safe),
+            PermissionLevel::Safe
+        );
     }
 
     #[test]

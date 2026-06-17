@@ -23,7 +23,11 @@ pub struct AnthropicProvider {
 }
 
 impl AnthropicProvider {
-    pub fn new(model_id: impl Into<String>, api_key: impl Into<String>, base_url: Option<String>) -> Self {
+    pub fn new(
+        model_id: impl Into<String>,
+        api_key: impl Into<String>,
+        base_url: Option<String>,
+    ) -> Self {
         let id = model_id.into();
         let info = default_info(&id);
         Self {
@@ -289,8 +293,10 @@ impl Model for AnthropicProvider {
                         call_type: "function".into(),
                         function: crate::response::ToolCallFunction {
                             name: c.name.unwrap_or_default(),
-                            arguments: serde_json::to_string(&c.input.unwrap_or(serde_json::json!({})))
-                                .unwrap_or("{}".into()),
+                            arguments: serde_json::to_string(
+                                &c.input.unwrap_or(serde_json::json!({})),
+                            )
+                            .unwrap_or("{}".into()),
                         },
                     });
                 }

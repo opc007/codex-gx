@@ -6,6 +6,7 @@ import { useSessionsStore, getSessionsState, setSessionsState, type PersistedMes
 import { useTranslation, setLocale as i18nSetLocale } from "../i18n";
 import { redactSimple, detectTypes } from "../lib/redact";
 import { sendChatStream } from "../lib/chat";
+import { buildChatHistory } from "../lib/chatHistory";
 import { loadProviders, type ProviderInfo } from "../lib/providers";
 import { StageTimeline, type Stage } from "./StageTimeline";
 
@@ -490,7 +491,7 @@ export function Composer({ sessionId }: Props) {
               kind: "command",
               title: args.slice(0, 40),
               input: { cmd: args },
-              sessionId: sessionId,
+              session_id: sessionId,
               description: null,
             },
           });
@@ -1356,6 +1357,7 @@ ${diff.diff.slice(0, 5000)}${diff.truncated ? "\n... [truncated, view full in gi
           model,
           requireApproval,
           planMode,
+          history: buildChatHistory(sessionId, [userMsg.id]),
         });
         for await (const evt of stream) {
           if (evt.kind === "content") acc += evt.delta;
@@ -1434,6 +1436,7 @@ ${diff.diff.slice(0, 5000)}${diff.truncated ? "\n... [truncated, view full in gi
         requireApproval,
         planMode,
         images: imagesToSend,
+        history: buildChatHistory(sessionId, [userMsg.id, assistantId]),
       });
 
       for await (const evt of stream) {

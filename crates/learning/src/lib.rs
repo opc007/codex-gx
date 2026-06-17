@@ -100,7 +100,11 @@ impl Learning {
     pub fn record_chat(&mut self, model: &str, user_msg: &str) {
         self.signals.total_chats += 1;
         self.signals.total_messages += 1;
-        *self.signals.model_usage.entry(model.to_string()).or_insert(0) += 1;
+        *self
+            .signals
+            .model_usage
+            .entry(model.to_string())
+            .or_insert(0) += 1;
         // 长度分桶
         let len = user_msg.chars().count();
         let bucket = if len < 50 {
@@ -112,11 +116,18 @@ impl Learning {
         } else {
             "1000+"
         };
-        *self.signals.prompt_length_buckets.entry(bucket.to_string()).or_insert(0) += 1;
+        *self
+            .signals
+            .prompt_length_buckets
+            .entry(bucket.to_string())
+            .or_insert(0) += 1;
         // 简单 token 提取（中文按 char，英文按 word）
         record_tokens(&mut self.signals.frequent_tokens, user_msg);
         // 语言检测（看是否含中文）
-        let lang = if user_msg.chars().any(|c| c as u32 >= 0x4E00 && c as u32 <= 0x9FFF) {
+        let lang = if user_msg
+            .chars()
+            .any(|c| c as u32 >= 0x4E00 && c as u32 <= 0x9FFF)
+        {
             "zh"
         } else {
             "en"
@@ -131,7 +142,11 @@ impl Learning {
     /// 记录一次工具调用
     pub fn record_tool_call(&mut self, tool_name: &str) {
         self.signals.total_tool_calls += 1;
-        *self.signals.tool_usage.entry(tool_name.to_string()).or_insert(0) += 1;
+        *self
+            .signals
+            .tool_usage
+            .entry(tool_name.to_string())
+            .or_insert(0) += 1;
         self.updated_at = now_ms();
     }
 
@@ -280,20 +295,40 @@ fn record_tokens(map: &mut HashMap<String, u32>, text: &str) {
 fn is_stopword(w: &str) -> bool {
     matches!(
         w,
-        "the" | "and" | "for" | "are" | "but" | "not" | "you" | "all"
-            | "can" | "her" | "was" | "one" | "our" | "had" | "has"
-            | "this" | "that" | "with" | "from" | "they" | "have"
-            | "what" | "when" | "where" | "which" | "who" | "how"
+        "the"
+            | "and"
+            | "for"
+            | "are"
+            | "but"
+            | "not"
+            | "you"
+            | "all"
+            | "can"
+            | "her"
+            | "was"
+            | "one"
+            | "our"
+            | "had"
+            | "has"
+            | "this"
+            | "that"
+            | "with"
+            | "from"
+            | "they"
+            | "have"
+            | "what"
+            | "when"
+            | "where"
+            | "which"
+            | "who"
+            | "how"
     )
 }
 
 fn top_n_keys(map: &HashMap<String, u32>, n: usize) -> Vec<String> {
     let mut v: Vec<(&String, &u32)> = map.iter().collect();
     v.sort_by(|a, b| b.1.cmp(a.1));
-    v.into_iter()
-        .take(n)
-        .map(|(k, _)| k.clone())
-        .collect()
+    v.into_iter().take(n).map(|(k, _)| k.clone()).collect()
 }
 
 fn top_n_keys_u32(map: &HashMap<u32, u32>, n: usize) -> Vec<u32> {
@@ -329,14 +364,20 @@ mod tests {
         let mut l = Learning::new();
         l.record_chat("MiniMax-M3", "hi");
         l.record_chat("MiniMax-M3", "hello world");
-        assert_eq!(l.signals.prompt_length_buckets.get("0-50").copied(), Some(2));
+        assert_eq!(
+            l.signals.prompt_length_buckets.get("0-50").copied(),
+            Some(2)
+        );
     }
 
     #[test]
     fn record_chat_buckets_long() {
         let mut l = Learning::new();
         l.record_chat("m", &"a".repeat(500));
-        assert_eq!(l.signals.prompt_length_buckets.get("200-1000").copied(), Some(1));
+        assert_eq!(
+            l.signals.prompt_length_buckets.get("200-1000").copied(),
+            Some(1)
+        );
     }
 
     #[test]
@@ -387,7 +428,10 @@ mod tests {
             l.record_tool_call("bash");
         }
         l.compute_preferences();
-        assert!(l.preferences.favorite_tools.contains(&"read_file".to_string()));
+        assert!(l
+            .preferences
+            .favorite_tools
+            .contains(&"read_file".to_string()));
     }
 
     #[test]

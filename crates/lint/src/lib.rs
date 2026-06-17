@@ -154,7 +154,10 @@ fn parse_clippy_json(text: &str) -> Vec<LintIssue> {
             .and_then(|m| m.as_str())
             .unwrap_or("")
             .to_string();
-        let level = msg.get("level").and_then(|l| l.as_str()).unwrap_or("warning");
+        let level = msg
+            .get("level")
+            .and_then(|l| l.as_str())
+            .unwrap_or("warning");
         let severity = match level {
             "error" => Severity::Error,
             "warning" => Severity::Warning,
@@ -269,12 +272,8 @@ fn parse_tsc_output(text: &str) -> Vec<LintIssue> {
     for line in text.lines() {
         if let Some(caps) = re_pattern.captures(line) {
             let file = caps.get(1).map(|m| m.as_str()).unwrap_or("").to_string();
-            let line_n = caps
-                .get(2)
-                .and_then(|m| m.as_str().parse::<u32>().ok());
-            let col_n = caps
-                .get(3)
-                .and_then(|m| m.as_str().parse::<u32>().ok());
+            let line_n = caps.get(2).and_then(|m| m.as_str().parse::<u32>().ok());
+            let col_n = caps.get(3).and_then(|m| m.as_str().parse::<u32>().ok());
             let severity = match caps.get(4).map(|m| m.as_str()) {
                 Some("error") => Severity::Error,
                 _ => Severity::Warning,
@@ -301,10 +300,8 @@ fn regex_static() -> &'static regex_lite::Regex {
     use std::sync::OnceLock;
     static RE: OnceLock<regex_lite::Regex> = OnceLock::new();
     RE.get_or_init(|| {
-        regex_lite::Regex::new(
-            r"^(.+?)\((\d+),(\d+)\):\s+(error|warning)\s+(TS\d+):\s+(.*)$",
-        )
-        .unwrap()
+        regex_lite::Regex::new(r"^(.+?)\((\d+),(\d+)\):\s+(error|warning)\s+(TS\d+):\s+(.*)$")
+            .unwrap()
     })
 }
 
@@ -347,14 +344,18 @@ fn scan_dir(dir: &Path, issues: &mut Vec<LintIssue>, depth: u32) {
     };
     for entry in rd.flatten() {
         let path = entry.path();
-        let name = path
-            .file_name()
-            .and_then(|s| s.to_str())
-            .unwrap_or("");
+        let name = path.file_name().and_then(|s| s.to_str()).unwrap_or("");
         // 跳过常见大目录
         if matches!(
             name,
-            "node_modules" | "target" | "dist" | "build" | ".git" | "venv" | ".venv" | "__pycache__"
+            "node_modules"
+                | "target"
+                | "dist"
+                | "build"
+                | ".git"
+                | "venv"
+                | ".venv"
+                | "__pycache__"
         ) {
             continue;
         }
@@ -450,7 +451,8 @@ mod tests {
 
     #[test]
     fn parse_tsc_basic() {
-        let text = "src/app.ts(10,5): error TS2322: Type 'string' is not assignable to type 'number'.";
+        let text =
+            "src/app.ts(10,5): error TS2322: Type 'string' is not assignable to type 'number'.";
         let issues = parse_tsc_output(text);
         assert_eq!(issues.len(), 1);
         assert_eq!(issues[0].file, "src/app.ts");

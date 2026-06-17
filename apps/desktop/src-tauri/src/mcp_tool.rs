@@ -71,7 +71,11 @@ impl NewServerEntry {
                 cmd: cmd.clone(),
                 args: args.clone(),
             },
-            NewServerEntry::Http { name: _, url, auth_token } => TransportConfig::Http {
+            NewServerEntry::Http {
+                name: _,
+                url,
+                auth_token,
+            } => TransportConfig::Http {
                 url: url.clone(),
                 auth_token: auth_token.clone(),
             },

@@ -24,7 +24,10 @@ pub async fn queue_list(state: tauri::State<'_, QueueState>) -> Result<Vec<Task>
 }
 
 #[tauri::command]
-pub async fn queue_get(id: String, state: tauri::State<'_, QueueState>) -> Result<Option<Task>, String> {
+pub async fn queue_get(
+    id: String,
+    state: tauri::State<'_, QueueState>,
+) -> Result<Option<Task>, String> {
     Ok(state.get(&id).await)
 }
 
@@ -80,9 +83,13 @@ pub fn spawn_event_forwarder(app: AppHandle, queue: QueueState) {
                     "progress",
                     serde_json::json!({ "id": id, "progress": progress, "log": log }),
                 ),
-                TaskEvent::Completed(t) => ("completed", serde_json::to_value(t).unwrap_or_default()),
+                TaskEvent::Completed(t) => {
+                    ("completed", serde_json::to_value(t).unwrap_or_default())
+                }
                 TaskEvent::Failed(t) => ("failed", serde_json::to_value(t).unwrap_or_default()),
-                TaskEvent::Cancelled(t) => ("cancelled", serde_json::to_value(t).unwrap_or_default()),
+                TaskEvent::Cancelled(t) => {
+                    ("cancelled", serde_json::to_value(t).unwrap_or_default())
+                }
             };
             let _ = app.emit(
                 "queue:event",

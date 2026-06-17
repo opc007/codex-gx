@@ -14,7 +14,11 @@ pub struct DeepSeekProvider {
 }
 
 impl DeepSeekProvider {
-    pub fn new(model_id: impl Into<String>, api_key: impl Into<String>, base_url: Option<String>) -> Self {
+    pub fn new(
+        model_id: impl Into<String>,
+        api_key: impl Into<String>,
+        base_url: Option<String>,
+    ) -> Self {
         let id = model_id.into();
         let info = match id.as_str() {
             "deepseek-v4-pro" | "deepseek-v3-pro" => ModelInfo {

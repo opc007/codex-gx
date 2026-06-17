@@ -109,7 +109,9 @@ impl ChatMessage {
     pub fn tool(tool_call_id: impl Into<String>, content: impl Into<String>) -> Self {
         Self {
             role: ChatRole::Tool,
-            content: vec![ChatContentPart::Text { text: content.into() }],
+            content: vec![ChatContentPart::Text {
+                text: content.into(),
+            }],
             reasoning_content: None,
             tool_call_id: Some(tool_call_id.into()),
         }
@@ -147,7 +149,11 @@ pub struct ToolFunction {
 }
 
 impl ToolDefinition {
-    pub fn new(name: impl Into<String>, description: impl Into<String>, parameters: serde_json::Value) -> Self {
+    pub fn new(
+        name: impl Into<String>,
+        description: impl Into<String>,
+        parameters: serde_json::Value,
+    ) -> Self {
         Self {
             tool_type: "function".into(),
             function: ToolFunction {

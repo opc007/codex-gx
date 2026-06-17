@@ -20,9 +20,7 @@ use serde::{Deserialize, Serialize};
 use tokio::sync::RwLock;
 
 use crate::code::DeviceFingerprint;
-use crate::provider::{
-    ActivationCodeProvider, LicenseError, LicenseProvider, LicenseStatus,
-};
+use crate::provider::{ActivationCodeProvider, LicenseError, LicenseProvider, LicenseStatus};
 
 /// Manager 状态（缓存 + 上次校验时间）
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
@@ -65,8 +63,7 @@ impl LicenseManager {
         let home = PathBuf::from(home);
         let cache_file = CacheState::cache_path(&home);
 
-        let provider: Arc<dyn LicenseProvider> =
-            Arc::new(ActivationCodeProvider::default_demo());
+        let provider: Arc<dyn LicenseProvider> = Arc::new(ActivationCodeProvider::default_demo());
 
         // 尝试读旧 cache
         let cache = std::fs::read_to_string(&cache_file)
@@ -207,7 +204,10 @@ impl LicenseManager {
     pub async fn summary(&self) -> LicenseSummary {
         let cache = self.cache.read().await;
         LicenseSummary {
-            status: cache.last_status.clone().unwrap_or(LicenseStatus::Unactivated),
+            status: cache
+                .last_status
+                .clone()
+                .unwrap_or(LicenseStatus::Unactivated),
             last_validated_at: cache.last_validated_at,
             offline: false,
         }
@@ -229,7 +229,8 @@ impl LicenseManager {
         // 演示：临时建一个 demo provider（不写存储）
         let demo_provider = ActivationCodeProvider::default_demo();
         let code = demo_provider.generate_demo_code(tier, &self.device);
-        code.to_user_code().map_err(|e| LicenseError::InvalidCode(e))
+        code.to_user_code()
+            .map_err(|e| LicenseError::InvalidCode(e))
     }
 }
 

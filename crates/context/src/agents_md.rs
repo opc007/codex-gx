@@ -58,11 +58,7 @@ pub fn load_agents_md(cwd: &Path) -> Result<AgentsMd, LoadError> {
 }
 
 /// 注入到 system message
-pub fn inject_into_system(
-    existing: &str,
-    agents_md: &AgentsMd,
-    cwd: &Path,
-) -> String {
+pub fn inject_into_system(existing: &str, agents_md: &AgentsMd, cwd: &Path) -> String {
     let mut out = String::new();
     out.push_str(&format!(
         "You are AgentShell, an AI coding agent running in `{}`.\n\n",
@@ -87,7 +83,11 @@ mod tests {
     #[test]
     fn test_load_agents_md() {
         let dir = tempdir().unwrap();
-        std::fs::write(dir.path().join("AGENTS.md"), "# Project rules\nUse Rust 2021 edition.").unwrap();
+        std::fs::write(
+            dir.path().join("AGENTS.md"),
+            "# Project rules\nUse Rust 2021 edition.",
+        )
+        .unwrap();
         let a = load_agents_md(dir.path()).unwrap();
         assert!(a.content.contains("Rust 2021"));
         // sources 至少包含我们写的那个（可能上层目录也有同名文件）

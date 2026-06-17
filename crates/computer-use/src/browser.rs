@@ -131,7 +131,10 @@ mod tests {
     #[test]
     fn test_set_viewport() {
         let mut s = BrowserSession::new();
-        s.set_viewport(ViewportSize { width: 800, height: 600 });
+        s.set_viewport(ViewportSize {
+            width: 800,
+            height: 600,
+        });
         assert_eq!(s.viewport.width, 800);
     }
 

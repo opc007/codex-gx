@@ -32,10 +32,7 @@ pub fn estimate_tokens(messages: &[Message]) -> u32 {
 }
 
 /// 压缩消息列表
-pub fn compact_messages(
-    messages: &[Message],
-    strategy: CompactionStrategy,
-) -> Vec<Message> {
+pub fn compact_messages(messages: &[Message], strategy: CompactionStrategy) -> Vec<Message> {
     match strategy {
         CompactionStrategy::KeepLast(n) => {
             let start = messages.len().saturating_sub(n);
@@ -95,7 +92,9 @@ mod tests {
     #[test]
     fn test_keep_last() {
         let sid = uuid::Uuid::new_v4();
-        let msgs: Vec<Message> = (0..10).map(|i| Message::user(sid, format!("msg {}", i))).collect();
+        let msgs: Vec<Message> = (0..10)
+            .map(|i| Message::user(sid, format!("msg {}", i)))
+            .collect();
         let out = compact_messages(&msgs, CompactionStrategy::KeepLast(3));
         assert_eq!(out.len(), 3);
     }
@@ -103,11 +102,16 @@ mod tests {
     #[test]
     fn test_truncate_middle() {
         let sid = uuid::Uuid::new_v4();
-        let msgs: Vec<Message> = (0..20).map(|i| Message::user(sid, format!("msg {}", i))).collect();
-        let out = compact_messages(&msgs, CompactionStrategy::TruncateMiddle {
-            keep_head: 3,
-            keep_tail: 5,
-        });
+        let msgs: Vec<Message> = (0..20)
+            .map(|i| Message::user(sid, format!("msg {}", i)))
+            .collect();
+        let out = compact_messages(
+            &msgs,
+            CompactionStrategy::TruncateMiddle {
+                keep_head: 3,
+                keep_tail: 5,
+            },
+        );
         assert_eq!(out.len(), 3 + 1 + 5); // head + marker + tail
     }
 

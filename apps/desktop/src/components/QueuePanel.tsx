@@ -80,7 +80,7 @@ export function QueuePanel({ onClose, sessionId }: Props) {
         kind: "command",
         title: cmd.slice(0, 40),
         input: { cmd },
-        sessionId: sessionId ?? null,
+        session_id: sessionId ?? null,
         description: null,
       },
     });
@@ -95,7 +95,7 @@ export function QueuePanel({ onClose, sessionId }: Props) {
         kind: "lint",
         title: `lint ${path}`,
         input: { path: path || "." },
-        sessionId: sessionId ?? null,
+        session_id: sessionId ?? null,
         description: null,
       },
     });

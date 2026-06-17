@@ -45,15 +45,15 @@ type UpdateInfo = {
 
 type LicenseStatusKind =
   | { kind: "unactivated" }
-  | { kind: "valid"; tier: string; remainingDays: number | null; activatedAt: number; expiresAt: number | null }
-  | { kind: "expiring"; tier: string; daysLeft: number }
-  | { kind: "expired"; tier: string; expiredAt: number }
-  | { kind: "offlinegrace"; daysOffline: number }
+  | { kind: "valid"; tier: string; remaining_days: number | null; activated_at: number; expires_at: number | null }
+  | { kind: "expiring"; tier: string; days_left: number }
+  | { kind: "expired"; tier: string; expired_at: number }
+  | { kind: "offlinegrace"; days_offline: number }
   | { kind: "invalid"; reason: string };
 
 type LicenseSummary = {
   status: LicenseStatusKind;
-  lastValidatedAt: number;
+  last_validated_at: number;
   offline: boolean;
 };
 
@@ -143,7 +143,7 @@ export function TopBar({ themeMode, setThemeMode, onLicenseClick }: Props) {
     <header className="topbar">
       <div className="topbar-left">
         <strong>Codex gx</strong>
-        <span className="topbar-version">v1.6.0</span>
+        <span className="topbar-version">v1.7.0</span>
         <WorkspaceSelector />
       </div>
       <div className="topbar-right">
@@ -429,14 +429,14 @@ function formatLicenseBadge(license: LicenseSummary | null): string {
     case "unactivated":
       return "未激活";
     case "valid":
-      if (s.remainingDays == null) return "终身";
-      return `还剩 ${s.remainingDays} 天`;
+      if (s.remaining_days == null) return "终身";
+      return `还剩 ${s.remaining_days} 天`;
     case "expiring":
-      return `临期 ${s.daysLeft} 天`;
+      return `临期 ${s.days_left} 天`;
     case "expired":
       return "已过期";
     case "offlinegrace":
-      return `离线 ${s.daysOffline} 天`;
+      return `离线 ${s.days_offline} 天`;
     case "invalid":
       return "异常";
   }

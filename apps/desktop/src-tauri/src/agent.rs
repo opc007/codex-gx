@@ -245,8 +245,8 @@ impl AgentRunner {
                     label: format!("Step {}/{} - 思考中...", step, self.max_steps),
                     detail: None,
                 }),
-                None,                None,
-
+                None,
+                None,
             );
 
             // 构建请求（含 tools schema）
@@ -258,11 +258,7 @@ impl AgentRunner {
                     .with_reasoning_effort("high")
                     .with_reasoning_split(true);
                 for s in reg.schemas() {
-                    req = req.with_tool(ToolDefinition::new(
-                        s.name,
-                        s.description,
-                        s.parameters,
-                    ));
+                    req = req.with_tool(ToolDefinition::new(s.name, s.description, s.parameters));
                 }
                 req
             };
@@ -319,23 +315,33 @@ impl AgentRunner {
                             "index": index,
                             "arguments_delta": arguments_delta,
                         });
-                        self.emit_event("tool_call_delta", payload.to_string(), None, false, None, None, None, None, None);
+                        self.emit_event(
+                            "tool_call_delta",
+                            payload.to_string(),
+                            None,
+                            false,
+                            None,
+                            None,
+                            None,
+                            None,
+                            None,
+                        );
                     }
-Ok(StreamChunk::Usage(u)) => {
-                            total_input = u.input_tokens;
-                            total_output = u.output_tokens;
-                            self.emit_event(
-                                "usage",
-                                String::new(),
-                                Some(UsageDto::from(u)),
-                                false,
-                                None,
-                                None,
-                                None,
-                                None,                                None,
-
-                            );
-                        }
+                    Ok(StreamChunk::Usage(u)) => {
+                        total_input = u.input_tokens;
+                        total_output = u.output_tokens;
+                        self.emit_event(
+                            "usage",
+                            String::new(),
+                            Some(UsageDto::from(u)),
+                            false,
+                            None,
+                            None,
+                            None,
+                            None,
+                            None,
+                        );
+                    }
                     Ok(StreamChunk::Done) => {
                         finish_chunk = true;
                         break;
@@ -392,8 +398,8 @@ Ok(StreamChunk::Usage(u)) => {
                 None,
                 None,
                 None,
-                None,                None,
-
+                None,
+                None,
             );
 
             // 没 tool_call 就结束
@@ -411,8 +417,8 @@ Ok(StreamChunk::Usage(u)) => {
                         label: "生成最终回答".into(),
                         detail: None,
                     }),
-                    None,                    None,
-
+                    None,
+                    None,
                 );
                 self.emit_event(
                     "done",
@@ -429,8 +435,8 @@ Ok(StreamChunk::Usage(u)) => {
                         label: "完成".into(),
                         detail: None,
                     }),
-                    None,                    None,
-
+                    None,
+                    None,
                 );
                 return;
             }
@@ -454,8 +460,8 @@ Ok(StreamChunk::Usage(u)) => {
                             .join(", "),
                     ),
                 }),
-                None,                None,
-
+                None,
+                None,
             );
 
             // 执行每个 tool_call
@@ -474,8 +480,8 @@ Ok(StreamChunk::Usage(u)) => {
                     Some(tc_evt.clone()),
                     None,
                     None,
-                    None,                    None,
-
+                    None,
+                    None,
                 );
 
                 // v0.4：检查取消
@@ -504,8 +510,8 @@ Ok(StreamChunk::Usage(u)) => {
                             label: "等待用户批准".into(),
                             detail: Some(name.clone()),
                         }),
-                        None,                        None,
-
+                        None,
+                        None,
                     );
                     // 等响应（带超时 5 分钟）
                     match tokio::time::timeout(std::time::Duration::from_secs(300), rx).await {
@@ -525,8 +531,8 @@ Ok(StreamChunk::Usage(u)) => {
                                     session_id: self.session_id.clone(),
                                 }),
                                 None,
-                                None,                                None,
-
+                                None,
+                                None,
                             );
                             // 仍要喂回 history，让模型知道被拒
                             self.history.push(ChatMessage::tool(
@@ -556,7 +562,11 @@ Ok(StreamChunk::Usage(u)) => {
                             Ok(out) => (out.success, out.output, out.error),
                             Err(e) => (false, String::new(), Some(e.to_string())),
                         },
-                        None => (false, String::new(), Some(format!("tool not found: {}", name))),
+                        None => (
+                            false,
+                            String::new(),
+                            Some(format!("tool not found: {}", name)),
+                        ),
                     }
                 };
 
@@ -575,8 +585,8 @@ Ok(StreamChunk::Usage(u)) => {
                     None,
                     Some(tr_evt),
                     None,
-                    None,                    None,
-
+                    None,
+                    None,
                 );
 
                 // 把结果喂回 history
@@ -642,8 +652,8 @@ Ok(StreamChunk::Usage(u)) => {
                 label: "制定计划中...".into(),
                 detail: None,
             }),
-            None,            None,
-
+            None,
+            None,
         );
 
         // 不带 tools，让模型只输出计划文本
@@ -678,30 +688,10 @@ Ok(StreamChunk::Usage(u)) => {
                 Ok(StreamChunk::Content(s)) => {
                     plan_text.push_str(&s);
                     // 同步把 plan 内容作为 content 推到前端，让用户实时看到
-                    self.emit_event(
-                        "content",
-                        s,
-                        None,
-                        false,
-                        None,
-                        None,
-                        None,
-                        None,                        None,
-
-                    );
+                    self.emit_event("content", s, None, false, None, None, None, None, None);
                 }
                 Ok(StreamChunk::Reasoning(s)) => {
-                    self.emit_event(
-                        "thinking",
-                        s,
-                        None,
-                        false,
-                        None,
-                        None,
-                        None,
-                        None,                        None,
-
-                    );
+                    self.emit_event("thinking", s, None, false, None, None, None, None, None);
                 }
                 Ok(StreamChunk::Usage(u)) => last_usage = Some(u),
                 Ok(StreamChunk::Done) => break,
@@ -721,8 +711,8 @@ Ok(StreamChunk::Usage(u)) => {
                 None,
                 None,
                 None,
-                None,                None,
-
+                None,
+                None,
             );
         }
 
@@ -754,12 +744,7 @@ Ok(StreamChunk::Usage(u)) => {
             let mut slot = self.plan_approval_rx.lock().await;
             *slot = Some(tx);
         }
-        let approval = match tokio::time::timeout(
-            std::time::Duration::from_secs(600),
-            rx,
-        )
-        .await
-        {
+        let approval = match tokio::time::timeout(std::time::Duration::from_secs(600), rx).await {
             Ok(Ok(a)) => a,
             Ok(Err(_)) => {
                 self.emit_error("plan 审批通道关闭".into());
@@ -790,6 +775,8 @@ Ok(StreamChunk::Usage(u)) => {
 
 fn uuid_v4() -> String {
     use std::time::{SystemTime, UNIX_EPOCH};
-    let now = SystemTime::now().duration_since(UNIX_EPOCH).unwrap_or_default();
+    let now = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .unwrap_or_default();
     format!("{:x}_{:x}", now.as_nanos(), std::process::id())
 }

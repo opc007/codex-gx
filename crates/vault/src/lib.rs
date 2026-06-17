@@ -234,8 +234,7 @@ fn derive_key(password: &str, salt: &[u8], iters: u32) -> [u8; 32] {
     use sha2::Sha256;
     type HmacSha256 = Hmac<Sha256>;
     let mut k = [0u8; 32];
-    pbkdf2::pbkdf2::<HmacSha256>(password.as_bytes(), salt, iters, &mut k)
-        .expect("pbkdf2");
+    pbkdf2::pbkdf2::<HmacSha256>(password.as_bytes(), salt, iters, &mut k).expect("pbkdf2");
     k
 }
 

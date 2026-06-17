@@ -126,7 +126,11 @@ pub fn load_skills() -> SkillsFile {
     for builtin in builtin_skills() {
         if !f.skills.iter().any(|s| s.name == builtin.name) {
             f.skills.push(builtin);
-        } else if let Some(bs) = f.skills.iter_mut().find(|s| s.name == builtin.name && s.builtin) {
+        } else if let Some(bs) = f
+            .skills
+            .iter_mut()
+            .find(|s| s.name == builtin.name && s.builtin)
+        {
             // 内置的更新（如有 builtin 字段）以 builtin 为准
             *bs = builtin;
         }
@@ -175,10 +179,7 @@ pub fn skills_path() -> PathBuf {
 }
 
 pub fn find_skill<'a>(skills: &'a SkillsFile, name: &str) -> Option<&'a Skill> {
-    skills
-        .skills
-        .iter()
-        .find(|s| s.name == name && s.enabled)
+    skills.skills.iter().find(|s| s.name == name && s.enabled)
 }
 
 pub fn find_skill_any<'a>(skills: &'a SkillsFile, name: &str) -> Option<&'a Skill> {
@@ -572,7 +573,7 @@ pub fn reset_builtin() -> Result<(), String> {
 pub struct SkillTemplate {
     pub skill: Skill,
     pub downloads: u32,
-    pub rating: f32, // 0-5
+    pub rating: f32,    // 0-5
     pub source: String, // "official" | "community" | url
 }
 
@@ -582,9 +583,7 @@ pub fn template_market() -> Vec<SkillTemplate> {
     let downloads = vec![
         1280, 980, 750, 642, 1100, 870, 540, 720, 1100, 1500, 480, 320,
     ];
-    let ratings = vec![
-        4.8, 4.5, 4.7, 4.4, 4.9, 4.6, 4.3, 4.5, 4.7, 4.2, 4.1, 4.0,
-    ];
+    let ratings = vec![4.8, 4.5, 4.7, 4.4, 4.9, 4.6, 4.3, 4.5, 4.7, 4.2, 4.1, 4.0];
     skills
         .into_iter()
         .enumerate()

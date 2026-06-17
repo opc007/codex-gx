@@ -13,18 +13,18 @@
 #![warn(missing_docs)]
 #![warn(clippy::all)]
 
+pub mod client;
 pub mod error;
 pub mod jsonrpc;
 pub mod message;
 pub mod transport;
-pub mod client;
 
+pub use client::McpClient;
 pub use error::{McpError, Result};
 pub use message::{
-    ClientRequest, ServerResponse, Tool, ToolCallParams, ToolCallResult,
-    Implementation, Capabilities, Content,
+    Capabilities, ClientRequest, Content, Implementation, ServerResponse, Tool, ToolCallParams,
+    ToolCallResult,
 };
-pub use transport::stdio::StdioTransport;
 pub use transport::http::{HttpEndpoint, HttpTransport};
 pub use transport::pool::{Backend, McpPool, TransportConfig};
-pub use client::McpClient;
+pub use transport::stdio::StdioTransport;

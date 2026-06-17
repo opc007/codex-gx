@@ -15,10 +15,10 @@
 #![warn(missing_docs)]
 #![warn(clippy::all)]
 
-pub mod policy;
 pub mod command;
 pub mod platform;
+pub mod policy;
 
-pub use policy::{SandboxPolicy, FilesystemRule, NetworkRule, Decision, LoadPolicyError};
 pub use command::{build_sandbox_command, SandboxMode};
 pub use platform::{current_platform, Platform};
+pub use policy::{Decision, FilesystemRule, LoadPolicyError, NetworkRule, SandboxPolicy};

@@ -17,7 +17,7 @@ use tokio::process::Command;
 pub struct TtsConfig {
     pub enabled: bool,
     pub voice: String,
-    pub rate: u32, // 词 / 分钟
+    pub rate: u32,   // 词 / 分钟
     pub volume: f32, // 0.0 - 1.0
     pub backend: TtsBackend,
     /// 自动播放最后一条 assistant 消息
@@ -74,9 +74,7 @@ impl TtsConfig {
                 .map_err(|e| e.to_string())?;
         }
         let text = serde_json::to_string_pretty(self).map_err(|e| e.to_string())?;
-        tokio::fs::write(&p, text)
-            .await
-            .map_err(|e| e.to_string())
+        tokio::fs::write(&p, text).await.map_err(|e| e.to_string())
     }
 }
 
@@ -303,7 +301,10 @@ async fn speak_festival(text: &str, _config: &TtsConfig) -> Result<(), String> {
         .spawn()
         .map_err(|e| e.to_string())?;
     if let Some(stdin) = child.stdin.as_mut() {
-        stdin.write_all(text.as_bytes()).await.map_err(|e| e.to_string())?;
+        stdin
+            .write_all(text.as_bytes())
+            .await
+            .map_err(|e| e.to_string())?;
     }
     let status = child.wait().await.map_err(|e| e.to_string())?;
     if !status.success() {

@@ -79,8 +79,8 @@ impl LicenseStorage {
 mod tests {
     use super::*;
     use crate::code::DeviceFingerprint;
-    use crate::verify::generate_license;
     use crate::code::LicenseTier;
+    use crate::verify::generate_license;
     use tempfile::tempdir;
 
     #[test]

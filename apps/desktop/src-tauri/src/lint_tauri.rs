@@ -1,6 +1,6 @@
 //! v1.4：代码 review / 静态分析 tauri 命令
 
-use lint::{Linter, LintReport};
+use lint::{LintReport, Linter};
 use std::path::PathBuf;
 
 #[tauri::command]

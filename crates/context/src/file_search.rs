@@ -43,7 +43,11 @@ fn walk(root: &Path, current: &Path, query: &str, out: &mut Vec<FileMatch>) {
         let name = entry.file_name();
         let name_str = name.to_string_lossy();
         // 跳过隐藏目录（.git / node_modules / target）
-        if name_str.starts_with('.') || name_str == "node_modules" || name_str == "target" || name_str == "dist" {
+        if name_str.starts_with('.')
+            || name_str == "node_modules"
+            || name_str == "target"
+            || name_str == "dist"
+        {
             continue;
         }
         let path = entry.path();

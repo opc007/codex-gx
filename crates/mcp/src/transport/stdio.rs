@@ -56,7 +56,11 @@ impl StdioTransport {
     }
 
     /// 发送请求
-    pub async fn send_request(&self, method: &str, params: serde_json::Value) -> Result<JsonRpcResponse> {
+    pub async fn send_request(
+        &self,
+        method: &str,
+        params: serde_json::Value,
+    ) -> Result<JsonRpcResponse> {
         let id = self.next_id().await;
         let req = JsonRpcRequest::new(method, params, id);
         let line = serde_json::to_string(&req)?;

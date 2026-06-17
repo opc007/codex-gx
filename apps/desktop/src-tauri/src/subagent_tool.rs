@@ -44,9 +44,7 @@ fn role_system_prompt(role: &str) -> String {
 fn allowed_tools_for_role(role: &str) -> Vec<&'static str> {
     match role {
         "researcher" => vec!["web_search", "read_file", "list_dir"],
-        "coder" => vec![
-            "read_file", "write_file", "edit_file", "list_dir", "bash",
-        ],
+        "coder" => vec!["read_file", "write_file", "edit_file", "list_dir", "bash"],
         "reviewer" => vec!["read_file", "list_dir"],
         _ => vec!["read_file"],
     }
@@ -202,10 +200,7 @@ async fn run_subagent(
     let sys_prompt = role_system_prompt(role);
     let user_msg = format!("任务：{}\n\n请直接给出结果（不要调用工具）。", task);
 
-    let messages = vec![
-        ChatMessage::system(sys_prompt),
-        ChatMessage::user(user_msg),
-    ];
+    let messages = vec![ChatMessage::system(sys_prompt), ChatMessage::user(user_msg)];
 
     let req = ChatRequest {
         model: String::new(),

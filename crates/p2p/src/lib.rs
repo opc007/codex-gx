@@ -57,10 +57,18 @@ pub struct PeerDevice {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(tag = "type", rename_all = "snake_case")]
 pub enum Message {
-    Hello { from: DeviceInfo },
-    Pair { code: String },
-    PairOk { token: String },
-    PairDenied { reason: String },
+    Hello {
+        from: DeviceInfo,
+    },
+    Pair {
+        code: String,
+    },
+    PairOk {
+        token: String,
+    },
+    PairDenied {
+        reason: String,
+    },
     SessionList {
         sessions: Vec<SessionSummary>,
     },
@@ -130,13 +138,29 @@ pub struct P2pHost {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(tag = "kind", rename_all = "snake_case")]
 pub enum P2pEvent {
-    ListenerReady { port: u16, addr: String },
+    ListenerReady {
+        port: u16,
+        addr: String,
+    },
     Discovered(PeerDevice),
-    PairingRequested { device_id: String, code: String, name: String },
+    PairingRequested {
+        device_id: String,
+        code: String,
+        name: String,
+    },
     PeerConnected(PeerDevice),
-    PeerDisconnected { device_id: String, reason: String },
-    PeerRejected { device_id: String, reason: String },
-    MessageReceived { device_id: String, msg: Message },
+    PeerDisconnected {
+        device_id: String,
+        reason: String,
+    },
+    PeerRejected {
+        device_id: String,
+        reason: String,
+    },
+    MessageReceived {
+        device_id: String,
+        msg: Message,
+    },
     Error(String),
 }
 
@@ -225,9 +249,7 @@ impl P2pHost {
         let listener = TcpListener::bind(("0.0.0.0", self.port))
             .await
             .map_err(|e| e.to_string())?;
-        let addr = listener
-            .local_addr()
-            .map_err(|e| e.to_string())?;
+        let addr = listener.local_addr().map_err(|e| e.to_string())?;
         *self.listener_addr.write().await = Some(addr);
         let _ = self.event_tx.send(P2pEvent::ListenerReady {
             port: addr.port(),
@@ -240,16 +262,14 @@ impl P2pHost {
                     let host2 = host.clone();
                     tokio::spawn(async move {
                         if let Err(e) = host.handle_connection(stream, peer).await {
-                            let _ = host2.event_tx.send(P2pEvent::Error(format!(
-                                "conn {peer}: {e}"
-                            )));
+                            let _ = host2
+                                .event_tx
+                                .send(P2pEvent::Error(format!("conn {peer}: {e}")));
                         }
                     });
                 }
                 Err(e) => {
-                    let _ = self
-                        .event_tx
-                        .send(P2pEvent::Error(format!("accept: {e}")));
+                    let _ = self.event_tx.send(P2pEvent::Error(format!("accept: {e}")));
                     tokio::time::sleep(Duration::from_millis(500)).await;
                 }
             }
@@ -274,9 +294,16 @@ impl P2pHost {
                 Ok(m) => m,
                 Err(e) => {
                     let _ = write
-                        .write_all(format!("{}\n", serde_json::to_string(&Message::Bye {
-                            reason: format!("bad json: {e}"),
-                        }).unwrap()).as_bytes())
+                        .write_all(
+                            format!(
+                                "{}\n",
+                                serde_json::to_string(&Message::Bye {
+                                    reason: format!("bad json: {e}"),
+                                })
+                                .unwrap()
+                            )
+                            .as_bytes(),
+                        )
                         .await;
                     break;
                 }
@@ -296,9 +323,9 @@ impl P2pHost {
                         },
                     );
                     current_peer_id = Some(pid.clone());
-                    let _ = self.event_tx.send(P2pEvent::Discovered(
-                        peers.get(&pid).cloned().unwrap(),
-                    ));
+                    let _ = self
+                        .event_tx
+                        .send(P2pEvent::Discovered(peers.get(&pid).cloned().unwrap()));
                     let resp = serde_json::to_string(&Message::Hello {
                         from: self.device_info.clone(),
                     })
@@ -363,7 +390,10 @@ impl P2pHost {
                     }
                 }
                 Message::SessionPull { session_id } => {
-                    let msgs = self.sessions_provider.get_session_messages(session_id).await;
+                    let msgs = self
+                        .sessions_provider
+                        .get_session_messages(session_id)
+                        .await;
                     let resp = serde_json::to_string(&Message::SessionData {
                         session_id: session_id.clone(),
                         messages: msgs,
@@ -404,13 +434,7 @@ impl P2pHost {
         let port = self.port;
         if cfg!(target_os = "macos") {
             let mut child = tokio::process::Command::new("dns-sd")
-                .args(&[
-                    "-R",
-                    &name,
-                    "_codex-gx._tcp",
-                    "local",
-                    &port.to_string(),
-                ])
+                .args(&["-R", &name, "_codex-gx._tcp", "local", &port.to_string()])
                 .kill_on_drop(true)
                 .spawn()
                 .map_err(|e| format!("dns-sd 启动失败: {e}"))?;
@@ -470,12 +494,11 @@ impl P2pClient {
             Ok(Some(l)) => l,
             _ => return Err("no hello back".to_string()),
         };
-        let host_info: DeviceInfo = match serde_json::from_str::<Message>(&line)
-            .map_err(|e| e.to_string())?
-        {
-            Message::Hello { from } => from,
-            _ => return Err("expected hello back".to_string()),
-        };
+        let host_info: DeviceInfo =
+            match serde_json::from_str::<Message>(&line).map_err(|e| e.to_string())? {
+                Message::Hello { from } => from,
+                _ => return Err("expected hello back".to_string()),
+            };
         // 3. 发送 Pair code
         let pair = Message::Pair {
             code: code.to_string(),

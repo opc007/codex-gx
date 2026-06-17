@@ -57,7 +57,9 @@ impl MinimaxProvider {
 
     /// 从环境变量 MINIMAX_API_KEY 读 key
     pub fn from_env() -> Option<Self> {
-        std::env::var("MINIMAX_API_KEY").ok().map(|k| Self::new(k, None))
+        std::env::var("MINIMAX_API_KEY")
+            .ok()
+            .map(|k| Self::new(k, None))
     }
 }
 

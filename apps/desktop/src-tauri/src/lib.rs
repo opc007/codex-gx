@@ -5,40 +5,43 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
 mod agent;
+mod bugreport_tauri;
 mod cu_tool;
 mod desktop_cua;
-mod mcp_tool;
-mod skills;
-mod tts;
 mod graph;
-mod sync;
-mod subagent_tool;
-mod tools;
-mod voice_tauri;
-mod marketplace_tauri;
-mod vault_tauri;
-mod workspace_tauri;
-mod routing;
-mod routing_tauri;
-mod bugreport_tauri;
-mod local_tauri;
-mod lint_tauri;
-mod queue_tauri;
-mod p2p_tauri;
 mod learning_tauri;
 mod license_tauri;
+mod personality_tauri;
+mod skills_md_tauri;
+mod goal_tauri;
+mod lint_tauri;
+mod local_tauri;
+mod marketplace_tauri;
+mod mcp_tool;
+mod p2p_tauri;
+mod queue_tauri;
+mod routing;
+mod routing_tauri;
+mod skills;
+mod subagent_tool;
+mod sync;
+mod tools;
+mod tts;
+mod vault_tauri;
+mod voice_tauri;
+mod workspace_tauri;
 
 use agent_core::tool::ToolRegistry;
+use provider::{
+    llama_cpp_info, ollama_info, request::ToolDefinition, AnthropicProvider, ChatMessage,
+    ChatRequest, DeepSeekProvider, LlamaCppProvider, MinimaxProvider, Model, OllamaProvider,
+};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::path::PathBuf;
 use std::sync::Arc;
 use tauri::{AppHandle, Emitter, Manager};
 use tokio::sync::Mutex;
-use provider::{
-    request::ToolDefinition, AnthropicProvider, ChatMessage, ChatRequest, DeepSeekProvider,
-    MinimaxProvider, Model, OllamaProvider, LlamaCppProvider, ollama_info, llama_cpp_info,
-};
 
 /// 全局 provider 缓存（lazy，按 model id）
 type ProviderCache = Arc<Mutex<Option<Box<dyn Model>>>>;
@@ -72,9 +75,13 @@ struct SessionControl {
 
 struct SessionHandle {
     cancel: std::sync::Arc<std::sync::atomic::AtomicBool>,
-    approval_tx: std::sync::Arc<tokio::sync::Mutex<Option<tokio::sync::oneshot::Sender<agent::ApprovalResponse>>>>,
+    approval_tx: std::sync::Arc<
+        tokio::sync::Mutex<Option<tokio::sync::oneshot::Sender<agent::ApprovalResponse>>>,
+    >,
     /// v0.6：plan approval sender
-    plan_tx: std::sync::Arc<tokio::sync::Mutex<Option<tokio::sync::oneshot::Sender<agent::PlanApproval>>>>,
+    plan_tx: std::sync::Arc<
+        tokio::sync::Mutex<Option<tokio::sync::oneshot::Sender<agent::PlanApproval>>>,
+    >,
 }
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
@@ -98,7 +105,11 @@ pub fn run() {
             vault::Vault::new(
                 std::env::var("HOME")
                     .or_else(|_| std::env::var("USERPROFILE"))
-                    .map(|h| std::path::PathBuf::from(h).join(".agentshell").join("vault"))
+                    .map(|h| {
+                        std::path::PathBuf::from(h)
+                            .join(".agentshell")
+                            .join("vault")
+                    })
                     .unwrap_or_else(|_| std::env::temp_dir().join("agentshell_vault")),
             )
             .expect("vault init"),
@@ -110,6 +121,9 @@ pub fn run() {
         .manage::<queue_tauri::QueueState>(queue_tauri::build_state())
         .manage(p2p_tauri::P2pState::new())
         .manage::<license_tauri::LicenseManagerState>(license_tauri::build_state())
+        .manage::<personality_tauri::PersonalityState>(personality_tauri::build_state())
+        .manage::<skills_md_tauri::SkillIndexState>(skills_md_tauri::build_state())
+        .manage::<goal_tauri::GoalState>(goal_tauri::build_state())
         .setup(|app| {
             // v1.3：安装 panic hook
             if let Some(state) = app.try_state::<BugReportState>() {
@@ -126,6 +140,14 @@ pub fn run() {
             if let Some(state) = app.try_state::<queue_tauri::QueueState>() {
                 queue_tauri::start_scheduler(state.inner().clone());
                 queue_tauri::spawn_event_forwarder(app.handle().clone(), state.inner().clone());
+            }
+            // v1.6：启动时 best-effort 校验 License（不阻塞 UI）
+            if let Some(state) = app.try_state::<license_tauri::LicenseManagerState>() {
+                let license = state.inner().clone();
+                tauri::async_runtime::spawn(async move {
+                    let summary = license_tauri::initial_check(&license).await;
+                    eprintln!("[license] startup check: {:?}", summary.status);
+                });
             }
             // v0.8：异步初始化 memory manager
             let app_handle = app.handle().clone();
@@ -163,104 +185,130 @@ pub fn run() {
             list_providers,
             list_tools,
             execute_tool,
-            license_tauri::license_status,    // v1.6
+            license_tauri::license_status,     // v1.6
             license_tauri::license_activate,   // v1.6
             license_tauri::license_deactivate, // v1.6
             license_tauri::license_refresh,    // v1.6
             license_tauri::license_tiers,      // v1.6
             license_tauri::license_demo_code,  // v1.6 dev
+            personality_tauri::personality_get,           // v1.7
+            personality_tauri::personality_list_presets,   // v1.7
+            personality_tauri::personality_set_preset,    // v1.7
+            personality_tauri::personality_set_custom,    // v1.7
+            personality_tauri::personality_load_custom,   // v1.7
+            personality_tauri::personality_save_custom,   // v1.7
+            skills_md_tauri::skillmd_list,         // v1.7 SKILL.md
+            skills_md_tauri::skillmd_get,          // v1.7 SKILL.md
+            skills_md_tauri::skillmd_match,        // v1.7 SKILL.md
+            skills_md_tauri::skillmd_reload,       // v1.7 SKILL.md
+            skills_md_tauri::skillmd_paths,        // v1.7 SKILL.md
+            skills_md_tauri::skillmd_install,      // v1.7 SKILL.md
+            skills_md_tauri::skillmd_uninstall,    // v1.7 SKILL.md
+            goal_tauri::goal_list,                  // v1.7 Goal
+            goal_tauri::goal_get,                   // v1.7 Goal
+            goal_tauri::goal_active_for_thread,     // v1.7 Goal
+            goal_tauri::goal_create,                // v1.7 Goal
+            goal_tauri::goal_add_todo,              // v1.7 Goal
+            goal_tauri::goal_mark_done,             // v1.7 Goal
+            goal_tauri::goal_mark_in_progress,      // v1.7 Goal
+            goal_tauri::goal_mark_blocked,          // v1.7 Goal
+            goal_tauri::goal_pause,                 // v1.7 Goal
+            goal_tauri::goal_resume,                // v1.7 Goal
+            goal_tauri::goal_abandon,               // v1.7 Goal
+            goal_tauri::goal_delete,                // v1.7 Goal
+            goal_tauri::goal_to_prompt,             // v1.7 Goal
             get_ide_context,
             get_git_diff,
             list_git_branches,
             list_mcp_servers,
             reload_mcp,
-            route_model_cmd, // v0.7
-            remember_memory, // v0.8
-            recall_memory, // v0.8
-            list_memories, // v0.8
-            forget_memory, // v0.8
-            clear_memories, // v0.8
-            list_skills, // v0.8
-            run_skill, // v0.8
-            list_skills_grouped, // v1.5
-            skill_market, // v1.5
-            skill_export, // v1.5
-            skill_import, // v1.5
-            skill_toggle, // v1.5
-            skill_remove, // v1.5
-            skill_reset_builtin, // v1.5
-            skill_chain, // v1.5
-            tts_detect, // v1.5
-            tts_get_config, // v1.5
-            tts_save_config, // v1.5
-            tts_speak, // v1.5
-            tts_speak_with, // v1.5
-            graph_from_plan, // v1.5
-            graph_to_mermaid, // v1.5
-            sync_publish, // v1.5
-            sync_fetch, // v1.5
-            sync_list, // v1.5
-            sync_remove, // v1.5
-            sync_clear_all, // v1.5
-            sync_schema_version, // v1.5
-            plugin_list, // v1.5
-            plugin_install, // v1.5
-            plugin_remove, // v1.5
-            plugin_reload, // v1.5
-            plugin_install_defaults, // v1.5
-            plugin_run_steps, // v1.5
-            plugin_invoke, // v1.5
-            compress_session, // v1.0
-            check_update, // v1.0
-            voice_tauri::voice_check, // v1.2
-            voice_tauri::voice_download_model, // v1.2
-            voice_tauri::voice_transcribe, // v1.2
-            voice_tauri::voice_cleanup, // v1.2
-            voice_tauri::voice_delete_model, // v1.2
-            marketplace_tauri::marketplace_fetch_index, // v1.2
+            route_model_cmd,                               // v0.7
+            remember_memory,                               // v0.8
+            recall_memory,                                 // v0.8
+            list_memories,                                 // v0.8
+            forget_memory,                                 // v0.8
+            clear_memories,                                // v0.8
+            list_skills,                                   // v0.8
+            run_skill,                                     // v0.8
+            list_skills_grouped,                           // v1.5
+            skill_market,                                  // v1.5
+            skill_export,                                  // v1.5
+            skill_import,                                  // v1.5
+            skill_toggle,                                  // v1.5
+            skill_remove,                                  // v1.5
+            skill_reset_builtin,                           // v1.5
+            skill_chain,                                   // v1.5
+            tts_detect,                                    // v1.5
+            tts_get_config,                                // v1.5
+            tts_save_config,                               // v1.5
+            tts_speak,                                     // v1.5
+            tts_speak_with,                                // v1.5
+            graph_from_plan,                               // v1.5
+            graph_to_mermaid,                              // v1.5
+            sync_publish,                                  // v1.5
+            sync_fetch,                                    // v1.5
+            sync_list,                                     // v1.5
+            sync_remove,                                   // v1.5
+            sync_clear_all,                                // v1.5
+            sync_schema_version,                           // v1.5
+            plugin_list,                                   // v1.5
+            plugin_install,                                // v1.5
+            plugin_remove,                                 // v1.5
+            plugin_reload,                                 // v1.5
+            plugin_install_defaults,                       // v1.5
+            plugin_run_steps,                              // v1.5
+            plugin_invoke,                                 // v1.5
+            compress_session,                              // v1.0
+            check_update,                                  // v1.0
+            voice_tauri::voice_check,                      // v1.2
+            voice_tauri::voice_download_model,             // v1.2
+            voice_tauri::voice_transcribe,                 // v1.2
+            voice_tauri::voice_cleanup,                    // v1.2
+            voice_tauri::voice_delete_model,               // v1.2
+            marketplace_tauri::marketplace_fetch_index,    // v1.2
             marketplace_tauri::marketplace_list_installed, // v1.2
-            marketplace_tauri::marketplace_install, // v1.2
-            marketplace_tauri::marketplace_uninstall, // v1.2
-            marketplace_tauri::marketplace_set_index_url, // v1.2
-            marketplace_tauri::marketplace_get_index_url, // v1.2
-            vault_tauri::vault_is_encrypted, // v1.2
-            vault_tauri::vault_list_encrypted, // v1.2
-            vault_tauri::vault_encrypt_session, // v1.2
-            vault_tauri::vault_decrypt_session, // v1.2
-            vault_tauri::vault_remove_session, // v1.2
-            workspace_tauri::workspace_changed_broadcast, // v1.3
-            routing_tauri::routing_decide, // v1.3
-            routing_tauri::routing_get_strategy, // v1.3
-            routing_tauri::routing_set_strategy, // v1.3
-            routing_tauri::routing_reset_to_default, // v1.3
-            bugreport_tauri::bug_report_record, // v1.3
-            bugreport_tauri::bug_report_list, // v1.3
-            bugreport_tauri::bug_report_clear, // v1.3
-            bugreport_tauri::bug_report_build, // v1.3
-            local_tauri::local_discover, // v1.4
-            local_tauri::local_list_models, // v1.4
-            local_tauri::local_ping, // v1.4
-            lint_tauri::lint_run, // v1.4
-            lint_tauri::lint_run_summary, // v1.4
-            queue_tauri::queue_list, // v1.4
-            queue_tauri::queue_get, // v1.4
-            queue_tauri::queue_enqueue, // v1.4
-            queue_tauri::queue_cancel, // v1.4
-            queue_tauri::queue_clear_finished, // v1.4
-            p2p_tauri::p2p_start_host, // v1.4
-            p2p_tauri::p2p_stop_host, // v1.4
-            p2p_tauri::p2p_generate_pairing, // v1.4
-            p2p_tauri::p2p_accept_pairing, // v1.4
-            p2p_tauri::p2p_reject_pairing, // v1.4
-            p2p_tauri::p2p_list_peers, // v1.4
-            p2p_tauri::p2p_connect, // v1.4
-            learning_tauri::learning_get, // v1.4
-            learning_tauri::learning_record_chat, // v1.4
-            learning_tauri::learning_record_tool, // v1.4
-            learning_tauri::learning_record_slash, // v1.4
-            learning_tauri::learning_record_feedback, // v1.4
-            learning_tauri::learning_reset, // v1.4
-            learning_tauri::learning_inject, // v1.4
+            marketplace_tauri::marketplace_install,        // v1.2
+            marketplace_tauri::marketplace_uninstall,      // v1.2
+            marketplace_tauri::marketplace_set_index_url,  // v1.2
+            marketplace_tauri::marketplace_get_index_url,  // v1.2
+            vault_tauri::vault_is_encrypted,               // v1.2
+            vault_tauri::vault_list_encrypted,             // v1.2
+            vault_tauri::vault_encrypt_session,            // v1.2
+            vault_tauri::vault_decrypt_session,            // v1.2
+            vault_tauri::vault_remove_session,             // v1.2
+            workspace_tauri::workspace_changed_broadcast,  // v1.3
+            routing_tauri::routing_decide,                 // v1.3
+            routing_tauri::routing_get_strategy,           // v1.3
+            routing_tauri::routing_set_strategy,           // v1.3
+            routing_tauri::routing_reset_to_default,       // v1.3
+            bugreport_tauri::bug_report_record,            // v1.3
+            bugreport_tauri::bug_report_list,              // v1.3
+            bugreport_tauri::bug_report_clear,             // v1.3
+            bugreport_tauri::bug_report_build,             // v1.3
+            local_tauri::local_discover,                   // v1.4
+            local_tauri::local_list_models,                // v1.4
+            local_tauri::local_ping,                       // v1.4
+            lint_tauri::lint_run,                          // v1.4
+            lint_tauri::lint_run_summary,                  // v1.4
+            queue_tauri::queue_list,                       // v1.4
+            queue_tauri::queue_get,                        // v1.4
+            queue_tauri::queue_enqueue,                    // v1.4
+            queue_tauri::queue_cancel,                     // v1.4
+            queue_tauri::queue_clear_finished,             // v1.4
+            p2p_tauri::p2p_start_host,                     // v1.4
+            p2p_tauri::p2p_stop_host,                      // v1.4
+            p2p_tauri::p2p_generate_pairing,               // v1.4
+            p2p_tauri::p2p_accept_pairing,                 // v1.4
+            p2p_tauri::p2p_reject_pairing,                 // v1.4
+            p2p_tauri::p2p_list_peers,                     // v1.4
+            p2p_tauri::p2p_connect,                        // v1.4
+            learning_tauri::learning_get,                  // v1.4
+            learning_tauri::learning_record_chat,          // v1.4
+            learning_tauri::learning_record_tool,          // v1.4
+            learning_tauri::learning_record_slash,         // v1.4
+            learning_tauri::learning_record_feedback,      // v1.4
+            learning_tauri::learning_reset,                // v1.4
+            learning_tauri::learning_inject,               // v1.4
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
@@ -279,12 +327,15 @@ async fn chat(req: ChatRequestPayload) -> Result<ChatResponsePayload, String> {
     let provider = create_provider(&req.model).await?;
     let chat_req = build_chat_request(&req.model, &req.message, false);
     let resp = provider.chat(chat_req).await.map_err(|e| e.to_string())?;
-    let msg = resp.first_message().cloned().unwrap_or_else(|| AssistantMessage {
-        role: "assistant".into(),
-        content: "(empty)".into(),
-        reasoning_content: None,
-        tool_calls: vec![],
-    });
+    let msg = resp
+        .first_message()
+        .cloned()
+        .unwrap_or_else(|| AssistantMessage {
+            role: "assistant".into(),
+            content: "(empty)".into(),
+            reasoning_content: None,
+            tool_calls: vec![],
+        });
     Ok(ChatResponsePayload {
         content: msg.content,
         thinking: msg.reasoning_content.unwrap_or_default(),
@@ -297,10 +348,7 @@ async fn chat(req: ChatRequestPayload) -> Result<ChatResponsePayload, String> {
 
 /// v0.4 Agent 运行入口 — 含 tool_calls 循环 + cancel + approval
 #[tauri::command]
-async fn agent_run(
-    app: AppHandle,
-    req: AgentRunPayload,
-) -> Result<String, String> {
+async fn agent_run(app: AppHandle, req: AgentRunPayload) -> Result<String, String> {
     // v0.7：auto 模型路由
     let model_name = if req.model == "auto" {
         route_model(&req.message)
@@ -406,16 +454,12 @@ async fn agent_run(
     tokio::spawn(async move {
         let reg_state = app_clone.state::<SharedToolRegistry>();
         let reg_arc: Arc<Mutex<ToolRegistry>> = Arc::clone(&reg_state);
-        let mut runner = agent::AgentRunner::new(
-            app_clone.clone(),
-            session_id.clone(),
-            provider_arc,
-            reg_arc,
-        )
-        .with_history(history)
-        .with_max_steps(10)
-        .with_require_approval(require_approval)
-        .with_plan_mode(plan_mode);
+        let mut runner =
+            agent::AgentRunner::new(app_clone.clone(), session_id.clone(), provider_arc, reg_arc)
+                .with_history(history)
+                .with_max_steps(10)
+                .with_require_approval(require_approval)
+                .with_plan_mode(plan_mode);
 
         // v0.4：注册 cancel handle + approval sender 到 SessionControl
         let cancel = runner.cancel_handle();
@@ -481,7 +525,8 @@ async fn respond_approval(
             } else {
                 agent::ApprovalResponse::Deny(reason.unwrap_or_else(|| "user denied".into()))
             };
-            tx.send(resp).map_err(|_| "approval channel closed".to_string())?;
+            tx.send(resp)
+                .map_err(|_| "approval channel closed".to_string())?;
         }
         Ok(())
     } else {
@@ -493,8 +538,8 @@ async fn respond_approval(
 #[tauri::command]
 async fn respond_plan(
     session_id: String,
-    action: String, // "approve" | "deny" | "edit"
-    reason: Option<String>, // for deny
+    action: String,              // "approve" | "deny" | "edit"
+    reason: Option<String>,      // for deny
     edited_plan: Option<String>, // for edit
     app: AppHandle,
 ) -> Result<(), String> {
@@ -509,7 +554,8 @@ async fn respond_plan(
                 "edit" => agent::PlanApproval::Edit(edited_plan.unwrap_or_default()),
                 _ => return Err(format!("unknown plan action: {}", action)),
             };
-            tx.send(resp).map_err(|_| "plan channel closed".to_string())?;
+            tx.send(resp)
+                .map_err(|_| "plan channel closed".to_string())?;
         }
         Ok(())
     } else {
@@ -544,7 +590,9 @@ struct ImageAttachment {
     mime: Option<String>,
 }
 
-fn default_true() -> bool { true }
+fn default_true() -> bool {
+    true
+}
 
 /// v0.9：从扩展名猜 MIME
 fn guess_mime_from_path(path: &str) -> String {
@@ -583,11 +631,15 @@ async fn list_tools(app: AppHandle) -> Result<Vec<ToolDefDto>, String> {
     if reg.is_empty() {
         tools::register_all(&mut reg, cwd.clone(), cwd);
     }
-    Ok(reg.schemas().into_iter().map(|s| ToolDefDto {
-        name: s.name,
-        description: s.description,
-        parameters: s.parameters,
-    }).collect())
+    Ok(reg
+        .schemas()
+        .into_iter()
+        .map(|s| ToolDefDto {
+            name: s.name,
+            description: s.description,
+            parameters: s.parameters,
+        })
+        .collect())
 }
 
 /// 执行工具
@@ -603,7 +655,9 @@ async fn execute_tool(
     if reg.is_empty() {
         tools::register_all(&mut reg, cwd.clone(), cwd);
     }
-    let tool = reg.get(&name).ok_or_else(|| format!("tool not found: {}", name))?;
+    let tool = reg
+        .get(&name)
+        .ok_or_else(|| format!("tool not found: {}", name))?;
     let out = tool.execute(arguments).await.map_err(|e| e.to_string())?;
     Ok(ToolExecDto {
         success: out.success,
@@ -678,7 +732,10 @@ fn list_git_branches() -> Result<Vec<String>, String> {
         return Err("git 不可用".into());
     }
     let s = String::from_utf8_lossy(&output.stdout).to_string();
-    Ok(s.lines().map(|l| l.trim().to_string()).filter(|l| !l.is_empty()).collect())
+    Ok(s.lines()
+        .map(|l| l.trim().to_string())
+        .filter(|l| !l.is_empty())
+        .collect())
 }
 
 #[derive(Serialize)]
@@ -711,7 +768,10 @@ async fn list_mcp_servers() -> Vec<McpServerDto> {
     let mut out = Vec::new();
     for n in names {
         let tool_count = pool.tools_of(&n).await.map(|v| v.len()).unwrap_or(0);
-        out.push(McpServerDto { name: n, tool_count });
+        out.push(McpServerDto {
+            name: n,
+            tool_count,
+        });
     }
     out
 }
@@ -762,11 +822,43 @@ fn build_chat_request(model: &str, message: &str, stream: bool) -> ChatRequest {
 fn route_model(message: &str) -> String {
     let lower = message.to_lowercase();
     // 代码相关 → DeepSeek（便宜 + 代码强）
-    let code_kw = ["code", "function", "fn ", "impl ", "bug", "debug", "error", "rust", "python", "javascript", "typescript", "compile", "refactor", "重构", "编译", "报错", "代码", "写一个", "函数", "bug"];
+    let code_kw = [
+        "code",
+        "function",
+        "fn ",
+        "impl ",
+        "bug",
+        "debug",
+        "error",
+        "rust",
+        "python",
+        "javascript",
+        "typescript",
+        "compile",
+        "refactor",
+        "重构",
+        "编译",
+        "报错",
+        "代码",
+        "写一个",
+        "函数",
+        "bug",
+    ];
     // 中文对话 / 创意 → MiniMax-M3
     let m3_kw = ["你好", "请问", "聊聊", "故事", "创作", "诗", "翻译", "总结"];
     // 规划 / 复杂推理 → Claude
-    let claude_kw = ["plan", "分析", "规划", "策略", "compare", "tradeoff", "复杂", "深度", "reasoning", "compare"];
+    let claude_kw = [
+        "plan",
+        "分析",
+        "规划",
+        "策略",
+        "compare",
+        "tradeoff",
+        "复杂",
+        "深度",
+        "reasoning",
+        "compare",
+    ];
 
     let code_score = code_kw.iter().filter(|k| lower.contains(**k)).count();
     let m3_score = m3_kw.iter().filter(|k| lower.contains(**k)).count();
@@ -831,11 +923,7 @@ async fn remember_memory(
     importance: Option<u8>,
     session_id: Option<String>,
 ) -> Result<MemoryDto, String> {
-    let mgr = app
-        .state::<SharedMemory>()
-        .inner()
-        .lock()
-        .await;
+    let mgr = app.state::<SharedMemory>().inner().lock().await;
     let mem = mgr
         .add_with_session(
             content,
@@ -880,14 +968,13 @@ async fn clear_memories(app: AppHandle) -> Result<(), String> {
 #[tauri::command]
 async fn list_skills() -> Result<Vec<skills::SkillInfo>, String> {
     let file = skills::load_skills();
-    Ok(skills::to_command_map(&file)
-        .into_values()
-        .collect())
+    Ok(skills::to_command_map(&file).into_values().collect())
 }
 
 /// v1.5：列出全部 skill（含 builtin / 禁用 / 非 shell），按 category 分组
 #[tauri::command]
-async fn list_skills_grouped() -> Result<std::collections::HashMap<String, Vec<skills::Skill>>, String> {
+async fn list_skills_grouped(
+) -> Result<std::collections::HashMap<String, Vec<skills::Skill>>, String> {
     let file = skills::load_skills();
     Ok(skills::list_grouped(&file))
 }
@@ -897,7 +984,10 @@ async fn run_skill(name: String, arg: String) -> Result<String, String> {
     let file = skills::load_skills();
     match skills::find_skill(&file, &name) {
         Some(s) => skills::execute_skill(s, &arg),
-        None => Err(format!("skill `{}` 未定义。检查 ~/.agentshell/skills.json", name)),
+        None => Err(format!(
+            "skill `{}` 未定义。检查 ~/.agentshell/skills.json",
+            name
+        )),
     }
 }
 
@@ -952,7 +1042,10 @@ async fn skill_reset_builtin() -> Result<(), String> {
 
 /// v1.5：执行 chain
 #[tauri::command]
-async fn skill_chain(names: Vec<String>, arg: String) -> Result<Vec<(String, Result<String, String>)>, String> {
+async fn skill_chain(
+    names: Vec<String>,
+    arg: String,
+) -> Result<Vec<(String, Result<String, String>)>, String> {
     let file = skills::load_skills();
     Ok(skills::chain_skills(&file, &names, &arg))
 }
@@ -1116,7 +1209,9 @@ struct CompressPayload {
     keep_recent: usize,
 }
 
-fn default_keep_recent() -> usize { 6 }
+fn default_keep_recent() -> usize {
+    6
+}
 
 #[derive(Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -1235,10 +1330,7 @@ async fn check_update() -> Result<UpdateInfo, String> {
         .get("html_url")
         .and_then(|v| v.as_str())
         .map(String::from);
-    let release_notes = body
-        .get("body")
-        .and_then(|v| v.as_str())
-        .map(String::from);
+    let release_notes = body.get("body").and_then(|v| v.as_str()).map(String::from);
 
     // 简单版本比较（vX.Y.Z）
     let update_available = match (&latest, &current) {
@@ -1280,14 +1372,13 @@ fn version_greater(a: &str, b: &str) -> bool {
 async fn create_provider(model: &str) -> Result<Box<dyn Model>, String> {
     // v0.7：模型路由 — "auto" 根据任务自动选 model
     if model == "auto" {
-        return Err(
-            "auto 路由需要在 agent_run 前先用 route_model 计算实际模型".to_string(),
-        );
+        return Err("auto 路由需要在 agent_run 前先用 route_model 计算实际模型".to_string());
     }
     match model {
         "MiniMax-M3" | "m3" => {
-            let key = std::env::var("MINIMAX_API_KEY")
-                .map_err(|_| "MINIMAX_API_KEY 环境变量未设置。请 export MINIMAX_API_KEY=xxx".to_string())?;
+            let key = std::env::var("MINIMAX_API_KEY").map_err(|_| {
+                "MINIMAX_API_KEY 环境变量未设置。请 export MINIMAX_API_KEY=xxx".to_string()
+            })?;
             Ok(Box::new(MinimaxProvider::new(key, None)))
         }
         m if m.starts_with("claude-") => {
@@ -1334,7 +1425,10 @@ async fn create_provider(model: &str) -> Result<Box<dyn Model>, String> {
             let name = m.trim_start_matches("llamacpp:").to_string();
             let base_url = std::env::var("LLAMACPP_BASE_URL")
                 .unwrap_or_else(|_| "http://127.0.0.1:8080".to_string());
-            Ok(Box::new(LlamaCppProvider::new(llama_cpp_info(&name), base_url)))
+            Ok(Box::new(LlamaCppProvider::new(
+                llama_cpp_info(&name),
+                base_url,
+            )))
         }
         other => Err(format!("未知模型: {}", other)),
     }

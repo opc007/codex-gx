@@ -18,9 +18,7 @@ impl LearningState {
 }
 
 #[tauri::command]
-pub async fn learning_get(
-    state: tauri::State<'_, LearningState>,
-) -> Result<Learning, String> {
+pub async fn learning_get(state: tauri::State<'_, LearningState>) -> Result<Learning, String> {
     Ok(state.inner.read().await.clone())
 }
 
@@ -69,18 +67,14 @@ pub async fn learning_record_feedback(
 }
 
 #[tauri::command]
-pub async fn learning_reset(
-    state: tauri::State<'_, LearningState>,
-) -> Result<(), String> {
+pub async fn learning_reset(state: tauri::State<'_, LearningState>) -> Result<(), String> {
     let mut l = state.inner.write().await;
     l.reset();
     l.save().await
 }
 
 #[tauri::command]
-pub async fn learning_inject(
-    state: tauri::State<'_, LearningState>,
-) -> Result<String, String> {
+pub async fn learning_inject(state: tauri::State<'_, LearningState>) -> Result<String, String> {
     let l = state.inner.read().await;
     Ok(l.inject_text())
 }

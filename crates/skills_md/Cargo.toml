@@ -1,0 +1,15 @@
+[package]
+name = "skills_md"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+description = "AgentShell v1.7 SKILL.md 开放标准 (Codex 2026 / Claude Code / Cursor 兼容)"
+
+[dependencies]
+serde.workspace = true
+serde_json.workspace = true
+serde_yaml = "0.9"
+thiserror.workspace = true
+chrono.workspace = true
+walkdir = "2"

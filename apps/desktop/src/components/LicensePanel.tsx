@@ -8,6 +8,7 @@
 
 import { useEffect, useState, useCallback } from "react";
 import { invoke } from "@tauri-apps/api/core";
+import { open as openUrl } from "@tauri-apps/plugin-shell";
 
 type LicenseTier = "monthly" | "quarterly" | "yearly" | "lifetime";
 
@@ -16,18 +17,18 @@ type LicenseStatus =
   | {
       kind: "valid";
       tier: LicenseTier;
-      remainingDays: number | null;
-      activatedAt: number;
-      expiresAt: number | null;
+      remaining_days: number | null;
+      activated_at: number;
+      expires_at: number | null;
     }
-  | { kind: "expiring"; tier: LicenseTier; daysLeft: number }
-  | { kind: "expired"; tier: LicenseTier; expiredAt: number }
-  | { kind: "offlinegrace"; daysOffline: number }
+  | { kind: "expiring"; tier: LicenseTier; days_left: number }
+  | { kind: "expired"; tier: LicenseTier; expired_at: number }
+  | { kind: "offlinegrace"; days_offline: number }
   | { kind: "invalid"; reason: string };
 
 type LicenseSummary = {
   status: LicenseStatus;
-  lastValidatedAt: number;
+  last_validated_at: number;
   offline: boolean;
 };
 
@@ -85,6 +86,19 @@ export function LicensePanel({ onClose }: { onClose: () => void }) {
     }
   };
 
+  const onRefresh = async () => {
+    setBusy(true);
+    setErr(null);
+    try {
+      await invoke("license_refresh");
+      await refresh();
+    } catch (e) {
+      setErr(String(e));
+    } finally {
+      setBusy(false);
+    }
+  };
+
   const onDeactivate = async () => {
     if (!confirm("确定要清除 License 吗？清除后需要重新输入激活码。")) return;
     setBusy(true);
@@ -123,7 +137,7 @@ export function LicensePanel({ onClose }: { onClose: () => void }) {
         <StatusCard
           status={summary.status}
           offline={summary.offline}
-          lastValidatedAt={summary.lastValidatedAt}
+          lastValidatedAt={summary.last_validated_at}
         />
       )}
 
@@ -149,7 +163,7 @@ export function LicensePanel({ onClose }: { onClose: () => void }) {
               <button className="primary" disabled={busy} onClick={onActivate}>
                 {busy ? "激活中..." : "立即激活"}
               </button>
-              <button onClick={() => invoke("open_buy_url") /* no-op fallback */}>
+              <button onClick={() => void openUrl("https://agentshell.io/buy")}>
                 我要购买
               </button>
             </div>
@@ -186,7 +200,7 @@ export function LicensePanel({ onClose }: { onClose: () => void }) {
         summary.status.kind !== "unactivated" &&
         summary.status.kind !== "expired" && (
           <div className="active-actions">
-            <button onClick={() => invoke("license_refresh")}>🔄 重新校验</button>
+            <button disabled={busy} onClick={() => void onRefresh()}>🔄 重新校验</button>
             <button onClick={onDeactivate}>清除 License</button>
           </div>
         )}
@@ -226,13 +240,13 @@ function StatusCard({
         <div>
           <div className="status-title">
             {tierDisplay(status.tier)} ·{" "}
-            {status.remainingDays == null
+            {status.remaining_days == null
               ? "终身"
-              : `还剩 ${status.remainingDays} 天`}
+              : `还剩 ${status.remaining_days} 天`}
           </div>
           <div className="status-sub">
             {offline ? "（离线模式）" : "已激活"} · 激活于{" "}
-            {new Date(status.activatedAt * 1000).toLocaleDateString()}
+            {new Date(status.activated_at * 1000).toLocaleDateString()}
             {lastValidatedAt > 0 && (
               <> · 上次校验 {new Date(lastValidatedAt * 1000).toLocaleString()}</>
             )}
@@ -247,7 +261,7 @@ function StatusCard({
         <div className="status-icon">⏰</div>
         <div>
           <div className="status-title">
-            {tierDisplay(status.tier)} · 还剩 {status.daysLeft} 天到期
+            {tierDisplay(status.tier)} · 还剩 {status.days_left} 天到期
           </div>
           <div className="status-sub">建议尽快续费，避免进入只读模式</div>
         </div>
@@ -272,7 +286,7 @@ function StatusCard({
       <div className="status-card status-offline">
         <div className="status-icon">📡</div>
         <div>
-          <div className="status-title">离线 {status.daysOffline} 天</div>
+          <div className="status-title">离线 {status.days_offline} 天</div>
           <div className="status-sub">已超过 7 天离线宽限 — 软件处于只读模式，请联网重新校验</div>
         </div>
       </div>

@@ -18,6 +18,10 @@ members = [
     "crates/p2p",
     "crates/learning",
     "crates/plugin",
+    "crates/personality",
+    "crates/skills_md",
+    "crates/goal",
+    "crates/headless",
     "apps/desktop/src-tauri",
 ]
 
@@ -96,6 +100,10 @@ queue = { path = "crates/queue" }
 p2p = { path = "crates/p2p" }
 learning = { path = "crates/learning" }
 plugin = { path = "crates/plugin" }
+personality = { path = "crates/personality" }
+skills_md = { path = "crates/skills_md" }
+goal = { path = "crates/goal" }
+headless = { path = "crates/headless" }
 
 # regex
 regex-lite = "0.1"

@@ -8,14 +8,16 @@ use async_trait::async_trait;
 use computer_use::{BrowserAction, JsRepl, ViewportSize};
 use serde_json::json;
 use std::sync::Arc;
-use tokio::sync::OnceCell;
 use tokio::sync::Mutex;
+use tokio::sync::OnceCell;
 
 /// 全局共享的 JS REPL（避免重复 spawn node）
 static REPL: OnceCell<Arc<Mutex<Option<JsRepl>>>> = OnceCell::const_new();
 
 async fn repl() -> Option<Arc<Mutex<Option<JsRepl>>>> {
-    let arc = REPL.get_or_init(|| async { Arc::new(Mutex::new(None)) }).await;
+    let arc = REPL
+        .get_or_init(|| async { Arc::new(Mutex::new(None)) })
+        .await;
     Some(arc.clone())
 }
 
@@ -25,7 +27,12 @@ async fn get_or_init_repl() -> Result<Arc<Mutex<Option<JsRepl>>>, String> {
     if guard.is_none() {
         match JsRepl::spawn(None).await {
             Ok(r) => *guard = Some(r),
-            Err(e) => return Err(format!("启动 node REPL 失败: {}（需要先装 Node.js + npm install playwright）", e)),
+            Err(e) => {
+                return Err(format!(
+                    "启动 node REPL 失败: {}（需要先装 Node.js + npm install playwright）",
+                    e
+                ))
+            }
         }
     }
     Ok(cell.clone())
@@ -84,7 +91,10 @@ impl Tool for BrowserNavigateTool {
             url.replace('"', "\\\"")
         );
         match repl.eval(&script).await {
-            Ok(out) => Ok(ToolOutput::ok(format!("✅ 打开成功：\nURL: {}\nResult: {}", url, out))),
+            Ok(out) => Ok(ToolOutput::ok(format!(
+                "✅ 打开成功：\nURL: {}\nResult: {}",
+                url, out
+            ))),
             Err(e) => Ok(ToolOutput::err(format!("navigate 失败: {}", e))),
         }
     }
@@ -263,7 +273,12 @@ impl Tool for BrowserTypeTool {
             text.replace('"', "\\\"").replace('\n', "\\n")
         );
         match repl.eval(&script).await {
-            Ok(out) => Ok(ToolOutput::ok(format!("✅ 已在 {} 输入 {} 字符\n{}", sel, text.len(), out))),
+            Ok(out) => Ok(ToolOutput::ok(format!(
+                "✅ 已在 {} 输入 {} 字符\n{}",
+                sel,
+                text.len(),
+                out
+            ))),
             Err(e) => Ok(ToolOutput::err(format!("type 失败: {}", e))),
         }
     }
@@ -320,7 +335,8 @@ impl Tool for BrowserGetTextTool {
                 const text = await globalThis._page.evaluate(() => document.body.innerText);
                 return { text };
             })()
-            "#.to_string()
+            "#
+            .to_string()
         };
         match repl.eval(&script).await {
             Ok(out) => Ok(ToolOutput::ok(format!("📄 页面文本：\n{}", out))),

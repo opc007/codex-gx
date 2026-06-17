@@ -9,7 +9,7 @@ use serde::{Deserialize, Serialize};
 
 use crate::error::{ProviderError, Result};
 use crate::model::{Model, ModelCapabilities, ModelInfo, WireApi};
-use crate::request::{ChatRequest, ChatMessage, ChatRole};
+use crate::request::{ChatMessage, ChatRequest, ChatRole};
 use crate::response::ChatResponse;
 use crate::stream::{ChatStream, OpenAiStreamChunk, StreamChunk};
 

@@ -63,15 +63,21 @@ impl Tool for BashTool {
         })
     }
     async fn execute(&self, input: ToolInput) -> agent_core::Result<ToolOutput> {
-        let cmd = input["command"].as_str().ok_or_else(|| {
-            agent_core::Error::ToolExecution("missing command".into())
-        })?;
+        let cmd = input["command"]
+            .as_str()
+            .ok_or_else(|| agent_core::Error::ToolExecution("missing command".into()))?;
         let _timeout = input["timeout_ms"].as_u64().unwrap_or(30_000);
 
         let output = if cfg!(target_os = "windows") {
-            Command::new("cmd").args(["/C", cmd]).current_dir(&self.cwd).output()
+            Command::new("cmd")
+                .args(["/C", cmd])
+                .current_dir(&self.cwd)
+                .output()
         } else {
-            Command::new("sh").args(["-c", cmd]).current_dir(&self.cwd).output()
+            Command::new("sh")
+                .args(["-c", cmd])
+                .current_dir(&self.cwd)
+                .output()
         };
 
         match output {
@@ -126,9 +132,9 @@ impl Tool for ReadFileTool {
         })
     }
     async fn execute(&self, input: ToolInput) -> agent_core::Result<ToolOutput> {
-        let path = input["path"].as_str().ok_or_else(|| {
-            agent_core::Error::ToolExecution("missing path".into())
-        })?;
+        let path = input["path"]
+            .as_str()
+            .ok_or_else(|| agent_core::Error::ToolExecution("missing path".into()))?;
         let full = if PathBuf::from(path).is_absolute() {
             PathBuf::from(path)
         } else {
@@ -143,7 +149,11 @@ impl Tool for ReadFileTool {
         let total = lines.len();
         let s = start.unwrap_or(1).saturating_sub(1).min(total);
         let e = end.unwrap_or(total).min(total);
-        let slice = if s < e { lines[s..e].join("\n") } else { String::new() };
+        let slice = if s < e {
+            lines[s..e].join("\n")
+        } else {
+            String::new()
+        };
         Ok(ToolOutput::ok(format!(
             "File: {}\nLines: {}-{}/{}\n\n{}",
             full.display(),
@@ -185,21 +195,20 @@ impl Tool for WriteFileTool {
         })
     }
     async fn execute(&self, input: ToolInput) -> agent_core::Result<ToolOutput> {
-        let path = input["path"].as_str().ok_or_else(|| {
-            agent_core::Error::ToolExecution("missing path".into())
-        })?;
-        let content = input["content"].as_str().ok_or_else(|| {
-            agent_core::Error::ToolExecution("missing content".into())
-        })?;
+        let path = input["path"]
+            .as_str()
+            .ok_or_else(|| agent_core::Error::ToolExecution("missing path".into()))?;
+        let content = input["content"]
+            .as_str()
+            .ok_or_else(|| agent_core::Error::ToolExecution("missing content".into()))?;
         let full = if PathBuf::from(path).is_absolute() {
             PathBuf::from(path)
         } else {
             self.root.join(path)
         };
         if let Some(parent) = full.parent() {
-            std::fs::create_dir_all(parent).map_err(|e| {
-                agent_core::Error::ToolExecution(format!("mkdir: {}", e))
-            })?;
+            std::fs::create_dir_all(parent)
+                .map_err(|e| agent_core::Error::ToolExecution(format!("mkdir: {}", e)))?;
         }
         std::fs::write(&full, content).map_err(|e| {
             agent_core::Error::ToolExecution(format!("write {}: {}", full.display(), e))
@@ -238,9 +247,9 @@ impl Tool for EditFileTool {
         })
     }
     async fn execute(&self, input: ToolInput) -> agent_core::Result<ToolOutput> {
-        let patch_text = input["patch"].as_str().ok_or_else(|| {
-            agent_core::Error::ToolExecution("missing patch".into())
-        })?;
+        let patch_text = input["patch"]
+            .as_str()
+            .ok_or_else(|| agent_core::Error::ToolExecution("missing patch".into()))?;
         match patch::apply_patch(&self.root, patch_text) {
             Ok(result) => Ok(ToolOutput::ok(result.summary())),
             Err(e) => Ok(ToolOutput::err(format!("patch failed: {}", e))),
@@ -291,7 +300,12 @@ impl Tool for ListDirTool {
             } else {
                 "FILE"
             };
-            lines.push(format!("  [{}] {} ({} bytes)", kind, e.path().display(), size));
+            lines.push(format!(
+                "  [{}] {} ({} bytes)",
+                kind,
+                e.path().display(),
+                size
+            ));
         }
         Ok(ToolOutput::ok(lines.join("\n")))
     }
@@ -385,7 +399,11 @@ impl Tool for WebSearchTool {
             return Ok(ToolOutput::err(format!(
                 "Brave API 返回 {}: {}",
                 status,
-                if body.len() > 500 { &body[..500] } else { &body }
+                if body.len() > 500 {
+                    &body[..500]
+                } else {
+                    &body
+                }
             )));
         }
 
@@ -453,7 +471,10 @@ impl Tool for WebSearchTool {
             }
         );
         for (i, r) in results.iter().enumerate().take(count as usize) {
-            let title = r.get("title").and_then(|v| v.as_str()).unwrap_or("(no title)");
+            let title = r
+                .get("title")
+                .and_then(|v| v.as_str())
+                .unwrap_or("(no title)");
             let url = r.get("url").and_then(|v| v.as_str()).unwrap_or("");
             let desc = r.get("description").and_then(|v| v.as_str()).unwrap_or("");
             text.push_str(&format!(
@@ -473,7 +494,9 @@ fn urlencoding(s: &str) -> String {
     let mut out = String::with_capacity(s.len());
     for b in s.bytes() {
         match b {
-            b'A'..=b'Z' | b'a'..=b'z' | b'0'..=b'9' | b'-' | b'_' | b'.' | b'~' => out.push(b as char),
+            b'A'..=b'Z' | b'a'..=b'z' | b'0'..=b'9' | b'-' | b'_' | b'.' | b'~' => {
+                out.push(b as char)
+            }
             _ => out.push_str(&format!("%{:02X}", b)),
         }
     }

@@ -49,27 +49,43 @@ pub enum PluginStep {
     Lower,
     Upper,
     /// 在尾部追加字符串（arg 为要追加的文本）
-    Append { arg: String },
+    Append {
+        arg: String,
+    },
     /// 在头部插入字符串
-    Prepend { arg: String },
+    Prepend {
+        arg: String,
+    },
     /// 替换（arg = "find::with"）
-    Replace { arg: String },
+    Replace {
+        arg: String,
+    },
     /// 截断到 N 字符
-    Truncate { arg: String },
+    Truncate {
+        arg: String,
+    },
     /// 用前缀包裹
-    Wrap { arg: String },
+    Wrap {
+        arg: String,
+    },
     /// 输出模板：把 $INPUT 替换为当前 text
-    Template { arg: String },
+    Template {
+        arg: String,
+    },
     /// 行级处理：把每行包到 markdown checkbox `- [ ] ...`
     ToChecklist,
     /// 行级处理：把每行包到 markdown bullet
     ToBullets,
     /// 拼接 N 次
-    Repeat { arg: String },
+    Repeat {
+        arg: String,
+    },
     /// 反转字符串
     Reverse,
     /// 自定义 key→value 注入（不修改 text，仅作为元数据）
-    Meta { arg: String },
+    Meta {
+        arg: String,
+    },
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -291,9 +307,7 @@ pub fn default_manifests() -> Vec<PluginManifest> {
                 command: None,
                 description: Some("Truncate to 200 chars".into()),
                 script: None,
-                steps: vec![PluginStep::Truncate {
-                    arg: "200".into(),
-                }],
+                steps: vec![PluginStep::Truncate { arg: "200".into() }],
             }],
         },
         PluginManifest {
@@ -307,11 +321,14 @@ pub fn default_manifests() -> Vec<PluginManifest> {
                 command: None,
                 description: Some("Wrap input in <think>".into()),
                 script: None,
-                steps: vec![PluginStep::Wrap {
-                    arg: "<think>\n".into(),
-                }, PluginStep::Append {
-                    arg: "\n</think>".into(),
-                }],
+                steps: vec![
+                    PluginStep::Wrap {
+                        arg: "<think>\n".into(),
+                    },
+                    PluginStep::Append {
+                        arg: "\n</think>".into(),
+                    },
+                ],
             }],
         },
         PluginManifest {
@@ -376,9 +393,7 @@ mod tests {
 
     #[test]
     fn step_truncate() {
-        let s = vec![PluginStep::Truncate {
-            arg: "5".into(),
-        }];
+        let s = vec![PluginStep::Truncate { arg: "5".into() }];
         assert_eq!(run_steps(&s, "abcdefghij").chars().count(), 6); // 5 + …
     }
 
@@ -387,10 +402,7 @@ mod tests {
         let s = vec![PluginStep::Template {
             arg: "请用一句话总结：$INPUT".into(),
         }];
-        assert_eq!(
-            run_steps(&s, "这是一段话"),
-            "请用一句话总结：这是一段话"
-        );
+        assert_eq!(run_steps(&s, "这是一段话"), "请用一句话总结：这是一段话");
     }
 
     #[test]
@@ -413,9 +425,7 @@ mod tests {
 
     #[test]
     fn step_repeat() {
-        let s = vec![PluginStep::Repeat {
-            arg: "3".into(),
-        }];
+        let s = vec![PluginStep::Repeat { arg: "3".into() }];
         assert_eq!(run_steps(&s, "ab"), "ababab");
     }
 
@@ -427,21 +437,15 @@ mod tests {
 
     #[test]
     fn step_wrap() {
-        let s = vec![PluginStep::Wrap {
-            arg: "**".into(),
-        }];
+        let s = vec![PluginStep::Wrap { arg: "**".into() }];
         assert_eq!(run_steps(&s, "bold"), "**bold**");
     }
 
     #[test]
     fn step_append_prepend() {
         let s = vec![
-            PluginStep::Prepend {
-                arg: ">>".into(),
-            },
-            PluginStep::Append {
-                arg: "<<".into(),
-            },
+            PluginStep::Prepend { arg: ">>".into() },
+            PluginStep::Append { arg: "<<".into() },
         ];
         assert_eq!(run_steps(&s, "x"), ">>x<<");
     }

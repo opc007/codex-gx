@@ -24,7 +24,7 @@ impl JsRepl {
     pub async fn spawn(node_path: Option<&str>) -> Result<Self> {
         let node = node_path.unwrap_or("node");
         let mut child = Command::new(node)
-            .arg("-i")  // interactive
+            .arg("-i") // interactive
             .stdin(Stdio::piped())
             .stdout(Stdio::piped())
             .stderr(Stdio::piped())
@@ -59,7 +59,10 @@ impl JsRepl {
             .write_all(wrapped.as_bytes())
             .await
             .map_err(ComputerUseError::Io)?;
-        self.stdin.write_all(b"\n").await.map_err(ComputerUseError::Io)?;
+        self.stdin
+            .write_all(b"\n")
+            .await
+            .map_err(ComputerUseError::Io)?;
         self.stdin.flush().await.map_err(ComputerUseError::Io)?;
 
         let mut line = String::new();

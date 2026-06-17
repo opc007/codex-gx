@@ -34,7 +34,11 @@ impl IdeContext {
             s.push_str(&format!("Current file: {}\n", f));
         }
         if let Some(line) = self.cursor_line {
-            s.push_str(&format!("Cursor: line {}, col {}\n", line, self.cursor_column.unwrap_or(0)));
+            s.push_str(&format!(
+                "Cursor: line {}, col {}\n",
+                line,
+                self.cursor_column.unwrap_or(0)
+            ));
         }
         if let Some(sel) = &self.selection {
             s.push_str("\nSelection:\n```\n");
