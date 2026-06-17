@@ -14,6 +14,7 @@ mod tools;
 mod voice_tauri;
 mod marketplace_tauri;
 mod vault_tauri;
+mod workspace_tauri;
 
 use agent_core::tool::ToolRegistry;
 use serde::{Deserialize, Serialize};
@@ -144,6 +145,7 @@ pub fn run() {
             vault_tauri::vault_encrypt_session, // v1.2
             vault_tauri::vault_decrypt_session, // v1.2
             vault_tauri::vault_remove_session, // v1.2
+            workspace_tauri::workspace_changed_broadcast, // v1.3
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

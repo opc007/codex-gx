@@ -237,6 +237,27 @@ kbd {
 .session-item { position: relative; }
 .session-item.tabbed { background: var(--bg-hover); }
 
+/* v1.3：Workspace selector */
+.workspace-selector {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  margin-left: 12px;
+  padding: 2px 6px;
+  border-radius: 6px;
+  background: var(--bg-secondary, rgba(0, 0, 0, 0.04));
+}
+.workspace-selector .workspace-select {
+  min-width: 140px;
+  max-width: 220px;
+}
+.workspace-selector .topbar-btn.small {
+  padding: 2px 8px;
+  font-size: 14px;
+  line-height: 1;
+}
+.workspace-selector .topbar-btn.danger { color: #d04848; }
+
 /* v1.1：标签栏 */
 .tab-bar {
   display: flex;

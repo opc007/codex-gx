@@ -383,7 +383,7 @@ export function Composer({ sessionId }: Props) {
       const helpMsg: PersistedMessage = {
         id: crypto.randomUUID(),
         role: "assistant",
-        text: `📖 AgentShell v0.4 命令帮助：
+        text: `📖 AgentShell v1.3 命令帮助：
 
 通用：
 /help      - 显示此帮助
@@ -399,47 +399,59 @@ Git & IDE：
 /diff      - Git diff vs HEAD
 /review    - AI 评审当前 diff（消耗 token）
 
-🛠️ v0.4 工具调用：
+🛠️ 工具调用：
 M3 / Claude / GPT 会自动调用：
 - bash（执行命令）
 - read_file / write_file / edit_file
 - list_dir
 - web_search（需要 BRAVE_API_KEY）
 - browser_navigate / browser_screenshot / browser_click / browser_type / browser_get_text（Computer Use，需要 Node + playwright）
+- desktop_list_windows / desktop_focus_window / desktop_get_app_tree / desktop_click_at / desktop_type_text / desktop_key_combo / desktop_screenshot（v1.2 Desktop CUA）
+- mcp__<server>__<tool>（v0.5 MCP）
+- subagent_<role>（v0.7 子代理）
 
-🔐 v0.4 批准模式：
+🔐 批准模式：
 /approval on  - 启用手动批准（默认）
 /approval off - 自动批准所有工具调用
 /approval     - 查看当前模式
 
-📋 v0.6 Plan Mode：
+📋 Plan Mode：
 /plan on  - 启用（下次发送先看模型给的执行计划）
 /plan off - 关闭
 /plan     - 查看当前模式
 
-🧠 v0.8 长期记忆：
+🧠 长期记忆：
 /remember <内容> [#tag]  - 记住一条
 /memories                  - 列出所有
 /recall <查询>             - 检索相关
 /forget <id前8位>          - 遗忘一条
 （自动：每次新会话根据当前消息检索相关记忆注入 system prompt）
 
-🛠️ v0.8 Skill：
+🛠️ Skill：
 /skills                    - 列出已加载的自定义 skill
 /<name> <参数>             - 执行 ~/.agentshell/skills.json 定义的命令
 
-🗜 v1.0 长会话压缩：
+🗜 长会话压缩：
 /compress [保留最近N条]    - 用 LLM 摘要压缩当前会话（默认保留 6 条）
 
-🔒 v1.1 脱敏测试：
+🔒 脱敏测试：
 /redact <文本>             - 测试脱敏（api key/email/IPv4/JWT/PEM...）
 
-🎙 v1.2 语音输入（本地 Whisper）：
+🎙 语音输入（本地 Whisper）：
 /voice status              - 查看 whisper-cli 状态和模型
 /voice download <模型名>   - 下载 Whisper 模型（tiny/base/small/medium）
 /voice cleanup             - 清理临时音频
 按钮: 🎙 - 录音；⏹ - 结束；转写文本自动填到输入框
 
+📁 v1.3 工作区（Workspace）：
+- Top bar 左侧下拉切换 / 新建 / 重命名 / 删除工作区
+- 每个工作区拥有独立 sessions 列表
+- 默认 "Default"，可创建任意多个
+- 删除工作区不会删除其中的 session（可切回 Default 查看）
+
+🧩 插件市场：Top bar 🧩 按钮
+🔐 会话加密：侧栏 session 旁 🔒 / 🔓 按钮
+📊 Token 用量：/usage
 💡 模型切换：Top bar 下拉
 💡 所有会话和消息自动保存到本地`,
         createdAt: Date.now(),

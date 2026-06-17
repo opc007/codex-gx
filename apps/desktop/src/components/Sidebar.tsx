@@ -2,10 +2,11 @@ import { useSessionsStore, type SessionMeta, type PersistedMessage } from "../st
 import { exportSession, type ExportFormat } from "../lib/export";
 import { useState, useEffect } from "react";
 import { useOpenTabs, openTab, closeTab, closeOtherTabs, closeAllTabs } from "../stores/tabs";
+import { useCurrentWorkspaceId } from "../stores/workspace";
 import { invoke } from "@tauri-apps/api/core";
 
 export function Sidebar() {
-  const sessions = useSessionsStore((s) => s.sessions);
+  const allSessions = useSessionsStore((s) => s.sessions);
   const currentId = useSessionsStore((s) => s.currentId);
   const setCurrent = useSessionsStore((s) => s.setCurrent);
   const create = useSessionsStore((s) => s.create);
@@ -13,6 +14,11 @@ export function Sidebar() {
   const messages = useSessionsStore((s) => s.messages);
   const setMessages = useSessionsStore((s) => s.setMessages);
   const openTabs = useOpenTabs();
+  const currentWorkspace = useCurrentWorkspaceId();
+  // v1.3：按 workspace 过滤
+  const sessions = allSessions.filter(
+    (sess) => (sess.workspaceId ?? "default") === currentWorkspace,
+  );
 
   const [exportOpen, setExportOpen] = useState<string | null>(null);
   const [tabMenuOpen, setTabMenuOpen] = useState(false);

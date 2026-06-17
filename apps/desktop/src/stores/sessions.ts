@@ -1,12 +1,15 @@
 // 会话持久化 store（基于 tauri-plugin-store）
 import { useSyncExternalStore } from "react";
 import { LazyStore } from "@tauri-apps/plugin-store";
+import { getCurrentWorkspaceId } from "./workspace";
 
 export type SessionMeta = {
   id: string;
   title: string;
   createdAt: number;
   updatedAt: number;
+  /// v1.3：所属 workspace id（默认 "default"）
+  workspaceId?: string;
 };
 
 export type PersistedMessage = {
@@ -156,7 +159,12 @@ async function load(): Promise<{
   const s = getStore();
   if (!s) return { sessions: [], currentId: null, messages: {} };
   try {
-    const sessions = (await s.get<SessionMeta[]>("sessions")) || [];
+    const rawSessions = (await s.get<SessionMeta[]>("sessions")) || [];
+    // v1.3 迁移：老 session 没有 workspaceId 字段 → 标为 "default"
+    const sessions: SessionMeta[] = rawSessions.map((sess) => ({
+      ...sess,
+      workspaceId: sess.workspaceId ?? "default",
+    }));
     const currentId = (await s.get<string | null>("currentId")) || null;
     const messages: Record<string, PersistedMessage[]> = {};
     // v1.1：优先读分片 msg:<id>，没有再 fallback 老的 messages 单 key
@@ -198,6 +206,7 @@ let state: SessionsStore = {
       title: title || `New session ${state.sessions.length + 1}`,
       createdAt: now,
       updatedAt: now,
+      workspaceId: getCurrentWorkspaceId(),
     };
     state = {
       ...state,
@@ -262,6 +271,25 @@ void load().then((loaded) => {
   state = { ...state, ...loaded };
   listeners.forEach((l) => l());
 });
+
+// v1.3：监听 workspace 切换事件
+// 当前实现：所有 workspace 共用同一个 store，session 按 workspaceId 字段过滤
+// 切换 workspace 不需要重新 load，只需让 UI 重新订阅（state 不变）
+// 这里只是占位监听（打日志）— 未来若做多 store 物理隔离时启用
+if (typeof window !== "undefined") {
+  void import("@tauri-apps/api/event").then(({ listen }) => {
+    listen("workspace:changed", (e) => {
+      tracing_warn("workspace changed to", e.payload);
+      // 不重 load；UI 按 workspaceId 过滤即可
+    });
+  });
+}
+
+function tracing_warn(..._args: unknown[]) {
+  // console-only log
+  // eslint-disable-next-line no-console
+  console.debug("[v1.3 workspace]", ..._args);
+}
 
 // v1.1：关闭前立即 flush
 if (typeof window !== "undefined") {
