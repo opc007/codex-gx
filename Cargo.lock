@@ -36,6 +36,7 @@ dependencies = [
  "futures",
  "license",
  "mcp",
+ "memory",
  "patch",
  "provider",
  "reqwest 0.12.28",
@@ -2046,6 +2047,22 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "488016bfae457b036d996092f6cb448677611ce4449e970ceaf42695203f218a"
 dependencies = [
  "autocfg",
+]
+
+[[package]]
+name = "memory"
+version = "0.1.0-alpha"
+dependencies = [
+ "async-trait",
+ "chrono",
+ "futures",
+ "serde",
+ "serde_json",
+ "tempfile",
+ "thiserror 1.0.69",
+ "tokio",
+ "tracing",
+ "uuid",
 ]
 
 [[package]]

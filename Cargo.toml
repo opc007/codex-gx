@@ -9,6 +9,7 @@ members = [
     "crates/sandbox",
     "crates/computer-use",
     "crates/license",
+    "crates/memory",
     "apps/desktop/src-tauri",
 ]
 
@@ -77,6 +78,8 @@ context = { path = "crates/context" }
 mcp = { path = "crates/mcp" }
 sandbox = { path = "crates/sandbox" }
 computer-use = { path = "crates/computer-use" }
+memory = { path = "crates/memory" }
+license = { path = "crates/license" }
 
 [profile.dev]
 opt-level = 0

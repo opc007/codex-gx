@@ -8,6 +8,7 @@ mod agent;
 mod cu_tool;
 mod desktop_cua;
 mod mcp_tool;
+mod skills;
 mod subagent_tool;
 mod tools;
 
@@ -28,6 +29,9 @@ type ProviderCache = Arc<Mutex<Option<Box<dyn Model>>>>;
 
 /// 全局工具注册表 — 直接用 Arc<Mutex<>> 让 AgentRunner 也能 clone
 type SharedToolRegistry = Arc<Mutex<ToolRegistry>>;
+
+/// v0.8：跨会话长期记忆
+type SharedMemory = Arc<Mutex<memory::MemoryManager>>;
 
 /// v0.4：每个 session 一个 cancel handle + approval sender
 #[derive(Default)]
@@ -53,6 +57,22 @@ pub fn run() {
         .manage(ProviderCache::default())
         .manage(SharedToolRegistry::default())
         .manage(SessionControl::default())
+        .setup(|app| {
+            // v0.8：异步初始化 memory manager
+            let app_handle = app.handle().clone();
+            tauri::async_runtime::spawn(async move {
+                match memory::MemoryManager::default_path().await {
+                    Ok(mgr) => {
+                        app_handle.manage(SharedMemory::new(Mutex::new(mgr)));
+                        eprintln!("[memory] 已加载 ~/.agentshell/memory.json");
+                    }
+                    Err(e) => {
+                        eprintln!("[memory] 加载失败: {}", e);
+                    }
+                }
+            });
+            Ok(())
+        })
         .invoke_handler(tauri::generate_handler![
             ping,
             chat,
@@ -72,8 +92,14 @@ pub fn run() {
             list_mcp_servers,
             reload_mcp,
             route_model_cmd, // v0.7
+            remember_memory, // v0.8
+            recall_memory, // v0.8
+            list_memories, // v0.8
+            forget_memory, // v0.8
+            clear_memories, // v0.8
+            list_skills, // v0.8
+            run_skill, // v0.8
         ])
-        .setup(|_app| Ok(()))
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
 }
@@ -151,6 +177,19 @@ async fn agent_run(
 
     // 构造 history
     let mut history: Vec<ChatMessage> = Vec::new();
+
+    // v0.8：注入相关历史记忆
+    if let Some(mgr_state) = app.try_state::<SharedMemory>() {
+        let mgr = mgr_state.inner().lock().await;
+        let memory_context = mgr.recall_context(&req.message, 5).await;
+        if !memory_context.is_empty() {
+            history.push(ChatMessage::system(format!(
+                "你可能相关的历史记忆（仅供参考，不要照搬）：{}",
+                memory_context
+            )));
+        }
+    }
+
     for m in &req.messages {
         history.push(match m.role.as_str() {
             "system" => ChatMessage::system(m.content.clone()),
@@ -629,6 +668,109 @@ fn route_model(message: &str) -> String {
 #[tauri::command]
 async fn route_model_cmd(message: String) -> Result<String, String> {
     Ok(route_model(&message))
+}
+
+// ============================================================
+// v0.8：跨会话长期记忆命令
+// ============================================================
+
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+struct MemoryDto {
+    id: String,
+    content: String,
+    tags: Vec<String>,
+    importance: u8,
+    created_at: String,
+    last_accessed_at: Option<String>,
+    accessed_count: u32,
+    session_id: Option<String>,
+}
+
+impl From<memory::Memory> for MemoryDto {
+    fn from(m: memory::Memory) -> Self {
+        Self {
+            id: m.id,
+            content: m.content,
+            tags: m.tags,
+            importance: m.importance,
+            created_at: m.created_at.to_rfc3339(),
+            last_accessed_at: m.last_accessed_at.map(|d| d.to_rfc3339()),
+            accessed_count: m.accessed_count,
+            session_id: m.session_id,
+        }
+    }
+}
+
+#[tauri::command]
+async fn remember_memory(
+    app: AppHandle,
+    content: String,
+    tags: Option<Vec<String>>,
+    importance: Option<u8>,
+    session_id: Option<String>,
+) -> Result<MemoryDto, String> {
+    let mgr = app
+        .state::<SharedMemory>()
+        .inner()
+        .lock()
+        .await;
+    let mem = mgr
+        .add_with_session(
+            content,
+            tags.unwrap_or_default(),
+            importance.unwrap_or(3),
+            session_id,
+        )
+        .await
+        .map_err(|e| e.to_string())?;
+    Ok(mem.into())
+}
+
+#[tauri::command]
+async fn recall_memory(app: AppHandle, query: String, k: Option<usize>) -> Result<String, String> {
+    let mgr = app.state::<SharedMemory>().inner().lock().await;
+    Ok(mgr.recall_context(&query, k.unwrap_or(5)).await)
+}
+
+#[tauri::command]
+async fn list_memories(app: AppHandle) -> Result<Vec<MemoryDto>, String> {
+    let mgr = app.state::<SharedMemory>().inner().lock().await;
+    let all = mgr.list().await;
+    Ok(all.into_iter().map(MemoryDto::from).collect())
+}
+
+#[tauri::command]
+async fn forget_memory(app: AppHandle, id: String) -> Result<bool, String> {
+    let mgr = app.state::<SharedMemory>().inner().lock().await;
+    mgr.forget(&id).await.map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+async fn clear_memories(app: AppHandle) -> Result<(), String> {
+    let mgr = app.state::<SharedMemory>().inner().lock().await;
+    mgr.clear().await.map_err(|e| e.to_string())
+}
+
+// ============================================================
+// v0.8：Skill 系统命令
+// ============================================================
+
+#[tauri::command]
+async fn list_skills() -> Result<Vec<skills::SkillInfo>, String> {
+    let file = skills::load_skills();
+    Ok(skills::to_command_map(&file)
+        .into_values()
+        .collect())
+}
+
+#[tauri::command]
+async fn run_skill(name: String, arg: String) -> Result<String, String> {
+    let file = skills::load_skills();
+    match skills::find_skill(&file, &name) {
+        Some(s) => skills::execute_skill(s, &arg),
+        None => Err(format!("skill `{}` 未定义。检查 ~/.agentshell/skills.json", name)),
+    }
 }
 
 async fn create_provider(model: &str) -> Result<Box<dyn Model>, String> {

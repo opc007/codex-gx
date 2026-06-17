@@ -130,6 +130,17 @@ M3 / Claude / GPT 会自动调用：
 /plan off - 关闭
 /plan     - 查看当前模式
 
+🧠 v0.8 长期记忆：
+/remember <内容> [#tag]  - 记住一条
+/memories                  - 列出所有
+/recall <查询>             - 检索相关
+/forget <id前8位>          - 遗忘一条
+（自动：每次新会话根据当前消息检索相关记忆注入 system prompt）
+
+🛠️ v0.8 Skill：
+/skills                    - 列出已加载的自定义 skill
+/<name> <参数>             - 执行 ~/.agentshell/skills.json 定义的命令
+
 💡 模型切换：Top bar 下拉
 💡 所有会话和消息自动保存到本地`,
         createdAt: Date.now(),
@@ -234,6 +245,225 @@ M3 / Claude / GPT 会自动调用：
       }
       setText("");
       return;
+    }
+    // v0.8：长期记忆命令
+    if (trimmed.startsWith("/remember ") || trimmed === "/remember") {
+      const content = trimmed.slice(9).trim();
+      if (!content) {
+        appendMessage(sessionId, {
+          id: crypto.randomUUID(),
+          role: "assistant",
+          text: "🧠 用法：`/remember <内容>`\n例如：`/remember 用户偏好 Rust 编程`",
+          createdAt: Date.now(),
+        });
+      } else {
+        try {
+          const tags = content.match(/#[一-龥\w]+/g)?.map((t) => t.slice(1)) ?? [];
+          const mem = await invoke<{ id: string; importance: number }>("remember_memory", {
+            content: content.replace(/#[一-龥\w]+/g, "").trim(),
+            tags,
+            importance: 3,
+            sessionId,
+          });
+          appendMessage(sessionId, {
+            id: crypto.randomUUID(),
+            role: "assistant",
+            text: `🧠 已记住 [#${mem.id.slice(0, 8)}] ${content}${tags.length > 0 ? `\n标签：${tags.join(", ")}` : ""}`,
+            createdAt: Date.now(),
+          });
+        } catch (e) {
+          appendMessage(sessionId, {
+            id: crypto.randomUUID(),
+            role: "assistant",
+            text: `🧠 记住失败：${e}`,
+            createdAt: Date.now(),
+          });
+        }
+      }
+      setText("");
+      return;
+    }
+    if (trimmed === "/memories" || trimmed.startsWith("/memories ")) {
+      try {
+        const all = await invoke<Array<{
+          id: string;
+          content: string;
+          importance: number;
+          tags: string[];
+          accessedCount: number;
+        }>>("list_memories");
+        if (all.length === 0) {
+          appendMessage(sessionId, {
+            id: crypto.randomUUID(),
+            role: "assistant",
+            text: "🧠 还没有任何长期记忆。用 `/remember <内容>` 添加。",
+            createdAt: Date.now(),
+          });
+        } else {
+          let msg = `🧠 长期记忆 (${all.length} 条)：\n\n`;
+          for (const m of all.slice(-20)) {
+            const tags = m.tags.length > 0 ? ` [${m.tags.join(", ")}]` : "";
+            msg += `• [#${m.id.slice(0, 8)}] (重要度 ${m.importance}/5, 访问 ${m.accessedCount})${tags}\n  ${m.content}\n\n`;
+          }
+          appendMessage(sessionId, {
+            id: crypto.randomUUID(),
+            role: "assistant",
+            text: msg,
+            createdAt: Date.now(),
+          });
+        }
+      } catch (e) {
+        appendMessage(sessionId, {
+          id: crypto.randomUUID(),
+          role: "assistant",
+          text: `🧠 列表失败：${e}`,
+          createdAt: Date.now(),
+        });
+      }
+      setText("");
+      return;
+    }
+    if (trimmed.startsWith("/recall ")) {
+      const query = trimmed.slice(8).trim();
+      if (!query) {
+        appendMessage(sessionId, {
+          id: crypto.randomUUID(),
+          role: "assistant",
+          text: "🧠 用法：`/recall <查询>`",
+          createdAt: Date.now(),
+        });
+      } else {
+        try {
+          const result = await invoke<string>("recall_memory", { query, k: 5 });
+          appendMessage(sessionId, {
+            id: crypto.randomUUID(),
+            role: "assistant",
+            text: result || "🧠 没有找到相关记忆。",
+            createdAt: Date.now(),
+          });
+        } catch (e) {
+          appendMessage(sessionId, {
+            id: crypto.randomUUID(),
+            role: "assistant",
+            text: `🧠 检索失败：${e}`,
+            createdAt: Date.now(),
+          });
+        }
+      }
+      setText("");
+      return;
+    }
+    if (trimmed.startsWith("/forget ")) {
+      const id = trimmed.slice(8).trim();
+      if (!id) {
+        appendMessage(sessionId, {
+          id: crypto.randomUUID(),
+          role: "assistant",
+          text: "🧠 用法：`/forget <记忆 id 前 8 位>`",
+          createdAt: Date.now(),
+        });
+      } else {
+        try {
+          const all = await invoke<Array<{ id: string }>>("list_memories");
+          const match = all.find((m) => m.id.startsWith(id));
+          if (!match) {
+            appendMessage(sessionId, {
+              id: crypto.randomUUID(),
+              role: "assistant",
+              text: `🧠 找不到 id 以 "${id}" 开头的记忆。`,
+              createdAt: Date.now(),
+            });
+          } else {
+            await invoke("forget_memory", { id: match.id });
+            appendMessage(sessionId, {
+              id: crypto.randomUUID(),
+              role: "assistant",
+              text: `🧠 已遗忘 [${match.id.slice(0, 8)}]`,
+              createdAt: Date.now(),
+            });
+          }
+        } catch (e) {
+          appendMessage(sessionId, {
+            id: crypto.randomUUID(),
+            role: "assistant",
+            text: `🧠 遗忘失败：${e}`,
+            createdAt: Date.now(),
+          });
+        }
+      }
+      setText("");
+      return;
+    }
+    if (trimmed === "/skills" || trimmed.startsWith("/skills ")) {
+      try {
+        const list = await invoke<Array<{ name: string; description: string }>>("list_skills");
+        if (list.length === 0) {
+          appendMessage(sessionId, {
+            id: crypto.randomUUID(),
+            role: "assistant",
+            text: `🛠️ 还没有自定义 skill。在 ~/.agentshell/skills.json 加：
+
+示例:
+{
+  "skills": [
+    {"name": "commit", "description": "Git 提交", "shell": "git add -A && git commit -m \"$ARG\""}
+  ]
+}
+
+调用: /commit <消息>`,
+            createdAt: Date.now(),
+          });
+        } else {
+          let msg = `已加载 ${list.length} 个 skill：\n\n`;
+          for (const s of list) {
+            msg += `- /${s.name}: ${s.description}\n`;
+          }
+          msg += `\n调用方式: /<name> <参数>`;
+          appendMessage(sessionId, {
+            id: crypto.randomUUID(),
+            role: "assistant",
+            text: msg,
+            createdAt: Date.now(),
+          });
+        }
+      } catch (e) {
+        appendMessage(sessionId, {
+          id: crypto.randomUUID(),
+          role: "assistant",
+          text: `🛠️ 加载失败：${e}`,
+          createdAt: Date.now(),
+        });
+      }
+      setText("");
+      return;
+    }
+    // v0.8：动态 skill 调用（先看 list_skills，匹配则执行）
+    if (trimmed.startsWith("/") && !trimmed.startsWith("//")) {
+      const m = trimmed.match(/^\/(\S+)\s*(.*)$/);
+      if (m) {
+        const name = m[1];
+        const arg = m[2];
+        // 检查是否已知命令（避免误调用）
+        const known = new Set([
+          "help", "status", "approval", "plan", "route", "remember", "memories", "recall", "forget", "skills",
+          "usage", "ide", "diff", "review",
+        ]);
+        if (!known.has(name)) {
+          try {
+            const r = await invoke<string>("run_skill", { name, arg });
+            appendMessage(sessionId, {
+              id: crypto.randomUUID(),
+              role: "assistant",
+              text: r,
+              createdAt: Date.now(),
+            });
+            setText("");
+            return;
+          } catch (e) {
+            // 不是 skill，继续常规处理
+          }
+        }
+      }
     }
     if (trimmed === "/status") {
       const statusMsg: PersistedMessage = {
