@@ -4,6 +4,15 @@ import { listen } from "@tauri-apps/api/event";
 import type { ThemeMode } from "../stores/theme";
 import { useLocaleSwitcher, SUPPORTED_LOCALES, LOCALE_LABELS } from "../i18n";
 import type { Locale } from "../i18n";
+import { open as openUrl } from "@tauri-apps/plugin-shell";
+
+type UpdateInfo = {
+  currentVersion: string;
+  latestVersion: string | null;
+  updateAvailable: boolean;
+  releaseUrl: string | null;
+  releaseNotes: string | null;
+};
 
 type LicenseStatus = {
   active: boolean;
@@ -21,6 +30,8 @@ type Props = {
 export function TopBar({ themeMode, setThemeMode, onLicenseClick }: Props) {
   const [busy, setBusy] = useState(false);
   const [license, setLicense] = useState<LicenseStatus | null>(null);
+  const [updateInfo, setUpdateInfo] = useState<UpdateInfo | null>(null);
+  const [updateBusy, setUpdateBusy] = useState(false);
   const { locale, setLocale } = useLocaleSwitcher();
 
   const refreshLicense = async () => {
@@ -68,6 +79,24 @@ export function TopBar({ themeMode, setThemeMode, onLicenseClick }: Props) {
       <div className="topbar-right">
         <button
           className="topbar-btn"
+          onClick={async () => {
+            setUpdateBusy(true);
+            try {
+              const info = await invoke<UpdateInfo>("check_update");
+              setUpdateInfo(info);
+            } catch (e) {
+              alert(`检查更新失败：${e}`);
+            } finally {
+              setUpdateBusy(false);
+            }
+          }}
+          disabled={updateBusy}
+          title="检查更新"
+        >
+          {updateBusy ? "..." : updateInfo?.updateAvailable ? "🆕" : "🔄"}
+        </button>
+        <button
+          className="topbar-btn"
           onClick={onLicenseClick}
           title="License"
         >
@@ -93,6 +122,47 @@ export function TopBar({ themeMode, setThemeMode, onLicenseClick }: Props) {
           ))}
         </select>
       </div>
+      {updateInfo && (
+        <div className="update-dialog-overlay" onClick={() => setUpdateInfo(null)}>
+          <div className="update-dialog" onClick={(e) => e.stopPropagation()}>
+            <div className="update-dialog-header">
+              <h3>{updateInfo.updateAvailable ? "🆕 有新版本可用" : "✓ 已是最新"}</h3>
+              <button className="update-close" onClick={() => setUpdateInfo(null)}>×</button>
+            </div>
+            <div className="update-dialog-body">
+              <p>当前版本: <code>{updateInfo.currentVersion}</code></p>
+              {updateInfo.latestVersion && (
+                <p>最新版本: <code>{updateInfo.latestVersion}</code></p>
+              )}
+              {updateInfo.releaseNotes && (
+                <details>
+                  <summary>更新说明</summary>
+                  <pre>{updateInfo.releaseNotes.slice(0, 2000)}</pre>
+                </details>
+              )}
+            </div>
+            <div className="update-dialog-footer">
+              <button className="update-cancel" onClick={() => setUpdateInfo(null)}>关闭</button>
+              {updateInfo.updateAvailable && updateInfo.releaseUrl && (
+                <button
+                  className="update-go"
+                  onClick={async () => {
+                    if (updateInfo.releaseUrl) {
+                      try {
+                        await openUrl(updateInfo.releaseUrl);
+                      } catch (e) {
+                        alert(`打开失败：${e}`);
+                      }
+                    }
+                  }}
+                >
+                  前往下载
+                </button>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
     </header>
   );
 }

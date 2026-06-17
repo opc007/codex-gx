@@ -184,6 +184,125 @@ kbd {
 .topbar-right { display: flex; gap: 8px; }
 .topbar-btn { font-size: 13px; padding: 4px 10px; }
 
+/* v1.0：会话导出 */
+.session-actions {
+  display: inline-flex;
+  gap: 2px;
+  margin-left: auto;
+}
+.session-export {
+  border: none;
+  background: transparent;
+  color: var(--text-muted);
+  cursor: pointer;
+  padding: 0 4px;
+  font-size: 13px;
+  border-radius: 3px;
+}
+.session-export:hover { background: var(--bg-hover); color: var(--accent); }
+.export-menu {
+  position: absolute;
+  right: 8px;
+  top: 28px;
+  background: var(--bg-elevated);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.15);
+  z-index: 10;
+  display: flex;
+  flex-direction: column;
+  min-width: 130px;
+}
+.export-menu button {
+  border: none;
+  background: transparent;
+  text-align: left;
+  padding: 6px 10px;
+  cursor: pointer;
+  color: var(--text);
+  font-size: 13px;
+}
+.export-menu button:hover { background: var(--bg-hover); }
+.session-item { position: relative; }
+
+/* v1.0：更新弹窗 */
+.update-dialog-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0,0,0,0.45);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 9999;
+}
+.update-dialog {
+  background: var(--bg-elevated);
+  color: var(--text);
+  border-radius: 10px;
+  box-shadow: 0 8px 32px rgba(0,0,0,0.3);
+  width: min(520px, 90vw);
+  max-height: 80vh;
+  display: flex;
+  flex-direction: column;
+}
+.update-dialog-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 12px 16px;
+  border-bottom: 1px solid var(--border);
+}
+.update-dialog-header h3 { margin: 0; font-size: 15px; }
+.update-close {
+  border: none;
+  background: transparent;
+  font-size: 22px;
+  cursor: pointer;
+  color: var(--text-muted);
+  line-height: 1;
+}
+.update-dialog-body { padding: 14px 16px; overflow-y: auto; }
+.update-dialog-body p { margin: 4px 0; font-size: 13px; }
+.update-dialog-body code {
+  background: var(--bg-hover);
+  padding: 1px 6px;
+  border-radius: 3px;
+  font-size: 12px;
+}
+.update-dialog-body details { margin-top: 10px; }
+.update-dialog-body details pre {
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  padding: 8px;
+  font-size: 11px;
+  max-height: 240px;
+  overflow: auto;
+  white-space: pre-wrap;
+}
+.update-dialog-footer {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  padding: 10px 16px;
+  border-top: 1px solid var(--border);
+}
+.update-cancel, .update-go {
+  border: 1px solid var(--border);
+  background: var(--bg);
+  color: var(--text);
+  padding: 5px 14px;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 13px;
+}
+.update-go {
+  background: var(--accent);
+  color: white;
+  border-color: var(--accent);
+}
+.update-go:hover { filter: brightness(0.92); }
+
 /* v0.9：附件 */
 .composer-attach { cursor: pointer; padding: 4px 8px; border-radius: 4px; }
 .composer-attach:hover { background: var(--bg-hover); }

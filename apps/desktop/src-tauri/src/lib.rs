@@ -99,6 +99,8 @@ pub fn run() {
             clear_memories, // v0.8
             list_skills, // v0.8
             run_skill, // v0.8
+            compress_session, // v1.0
+            check_update, // v1.0
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
@@ -400,7 +402,7 @@ fn guess_mime_from_path(path: &str) -> String {
     }
 }
 
-#[derive(Deserialize)]
+#[derive(Deserialize, Serialize, Clone)]
 #[serde(rename_all = "camelCase")]
 struct AgentHistoryMessage {
     role: String,
@@ -826,6 +828,182 @@ async fn run_skill(name: String, arg: String) -> Result<String, String> {
         Some(s) => skills::execute_skill(s, &arg),
         None => Err(format!("skill `{}` 未定义。检查 ~/.agentshell/skills.json", name)),
     }
+}
+
+// ============================================================
+// v1.0：长会话压缩
+// ============================================================
+
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct CompressPayload {
+    model: String,
+    /// 旧消息（user/assistant 交替）
+    messages: Vec<AgentHistoryMessage>,
+    /// 保留最近 K 条不压缩（默认 6）
+    #[serde(default = "default_keep_recent")]
+    keep_recent: usize,
+}
+
+fn default_keep_recent() -> usize { 6 }
+
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+struct CompressResult {
+    summary: String,
+    original_count: usize,
+    summary_count: usize,
+    /// 压缩后的消息历史（只剩 summary + recent）
+    new_messages: Vec<AgentHistoryMessage>,
+}
+
+#[tauri::command]
+async fn compress_session(req: CompressPayload) -> Result<CompressResult, String> {
+    let n = req.messages.len();
+    if n <= req.keep_recent + 2 {
+        return Err(format!(
+            "消息数 ({}) 太少，无需压缩（需要 > {})",
+            n,
+            req.keep_recent + 2
+        ));
+    }
+
+    // 构造 prompt
+    let mut transcript = String::new();
+    for m in &req.messages[..n - req.keep_recent] {
+        transcript.push_str(&format!("[{}] {}\n", m.role, m.content));
+    }
+    let summary_prompt = format!(
+        "请用 150 字以内总结以下对话的关键信息（用户目标、决定、待办、关键事实）。保留命令/路径/名称/人名等具体信息。\n\n对话：\n{}\n\n总结：",
+        transcript
+    );
+
+    // 用指定 model 调用
+    let provider = create_provider(&req.model).await?;
+    let chat_req = ChatRequest {
+        model: req.model.clone(),
+        messages: vec![ChatMessage::user(summary_prompt)],
+        tools: Vec::new(),
+        max_tokens: Some(400),
+        temperature: Some(0.3),
+        top_p: None,
+        reasoning_effort: None,
+        reasoning_split: None,
+        stop: Vec::new(),
+        stream: false,
+        user: None,
+    };
+    let resp = provider.chat(chat_req).await.map_err(|e| e.to_string())?;
+    let summary = resp
+        .choices
+        .first()
+        .map(|c| c.message.content.trim().to_string())
+        .unwrap_or_default();
+    if summary.is_empty() {
+        return Err("LLM 总结返回空".into());
+    }
+
+    // 构造新 history：1 条 summary 消息 + 最近 K 条
+    let mut new_messages = Vec::new();
+    new_messages.push(AgentHistoryMessage {
+        role: "system".into(),
+        content: format!("[之前的对话摘要] {}", summary),
+        tool_call_id: None,
+    });
+    for m in &req.messages[n - req.keep_recent..] {
+        new_messages.push(m.clone());
+    }
+
+    Ok(CompressResult {
+        summary,
+        original_count: n,
+        summary_count: new_messages.len(),
+        new_messages,
+    })
+}
+
+// ============================================================
+// v1.0：Auto-update 检查
+// ============================================================
+
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+struct UpdateInfo {
+    current_version: String,
+    latest_version: Option<String>,
+    update_available: bool,
+    release_url: Option<String>,
+    release_notes: Option<String>,
+}
+
+#[tauri::command]
+async fn check_update() -> Result<UpdateInfo, String> {
+    let current = env!("CARGO_PKG_VERSION").to_string();
+    // v1.0 简化：调 GitHub Releases API 检查最新 tag
+    let url = "https://api.github.com/repos/opc007/codex-gx/releases/latest";
+    let client = reqwest::Client::builder()
+        .user_agent("AgentShell")
+        .build()
+        .map_err(|e| e.to_string())?;
+    let resp = client.get(url).send().await.map_err(|e| e.to_string())?;
+    if !resp.status().is_success() {
+        return Ok(UpdateInfo {
+            current_version: current,
+            latest_version: None,
+            update_available: false,
+            release_url: None,
+            release_notes: None,
+        });
+    }
+    let body: serde_json::Value = resp.json().await.map_err(|e| e.to_string())?;
+    let latest = body
+        .get("tag_name")
+        .and_then(|v| v.as_str())
+        .map(|s| s.trim_start_matches('v').to_string());
+    let release_url = body
+        .get("html_url")
+        .and_then(|v| v.as_str())
+        .map(String::from);
+    let release_notes = body
+        .get("body")
+        .and_then(|v| v.as_str())
+        .map(String::from);
+
+    // 简单版本比较（vX.Y.Z）
+    let update_available = match (&latest, &current) {
+        (Some(l), c) => l != c && version_greater(l, c),
+        _ => false,
+    };
+
+    Ok(UpdateInfo {
+        current_version: current,
+        latest_version: latest,
+        update_available,
+        release_url,
+        release_notes,
+    })
+}
+
+/// 比较 vX.Y.Z 字符串
+fn version_greater(a: &str, b: &str) -> bool {
+    let parse = |s: &str| -> Vec<u32> {
+        s.split('.')
+            .filter_map(|p| p.split('-').next().unwrap_or("").parse::<u32>().ok())
+            .collect()
+    };
+    let av = parse(a);
+    let bv = parse(b);
+    for i in 0..av.len().max(bv.len()) {
+        let x = av.get(i).copied().unwrap_or(0);
+        let y = bv.get(i).copied().unwrap_or(0);
+        if x > y {
+            return true;
+        }
+        if x < y {
+            return false;
+        }
+    }
+    false
 }
 
 async fn create_provider(model: &str) -> Result<Box<dyn Model>, String> {

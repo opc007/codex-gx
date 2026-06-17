@@ -90,6 +90,66 @@ export function Composer({ sessionId }: Props) {
       setText("");
       return;
     }
+    // v1.0：长会话压缩
+    if (trimmed === "/compress" || trimmed.startsWith("/compress ")) {
+      const arg = trimmed.slice(9).trim();
+      const keepRecent = arg ? parseInt(arg, 10) || 6 : 6;
+      const all = (getSessionsState().messages[sessionId] ?? [])
+        .filter((m) => m.role === "user" || m.role === "assistant")
+        .filter((m) => m.text);
+      if (all.length <= keepRecent + 2) {
+        appendMessage(sessionId, {
+          id: crypto.randomUUID(),
+          role: "assistant",
+          text: `🗜 消息数 (${all.length}) 太少，无需压缩（需要 > ${keepRecent + 2}）。\n\n语法：/compress [保留最近 N 条]`,
+          createdAt: Date.now(),
+        });
+        setText("");
+        return;
+      }
+      try {
+        const result = await invoke<{
+          summary: string;
+          originalCount: number;
+          summaryCount: number;
+          newMessages: Array<{ role: string; content: string }>;
+        }>("compress_session", {
+          req: {
+            model: model === "auto" ? "MiniMax-M3" : model,
+            messages: all.map((m) => ({ role: m.role, content: m.text })),
+            keepRecent,
+          },
+        });
+        // 用 summary + 最近 N 条替换当前 session 消息
+        // 但 history 还包含 [之前摘要] system + keepRecent user/assistant
+        // 我们重建：从 store 拿全 messages，把 keepRecent 之前的都丢掉，前缀加一条 [summary] user msg
+        const fullList = getSessionsState().messages[sessionId] ?? [];
+        const cutoff = fullList.length - keepRecent;
+        const kept = fullList.slice(cutoff);
+        const summaryMsg: PersistedMessage = {
+          id: crypto.randomUUID(),
+          role: "system",
+          text: `🗜 [之前对话摘要]\n${result.summary}\n\n---\n\n（以下 ${keepRecent} 条为最近对话）`,
+          createdAt: Date.now(),
+        };
+        setMessages(sessionId, [summaryMsg, ...kept]);
+        appendMessage(sessionId, {
+          id: crypto.randomUUID(),
+          role: "assistant",
+          text: `🗜 压缩完成：${result.originalCount} → ${kept.length + 1} 条\n\n摘要：\n${result.summary}`,
+          createdAt: Date.now(),
+        });
+      } catch (e) {
+        appendMessage(sessionId, {
+          id: crypto.randomUUID(),
+          role: "assistant",
+          text: `🗜 压缩失败：${e}`,
+          createdAt: Date.now(),
+        });
+      }
+      setText("");
+      return;
+    }
     // v0.9：i18n 切换
     if (trimmed.startsWith("/lang ") || trimmed === "/lang") {
       const arg = trimmed.slice(5).trim();
@@ -167,6 +227,9 @@ M3 / Claude / GPT 会自动调用：
 🛠️ v0.8 Skill：
 /skills                    - 列出已加载的自定义 skill
 /<name> <参数>             - 执行 ~/.agentshell/skills.json 定义的命令
+
+🗜 v1.0 长会话压缩：
+/compress [保留最近N条]    - 用 LLM 摘要压缩当前会话（默认保留 6 条）
 
 💡 模型切换：Top bar 下拉
 💡 所有会话和消息自动保存到本地`,

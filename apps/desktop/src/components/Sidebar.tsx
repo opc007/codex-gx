@@ -1,4 +1,6 @@
-import { useSessionsStore } from "../stores/sessions";
+import { useSessionsStore, type SessionMeta, type PersistedMessage } from "../stores/sessions";
+import { exportSession, type ExportFormat } from "../lib/export";
+import { useState } from "react";
 
 export function Sidebar() {
   const sessions = useSessionsStore((s) => s.sessions);
@@ -6,6 +8,23 @@ export function Sidebar() {
   const setCurrent = useSessionsStore((s) => s.setCurrent);
   const create = useSessionsStore((s) => s.create);
   const remove = useSessionsStore((s) => s.remove);
+  const messages = useSessionsStore((s) => s.messages);
+
+  const [exportOpen, setExportOpen] = useState<string | null>(null);
+
+  const doExport = async (s: SessionMeta, fmt: ExportFormat) => {
+    const msgs: PersistedMessage[] = messages[s.id] ?? [];
+    try {
+      const path = await exportSession(s, msgs, fmt);
+      setExportOpen(null);
+      alert(`已导出到：${path}`);
+    } catch (e: any) {
+      if (!String(e).includes("已取消")) {
+        alert(`导出失败：${e}`);
+      }
+      setExportOpen(null);
+    }
+  };
 
   return (
     <aside className="sidebar">
@@ -30,16 +49,35 @@ export function Sidebar() {
             onClick={() => setCurrent(s.id)}
           >
             <span className="session-title">{s.title}</span>
-            <button
-              className="session-del"
-              onClick={(e) => {
-                e.stopPropagation();
-                if (confirm(`删除 "${s.title}"？`)) remove(s.id);
-              }}
-              title="删除"
-            >
-              ×
-            </button>
+            <div className="session-actions">
+              <button
+                className="session-export"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setExportOpen(exportOpen === s.id ? null : s.id);
+                }}
+                title="导出"
+              >
+                ⬇
+              </button>
+              <button
+                className="session-del"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  if (confirm(`删除 "${s.title}"？`)) remove(s.id);
+                }}
+                title="删除"
+              >
+                ×
+              </button>
+            </div>
+            {exportOpen === s.id && (
+              <div className="export-menu" onClick={(e) => e.stopPropagation()}>
+                <button onClick={() => doExport(s, "markdown")}>📝 Markdown</button>
+                <button onClick={() => doExport(s, "html")}>🌐 HTML</button>
+                <button onClick={() => doExport(s, "json")}>📦 JSON</button>
+              </div>
+            )}
           </li>
         ))}
       </ul>
