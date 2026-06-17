@@ -251,6 +251,53 @@ export function Composer({ sessionId }: Props) {
         return;
       }
     }
+    // v1.5：TTS 设置
+    if (trimmed === "/tts") {
+      window.dispatchEvent(new CustomEvent("open-tts-panel"));
+      appendMessage(sessionId, {
+        id: crypto.randomUUID(),
+        role: "assistant",
+        text: "🔊 已触发：打开 TTS 面板（请点 TopBar 🔊）",
+        createdAt: Date.now(),
+      });
+      return;
+    }
+
+    // v1.5：朗读
+    if (trimmed.startsWith("/speak ") || trimmed.startsWith("/say ")) {
+      const args = trimmed.startsWith("/speak ")
+        ? trimmed.slice(7).trim()
+        : trimmed.slice(5).trim();
+      try {
+        const cfg = await invoke<{ enabled: boolean }>("tts_get_config");
+        if (!cfg.enabled) {
+          appendMessage(sessionId, {
+            id: crypto.randomUUID(),
+            role: "assistant",
+            text: "⚠️ TTS 未启用，先用 /tts 打开设置（TopBar 🔊）",
+            createdAt: Date.now(),
+          });
+          return;
+        }
+        await invoke("tts_speak", { text: args || "（空）" });
+        appendMessage(sessionId, {
+          id: crypto.randomUUID(),
+          role: "assistant",
+          text: `▶ 朗读中：${args.slice(0, 40)}${args.length > 40 ? "…" : ""}`,
+          createdAt: Date.now(),
+        });
+      } catch (e) {
+        appendMessage(sessionId, {
+          id: crypto.randomUUID(),
+          role: "assistant",
+          text: `❌ ${e}`,
+          createdAt: Date.now(),
+        });
+      }
+      setText("");
+      return;
+    }
+
     // v1.4：本地 LLM 探测
     if (trimmed.startsWith("/local ") || trimmed === "/local") {
       const args = trimmed.slice(6).trim();
@@ -723,6 +770,8 @@ M3 / Claude / GPT 会自动调用：
 
 🏠 v1.4 本地 LLM：
 - /local [ollama_url]   - 探测本机 Ollama 模型
+- /tts                  - 打开 TTS 语音输出设置
+- /speak <text>         - 朗读一段文本（需先在 TopBar 🔊 启用 TTS）
 - Top bar 🏠 打开模型管理 UI
 - 模型 ID 格式：ollama:<name> / llamacpp:<name>
 - 自动 discover Ollama (http://127.0.0.1:11434) 和 llama.cpp server

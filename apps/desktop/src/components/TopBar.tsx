@@ -16,6 +16,7 @@ import { QueuePanel } from "./QueuePanel";
 import { DevicesPanel } from "./DevicesPanel";
 import { LearningPanel } from "./LearningPanel";
 import { SkillsLibraryDialog } from "./SkillsLibraryDialog";
+import { TtsPanel } from "./TtsPanel";
 import {
   useCurrentWorkspaceId,
   useWorkspaceList,
@@ -68,6 +69,7 @@ export function TopBar({ themeMode, setThemeMode, onLicenseClick }: Props) {
   const [devicesOpen, setDevicesOpen] = useState(false);
   const [learningOpen, setLearningOpen] = useState(false);
   const [skillsOpen, setSkillsOpen] = useState(false);
+  const [ttsOpen, setTtsOpen] = useState(false);
   const { locale, setLocale } = useLocaleSwitcher();
 
   const refreshLicense = async () => {
@@ -216,6 +218,13 @@ export function TopBar({ themeMode, setThemeMode, onLicenseClick }: Props) {
         >
           📚
         </button>
+        <button
+          className="topbar-btn"
+          onClick={() => setTtsOpen(true)}
+          title="语音输出 TTS (v1.5)"
+        >
+          🔊
+        </button>
         <UserMenu
           open={userMenuOpen}
           onToggle={() => setUserMenuOpen(!userMenuOpen)}
@@ -335,6 +344,9 @@ export function TopBar({ themeMode, setThemeMode, onLicenseClick }: Props) {
 
       {/* v1.5: Skills Library 弹窗 */}
       {skillsOpen && <SkillsLibraryDialog onClose={() => setSkillsOpen(false)} />}
+
+      {/* v1.5: TTS 弹窗 */}
+      {ttsOpen && <TtsPanel onClose={() => setTtsOpen(false)} />}
     </header>
   );
 }

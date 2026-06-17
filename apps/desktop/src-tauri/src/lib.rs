@@ -9,6 +9,7 @@ mod cu_tool;
 mod desktop_cua;
 mod mcp_tool;
 mod skills;
+mod tts;
 mod subagent_tool;
 mod tools;
 mod voice_tauri;
@@ -174,6 +175,11 @@ pub fn run() {
             skill_remove, // v1.5
             skill_reset_builtin, // v1.5
             skill_chain, // v1.5
+            tts_detect, // v1.5
+            tts_get_config, // v1.5
+            tts_save_config, // v1.5
+            tts_speak, // v1.5
+            tts_speak_with, // v1.5
             compress_session, // v1.0
             check_update, // v1.0
             voice_tauri::voice_check, // v1.2
@@ -1015,6 +1021,44 @@ async fn skill_reset_builtin() -> Result<(), String> {
 async fn skill_chain(names: Vec<String>, arg: String) -> Result<Vec<(String, Result<String, String>)>, String> {
     let file = skills::load_skills();
     Ok(skills::chain_skills(&file, &names, &arg))
+}
+
+// =============================================================================
+// v1.5 TTS 命令
+// =============================================================================
+
+#[tauri::command]
+async fn tts_detect() -> Result<tts::TtsStatus, String> {
+    Ok(tts::detect().await)
+}
+
+#[tauri::command]
+async fn tts_get_config() -> Result<tts::TtsConfig, String> {
+    Ok(tts::TtsConfig::load().await)
+}
+
+#[tauri::command]
+async fn tts_save_config(config: tts::TtsConfig) -> Result<(), String> {
+    config.save().await
+}
+
+#[tauri::command]
+async fn tts_speak(text: String) -> Result<(), String> {
+    let cfg = tts::TtsConfig::load().await;
+    if !cfg.enabled {
+        return Err("TTS 未启用，请先在设置里开启".to_string());
+    }
+    tts::speak(text, cfg);
+    Ok(())
+}
+
+#[tauri::command]
+async fn tts_speak_with(text: String, config: tts::TtsConfig) -> Result<(), String> {
+    if !config.enabled {
+        return Err("TTS 未启用".to_string());
+    }
+    tts::speak(text, config);
+    Ok(())
 }
 
 // ============================================================

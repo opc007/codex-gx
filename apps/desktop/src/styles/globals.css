@@ -541,6 +541,22 @@ kbd {
 .market-item { border: 1px solid var(--border); border-radius: 6px; padding: 10px; background: var(--bg-secondary); }
 .market-meta { display: flex; align-items: center; gap: 8px; font-size: 11px; color: var(--text-muted); margin-top: 6px; padding-top: 6px; border-top: 1px solid var(--border); }
 
+/* v1.5: tts */
+.tts-status { padding: 8px 12px; background: var(--bg-secondary); border-radius: 6px; margin-bottom: 12px; font-size: 13px; }
+.tts-form { display: flex; flex-direction: column; gap: 10px; margin-bottom: 12px; }
+.tts-row { display: flex; align-items: center; gap: 12px; font-size: 13px; }
+.tts-row > span:first-child { min-width: 140px; color: var(--text-muted); }
+.tts-row input[type="range"] { flex: 1; }
+.tts-row select { flex: 1; max-width: 240px; }
+.tts-test { padding: 12px; background: var(--bg-secondary); border-radius: 6px; }
+.tts-test h4 { margin: 0 0 6px 0; font-size: 13px; }
+.tts-test textarea { width: 100%; font-size: 12px; }
+.tts-hint { margin-top: 6px; font-size: 12px; color: var(--text-muted); }
+
+.msg-speak { background: none; border: none; cursor: pointer; padding: 2px 6px; font-size: 12px; opacity: 0.6; }
+.msg-speak:hover { opacity: 1; }
+.msg-speak:disabled { opacity: 0.3; cursor: not-allowed; }
+
 /* v1.1：标签栏 */
 .tab-bar {
   display: flex;

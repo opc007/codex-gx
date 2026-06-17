@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { invoke } from "@tauri-apps/api/core";
 import type { PersistedMessage } from "../stores/sessions";
 import ReplayDialog, { type ToolCallRecord } from "./ReplayDialog";
 
@@ -9,6 +10,20 @@ type Props = {
 export function MessageBubble({ msg }: Props) {
   // v0.6：tool call 回放
   const [replayTarget, setReplayTarget] = useState<ToolCallRecord | null>(null);
+  // v1.5：TTS 朗读
+  const [speaking, setSpeaking] = useState(false);
+
+  const handleSpeak = async () => {
+    if (speaking) return;
+    setSpeaking(true);
+    try {
+      await invoke("tts_speak", { text: msg.text });
+    } catch (e) {
+      console.warn("[tts] speak failed", e);
+    } finally {
+      setTimeout(() => setSpeaking(false), 2000);
+    }
+  };
 
   return (
     <div className={`bubble bubble-${msg.role}`}>
@@ -19,6 +34,16 @@ export function MessageBubble({ msg }: Props) {
         <span className="bubble-time">
           {new Date(msg.createdAt).toLocaleTimeString()}
         </span>
+        {msg.role === "assistant" && msg.text && !msg.streaming && (
+          <button
+            className="msg-speak"
+            onClick={handleSpeak}
+            disabled={speaking}
+            title="朗读（v1.5 TTS）"
+          >
+            {speaking ? "🔊…" : "🔊"}
+          </button>
+        )}
         {msg.streaming && <span className="bubble-streaming">● 正在输入...</span>}
         {(msg.inputTokens || msg.outputTokens) && (
           <span className="bubble-tokens">
