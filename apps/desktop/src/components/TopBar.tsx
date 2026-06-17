@@ -10,6 +10,7 @@ import { ThemeStudioDialog } from "./ThemeStudioDialog";
 import { RoutingEditorDialog } from "./RoutingEditorDialog";
 import { BugReportDialog } from "./BugReportDialog";
 import { TeamPanel } from "./TeamPanel";
+import { LocalModelDialog } from "./LocalModelDialog";
 import {
   useCurrentWorkspaceId,
   useWorkspaceList,
@@ -56,6 +57,7 @@ export function TopBar({ themeMode, setThemeMode, onLicenseClick }: Props) {
   const [bugOpen, setBugOpen] = useState(false);
   const [teamOpen, setTeamOpen] = useState(false);
   const [userMenuOpen, setUserMenuOpen] = useState(false);
+  const [localOpen, setLocalOpen] = useState(false);
   const { locale, setLocale } = useLocaleSwitcher();
 
   const refreshLicense = async () => {
@@ -162,6 +164,13 @@ export function TopBar({ themeMode, setThemeMode, onLicenseClick }: Props) {
         >
           👥
         </button>
+        <button
+          className="topbar-btn"
+          onClick={() => setLocalOpen(true)}
+          title="本地 LLM (v1.4)"
+        >
+          🏠
+        </button>
         <UserMenu
           open={userMenuOpen}
           onToggle={() => setUserMenuOpen(!userMenuOpen)}
@@ -253,6 +262,19 @@ export function TopBar({ themeMode, setThemeMode, onLicenseClick }: Props) {
 
       {/* v1.3: Team Panel 弹窗 */}
       {teamOpen && <TeamPanel onClose={() => setTeamOpen(false)} />}
+
+      {/* v1.4: Local Model 弹窗 */}
+      {localOpen && (
+        <LocalModelDialog
+          onClose={() => setLocalOpen(false)}
+          onUseModel={(id) => {
+            navigator.clipboard.writeText(id).catch(() => {});
+            alert(
+              `模型 ID: ${id}\n\n已复制到剪贴板。\n\n在 Top bar 模型下拉 / 路由策略里用此 ID。`,
+            );
+          }}
+        />
+      )}
     </header>
   );
 }

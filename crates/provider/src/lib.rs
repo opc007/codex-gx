@@ -17,6 +17,7 @@ pub mod openai_compat;
 pub mod minimax;
 pub mod anthropic;
 pub mod deepseek;
+pub mod local;
 pub mod registry;
 
 pub use error::{ProviderError, Result};
@@ -27,4 +28,8 @@ pub use openai_compat::OpenAiCompatProvider;
 pub use minimax::MinimaxProvider;
 pub use anthropic::AnthropicProvider;
 pub use deepseek::DeepSeekProvider;
+pub use local::{
+    discover_all, llama_cpp_info, LlamaCppEntry, LlamaCppProvider, LocalDiscovery, ollama_info,
+    OllamaModelEntry, OllamaProvider,
+};
 pub use registry::ProviderRegistry;

@@ -141,6 +141,8 @@ pub enum WireApi {
     Messages,
     /// OpenAI Responses
     Responses,
+    /// v1.4：Ollama /api/chat（NDJSON）或 llama.cpp OpenAI 兼容
+    Ollama,
 }
 
 /// Provider 共享注册表（多模型共存）

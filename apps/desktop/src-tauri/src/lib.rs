@@ -18,6 +18,7 @@ mod workspace_tauri;
 mod routing;
 mod routing_tauri;
 mod bugreport_tauri;
+mod local_tauri;
 
 use agent_core::tool::ToolRegistry;
 use serde::{Deserialize, Serialize};
@@ -28,7 +29,7 @@ use tauri::{AppHandle, Emitter, Manager};
 use tokio::sync::Mutex;
 use provider::{
     request::ToolDefinition, AnthropicProvider, ChatMessage, ChatRequest, DeepSeekProvider,
-    MinimaxProvider, Model,
+    MinimaxProvider, Model, OllamaProvider, LlamaCppProvider, ollama_info, llama_cpp_info,
 };
 
 /// 全局 provider 缓存（lazy，按 model id）
@@ -171,6 +172,9 @@ pub fn run() {
             bugreport_tauri::bug_report_list, // v1.3
             bugreport_tauri::bug_report_clear, // v1.3
             bugreport_tauri::bug_report_build, // v1.3
+            local_tauri::local_discover, // v1.4
+            local_tauri::local_list_models, // v1.4
+            local_tauri::local_ping, // v1.4
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
@@ -1120,6 +1124,20 @@ async fn create_provider(model: &str) -> Result<Box<dyn Model>, String> {
                 "https://api.openai.com/v1",
                 key,
             )))
+        }
+        m if m.starts_with("ollama:") => {
+            // v1.4：本地 Ollama
+            let name = m.trim_start_matches("ollama:").to_string();
+            let base_url = std::env::var("OLLAMA_BASE_URL")
+                .unwrap_or_else(|_| "http://127.0.0.1:11434".to_string());
+            Ok(Box::new(OllamaProvider::new(ollama_info(&name), base_url)))
+        }
+        m if m.starts_with("llamacpp:") => {
+            // v1.4：本地 llama.cpp server（OpenAI 兼容）
+            let name = m.trim_start_matches("llamacpp:").to_string();
+            let base_url = std::env::var("LLAMACPP_BASE_URL")
+                .unwrap_or_else(|_| "http://127.0.0.1:8080".to_string());
+            Ok(Box::new(LlamaCppProvider::new(llama_cpp_info(&name), base_url)))
         }
         other => Err(format!("未知模型: {}", other)),
     }

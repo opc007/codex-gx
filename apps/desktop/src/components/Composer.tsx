@@ -197,6 +197,50 @@ export function Composer({ sessionId }: Props) {
       setText("");
       return;
     }
+    // v1.4：本地 LLM 探测
+    if (trimmed.startsWith("/local ") || trimmed === "/local") {
+      const args = trimmed.slice(6).trim();
+      try {
+        const ollamaUrl = args || "http://127.0.0.1:11434";
+        const d = await invoke<{
+          ollama_models: Array<{ name: string; size: number | null }>;
+          llamacpp_models: Array<{ id: string }>;
+          ollama_error: string | null;
+          llamacpp_error: string | null;
+        }>("local_discover", {
+          ollamaUrl,
+          llamacppUrl: null,
+        });
+        let text = `🏠 **本地模型**\n\n🦙 Ollama (${ollamaUrl}): ${d.ollama_models.length} 个模型`;
+        if (d.ollama_error) text += `\n  ⚠️ ${d.ollama_error}`;
+        for (const m of d.ollama_models.slice(0, 20)) {
+          const size = m.size ? `${(m.size / 1e9).toFixed(2)}GB` : "?";
+          text += `\n  - \`ollama:${m.name}\` (${size})`;
+        }
+        text += `\n\n🐑 llama.cpp: ${d.llamacpp_models.length} 个模型`;
+        for (const m of d.llamacpp_models.slice(0, 20)) {
+          text += `\n  - \`llamacpp:${m.id}\``;
+        }
+        text += `\n\n💡 也可点击 Top bar 🏠 打开完整 UI`;
+        appendMessage(sessionId, {
+          id: crypto.randomUUID(),
+          role: "assistant",
+          text,
+          createdAt: Date.now(),
+        });
+        setText("");
+        return;
+      } catch (e) {
+        appendMessage(sessionId, {
+          id: crypto.randomUUID(),
+          role: "assistant",
+          text: `❌ 探测失败: ${e}`,
+          createdAt: Date.now(),
+        });
+        setText("");
+        return;
+      }
+    }
     // v1.3：路由测试
     if (trimmed.startsWith("/route ") || trimmed === "/route") {
       const args = trimmed.slice(6).trim();

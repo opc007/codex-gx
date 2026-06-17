@@ -375,6 +375,29 @@ kbd {
 .user-menu-item.active { background: var(--bg-hover); }
 .user-menu-item .check { margin-left: auto; color: var(--primary); }
 
+/* v1.4：本地 LLM */
+.local-urls { padding: 12px; background: var(--bg-secondary); border-radius: 6px; margin-bottom: 16px; }
+.local-url-row { display: flex; align-items: center; gap: 8px; margin-bottom: 6px; }
+.local-url-row label { min-width: 100px; font-size: 12px; color: var(--text-muted); }
+.local-url-row .vault-password-input { flex: 1; }
+
+.local-section h4 { margin: 12px 0 8px 0; font-size: 13px; display: flex; align-items: center; gap: 8px; }
+.local-section h4 .mp-error { font-size: 11px; font-weight: normal; }
+
+.local-model-list { display: flex; flex-direction: column; gap: 4px; }
+.local-model-row { display: flex; align-items: center; gap: 6px; padding: 6px 10px; border: 1px solid var(--border); border-radius: 6px; flex-wrap: wrap; }
+.local-model-name { font-weight: 500; font-size: 13px; }
+.local-model-tag { font-size: 10px; padding: 1px 6px; background: var(--bg-secondary); border-radius: 3px; color: var(--text-muted); }
+.local-model-id { font-family: ui-monospace, monospace; font-size: 11px; color: var(--text-muted); flex: 1; min-width: 120px; }
+.local-model-ping { font-size: 11px; font-family: ui-monospace, monospace; }
+.local-model-ping.ok { color: var(--success); }
+.local-model-ping.err { color: var(--danger); }
+
+.local-help { padding: 12px; background: var(--bg-secondary); border-radius: 6px; margin-top: 16px; }
+.local-help h4 { margin: 0 0 8px 0; font-size: 13px; }
+.local-help ul { margin: 0; }
+.local-help a { color: var(--primary); }
+
 /* v1.1：标签栏 */
 .tab-bar {
   display: flex;
