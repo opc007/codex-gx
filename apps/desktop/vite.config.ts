@@ -6,6 +6,9 @@ import { fileURLToPath, URL } from "node:url";
 export default defineConfig(async () => ({
   plugins: [react()],
 
+  // Tauri 打包必须用相对路径，否则 macOS 上 /assets/*.js 会 404，界面卡在 Loading
+  base: "./",
+
   // 重要：Vite root 设为 src，避免把当前目录的 icons 当成入口
   root: fileURLToPath(new URL("./src", import.meta.url)),
   publicDir: fileURLToPath(new URL("./public", import.meta.url)),

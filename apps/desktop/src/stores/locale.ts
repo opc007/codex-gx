@@ -1,6 +1,7 @@
 import { useSyncExternalStore } from "react";
-import type { Dict, Locale } from "../i18n";
-import { DEFAULT_LOCALE, SUPPORTED_LOCALES, DICTS } from "../i18n";
+import type { Dict, Locale } from "../i18n/types";
+import { DEFAULT_LOCALE, SUPPORTED_LOCALES } from "../i18n/types";
+import { DICTS } from "../i18n/dicts";
 
 const STORAGE_KEY = "codex_gx_locale";
 

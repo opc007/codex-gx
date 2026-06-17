@@ -1,199 +1,183 @@
-# Codex gx— Codex 全功能平替，国产大模型驱动，可以自由控制本地电脑干活。
+# Codex gx
 
-<p align="center">
-  <img src="docs/assets/logo.svg" alt="Codex gx" width="480">
-</p>
+> **Codex 平替桌面 Agent 客户端** — Tauri 2 + Rust，macOS / Windows 双端
+>
+> v1.6 商业化版本
 
-> **Codex 桌面版的开源平替**。功能对标 OpenAI Codex CLI /cursor/ Desktop，**持续同步更新**。
-> 基于国产 [MiniMax M3](https://www.minimax.io/models/text/m3)，同时支持 Claude / GPT / DeepSeek / 自建模型。
-> **macOS / Windows 双端桌面版** · **Tauri 2 + Rust** · **MIT 许可证**
+## ✨ 特性
 
-[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
-[![Tauri](https://img.shields.io/badge/Tauri-2-blue)](https://tauri.app/)
-[![Rust](https://img.shields.io/badge/Rust-1.85%2B-orange)](https://www.rust-lang.org/)
-[![Platform](https://img.shields.io/badge/Platform-macOS%20%7C%20Windows-lightgrey)](#-下载)
-[![Status](https://img.shields.io/badge/Status-Planning-yellow)](#-路线图)
-[![Price](https://img.shields.io/badge/Price-8×%20Cheaper%20than%20Opus-brightgreen)](#-为什么选-agentshell)
+- 🧠 **多 Provider** — M3 / DeepSeek / OpenAI / Claude / Ollama / Llama.cpp
+- 🛠 **15+ 内置工具** — Read / Edit / Write / APPLY_PATCH / Bash / Grep / Glob / WebFetch / Git / PR Review …
+- 📚 **Skills 库** — 12 个内置模板（shell / prompt / chain 三种执行模式）
+- 🔊 **TTS** — 跨平台语音播报（macOS `say` / Windows PowerShell / Linux `espeak`）
+- 🕸️ **Agent Flow Graph** — Plan 任务可视化 DAG + Mermaid 导出
+- ☁️ **Session Sync** — 本地 bundle 缓存 / 导入导出
+- 🧩 **Plugin 热加载** — 5 个内置插件 + DSL 文本转换
+- 🔐 **License 商业化** — 4 档激活码（v1.6）
 
----
+## 📦 安装
 
-## 🎯 为什么选 Codex gx？
+### macOS
 
-### 💰 最大的特点：便宜，可以和codex一样控制自己的电脑给自己全天24小时牛马干活，一个月才需几十米就可以养一个7x24小时干活的牛马。
+1. 在 [GitHub Releases](https://github.com/opc007/codex-gx/releases) 下载 `Codex gx_1.6.0_aarch64.dmg`
+2. 双击 `.dmg`，把 **Codex gx.app** 拖到 **Applications** 文件夹
+3. 打开 Applications，右键 **Codex gx.app** → 打开（首次需要确认未签名应用）
+4. 第一次启动可能提示"无法打开，因为它来自身份不明的开发者"，点 **系统设置 → 隐私与安全性 → 仍要打开**
 
-- **Token 价格碾压式优势**：
-  - MiniMax M3：月租49元算力（接api），随便你天天跑都很难跑完，关键还不需要翻墙，开箱直接用。
-  - 对比 Claude Opus 4.8：~~$15 / M~~ → **便宜 18 倍**
-  - 对比 GPT-5.5：~~$5 / M~~ → **便宜 5 倍**
-  - 对比 DeepSeek V4-Pro：~~$0.27 / M~~ → 略贵，但速度快 4×
-- **订阅套餐更便宜**：MiniMax Token Plan 49元订阅
-- **接入本地国产大模型**：DeepSeek / 通义千问 / 文心一言 / 智谱 GLM / 任何 OpenAI 兼容协议
-- **License 激活码**（可选）：月卡 ¥9.9 / 季卡 ¥29.9 / 年卡 ¥99 / 终身 ¥299 — 一次性购买，不退款、不自动续费、终身免费升级
+> **Apple Silicon (M1/M2/M3) 用户**：下载 `aarch64` 版本
+> **Intel Mac 用户**：下载 `x64` 版本
 
-### 🤖 全 Agent 智能体：不是聊天，是干活
+### Windows
 
- Codex gx 不是聊天框，是**真正能干活的全能 Agent**：
+1. 在 [GitHub Releases](https://github.com/opc007/codex-gx/releases) 下载 `Codex gx_1.6.0_x64-setup.exe`
+2. 双击运行安装器
+3. 如果 SmartScreen 拦截，点 **更多信息 → 仍要运行**
 
-- **💻 写代码** — 跨文件重构 / 自动 PR / Code Review / TDD / 单元测试生成
-- **📝 做文案** — 营销文案 / 周报月报 / 公众号文章 / 多语言翻译 / 学术写作
-- **🎨 做图** — 海报 / 头像 / 配图 / 商品图 / 概念设计（集成 MiniMax 图像生成 API）
-- **🎬 做视频** — 短视频 / 宣传片 / **专业影视级** / 数字人 / 动画（集成 MiniMax 视频生成 API）
-- **🌐 操作电脑** — 浏览器自动化 / 桌面应用控制 / 跨软件工作流
-- **📊 数据分析** — Excel / CSV / 数据库查询 / 可视化
+### Linux
 
-### 🖥️ Codex 全部功能，我们都有
+暂未提供安装包。可从源码 build（见下）。
 
-| Codex 功能 |  Codex gx 支持 | 状态 |
-|-----------|----------------|------|
-| ✅ Computer Use 浏览器（Playwright） | ✅ | v0.1 计划 |
-| ✅ Computer Use 桌面 CUA（macOS/Win） | ✅ | v0.4 计划 |
-| ✅ 多模态（图像理解 / OCR / 语音） | ✅ | v0.1 计划 |
-| ✅ 60+ 工具集（文件/Bash/浏览器/桌面/网络/截图） | ✅ | v0.1 计划 |
-| ✅ 远程触发（Pocket / 飞书 / 企微 / Slack） | ✅ | v0.4 计划 |
-| ✅ 插件市场（6 种 plugin） | ✅ | v0.4 计划 |
-| ✅ 自动化（`.toml` 定时任务） | ✅ | v0.3 计划 |
-| ✅ 本地优先（不上云） | ✅ | v0.1 计划 |
-| ✅ 主题 / Unified Mentions / Tab 队列 | ✅ | v0.1 计划 |
-| ✅ Vim / IDE context / diff & review | ✅ | v0.2 计划 |
-| ✅ Skills / Personality / Fork+Side | ✅ | v0.2 计划 |
-| ✅ Automations 调度器 + Voice Input | ✅ | v0.3 计划 |
-| ✅ Floating pop-out / Appshots | ✅ | v0.3 计划 |
-| ✅ Mobile Remote / Profile lifetime | ✅ | v0.4 计划 |
+## 🛒 License 激活
 
-### 🔐 开源 / 本地优先
+启动后默认进入 License 页面（v1.6 强制激活），4 档可选：
 
-- **MIT 许可证** — 随便用、商用、改、闭源都行
-- **Memory / Session / Profile 全部本地加密**（macOS Keychain / Windows Credential Manager）
-- **不上传任何数据到云端**（除非你主动启用云功能）
-- **API key 加密本地存储**（v0.2 默认开启）
-- **可自建 M3 Open-weights 私有化部署**（v0.5 To B 路线）
+| 档位 | 价格 | 设备数 | 适合 |
+|------|------|--------|------|
+| 月卡 | ¥9.9 | 1 台 | 试用 1 个月 |
+| 季卡 | ¥29.9 | 1 台 | 想试一季度再决定 |
+| **年卡**（推荐） | **¥99** | 1 台 | 重度个人开发者 |
+| 终身 | ¥299 | 1 台 | 一次买断 |
 
-## 📸 截图
+### 购买渠道
 
-（v0.1.0 上线后补）
+- 主渠道：Lemon Squeezy（国际，支持微信/支付宝/信用卡）
+- 备选：微信小商店
+- 备选：Gumroad（仅国际）
 
-## 🚀 快速开始
+购买后你会收到一封邮件，里面有 Base64 字符串的激活码。
 
-### 下载
+### 激活步骤
 
-| 系统 | 下载 | 状态 |
-|------|------|------|
-| macOS (Apple Silicon) | [Releases](https://github.com/opc007/codex-gx/releases) | v0.1.0-alpha 计划中 |
-| macOS (Intel) | [Releases](https://github.com/opc007/codex-gx/releases) | v0.1.0-alpha 计划中 |
-| Windows (x64) | [Releases](https://github.com/opc007/codex-gx/releases) | v0.1.0-alpha 计划中 |
-| Windows (ARM64) | [Releases](https://github.com/opc007/codex-gx/releases) | v0.1.0-alpha 计划中 |
+1. 启动 Codex gx → 自动弹出 License 页
+2. 把激活码粘到「已有激活码？」输入框
+3. 点 **立即激活** → 3 秒内完成
 
-### 从源码编译
+### 重要规则
+
+- **一个码 = 一段时间**（月 30 天 / 季 90 天 / 年 365 天 / 终身 = 永不到期）
+- **从输入激活码的那一刻起算**，到期就失效
+- **到期后重新输入新码**，从新输入时间重新累计时长
+- **旧码剩余时间不可合并到新码**
+- **终身档用户永久免费升级软件版本**（v0.1 → v1.0 全部免费）
+- **不退款、不自动续费、不升级折价**
+
+## 🛠 从源码 Build
 
 ```bash
-# 前置：Rust 1.85+, Node.js 20+, pnpm 9+
 git clone https://github.com/opc007/codex-gx.git
-cd agentshell
+cd codex-gx
+
+# 1. 安装 Rust 工具链（≥ 1.85）
+curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
+
+# 2. 安装 Node.js（≥ 20）
+brew install node@20  # macOS
+# 或 nvm install 20
+
+# 3. 安装 pnpm
+npm install -g pnpm
+
+# 4. 安装 Tauri CLI
+cargo install tauri-cli --version "^2"
+
+# 5. 安装前端依赖
+cd apps/desktop
 pnpm install
-pnpm tauri build
+
+# 6. 开发模式
+cargo tauri dev
+
+# 7. 生产 build
+cargo tauri build
 ```
 
-### 配置
+## 🧪 生成测试 License（开发用）
 
 ```bash
-# 复制配置模板
-cp configs/config.example.toml ~/.agentshell/config.toml
-
-# 设置 M3 API Key（也可走 MiniMax Token Plan）
-export MINIMAX_API_KEY=sk-...
+# 跑 license-gen 生成 demo 激活码（仅 dev 用）
+cargo run --bin license-gen -- yearly
 ```
 
-详见 [配置示例](configs/config.example.toml) 和 [开发文档](docs/开发文档.md#42-配置文件结构)。
+> ⚠️ 内部工具 — 仅用于开发 / 自测。生产 license 由服务端签发。
 
-## 📚 文档
+## 📁 目录结构
 
-- [**开发文档**（7700+ 行完整设计）](docs/开发文档.md) — 产品定位 / 架构 / 功能 / 路线图 / 风险
-- [配置示例](configs/config.example.toml) — 4.2 配置文件结构
-- [CHANGELOG](CHANGELOG.md) — 版本变更
-- [CONTRIBUTING](CONTRIBUTING.md) — 贡献指南
-- [CODE_OF_CONDUCT](CODE_OF_CONDUCT.md) — 社区公约
+```
+codex-gx/
+├── apps/desktop/           # Tauri 2 桌面端
+│   ├── src/                # React + TypeScript 前端
+│   ├── src-tauri/          # Rust 后端
+│   └── src-tauri/src/bin/  # 内部 CLI 工具
+├── crates/                 # 共享 Rust 库
+│   ├── agent-core/         # Agent 核心
+│   ├── provider/           # LLM provider 抽象
+│   ├── patch/              # apply_patch 引擎
+│   ├── context/            # 上下文压缩
+│   ├── mcp/                # MCP 协议
+│   ├── queue/              # 任务队列
+│   ├── p2p/                # 设备间通信
+│   ├── license/            # License 系统（v1.6）
+│   ├── memory/             # 跨 session 记忆
+│   ├── voice/              # 语音
+│   ├── marketplace/        # 插件市场
+│   ├── vault/              # 凭证保险库
+│   ├── lint/               # 代码 lint
+│   ├── learning/           # 用户行为学习
+│   └── plugin/             # 插件运行时
+├── docs/                   # 设计文档
+└── README.md
+```
 
-## 🗺️ 路线图
+## ⌨️ 常用快捷键
 
-| 版本 | 时间 | 关键能力 |
-|------|------|----------|
-| **v0.1.0-alpha** | 2026-08 | 多 provider + Computer Use (Web) + License 激活码 + 5.36 主题 + 5.37A Unified Mentions + 5.40 Thinking 折叠 |
-| v0.2.0 | 2026-10 | Computer Use (Web 增强) + Personality + Skills + Vim 模式 + MCP 集成 |
-| v0.3.0 | 2026-12 | Automations 定时任务 + Voice Input + Appshots + Floating pop-out + 5.22A Goal |
-| v0.4.0 | 2027-02 | Computer Use 桌面 CUA 双端 + Pocket 消息触发 + Plugin Marketplace + Profile lifetime token + Mobile Remote |
-| v0.5.0 | 2027-04 | Open-weights M3 私有化部署（To B 路线）+ Headless 模式 + GDPR |
-| **v1.0.0** | 2027-06 | GA 正式版 + 终身免费升级路径 |
+- `Cmd/Ctrl + K` — 快速命令面板
+- `Cmd/Ctrl + N` — 新建 thread
+- `Cmd/Ctrl + /` — Slash 命令
+- `Cmd/Ctrl + Enter` — 发送消息
 
-完整 14 个 Phase 任务清单见 [开发文档 §10](docs/开发文档.md#10-开发阶段与里程碑)。
+## 🆘 常见问题
 
-## 🛠️ 技术栈
+### 安装后打不开（macOS）
 
-- **壳层**：Tauri 2（Rust + WebView）
-- **核心**：Rust（`crates/agent-core`, `provider`, `patch`, `context`, `mcp`, `sandbox`）
-- **前端**：React 19 + TypeScript + Vite
-- **MCP 协议**：stdio / WebSocket / Unix Domain Socket
-- **目标系统**：macOS 12+ / Windows 10+
+- 右键 `Codex gx.app` → **打开**（不是双击）
+- 提示 "无法打开" 时，去 **系统设置 → 隐私与安全性** → 找到 Codex gx → **仍要打开**
+
+### 激活码提示"签名验证失败"
+
+- 码可能被截断。重新复制整行（包括末尾的 `==`）
+- 码来源不对（仅支持 Codex gx 官方码）
+
+### 激活码提示"设备不匹配"
+
+- 一个码只能在首次激活的设备使用
+- 换设备？联系客服 / 重新购买
+
+### License 已过期
+
+- 到期后软件进入只读模式
+- 购买新码粘到 License 页激活，从新输入时间重新累计
+
+## 📜 License
+
+本仓库源码为 MIT License（开发用）。
+发行版为商业软件 — 见 [License 商业化策略](docs/开发文档.md#136-商业化策略激活码--4-档-sku)。
 
 ## 🤝 贡献
 
-我们**欢迎所有形式的贡献**！详情见 [CONTRIBUTING.md](CONTRIBUTING.md)：
+欢迎 PR！但请先读 [开发文档](docs/开发文档.md) 了解架构。
 
-- 🐛 **Bug 报告**：[GitHub Issues](https://github.com/opc007/codex-gx/issues/new?template=bug.md)
-- 💡 **功能请求**：[GitHub Issues](https://github.com/ahs/agent-agent/issues/new?template=feature.md)
-- 🔧 **Pull Request**：参考 [CONTRIBUTING.md](CONTRIBUTING.md) 的 PR 流程
-- 🌐 **翻译**：[docs/i18n](docs/i18n) （v0.4+ 启动）
-- 📖 **文档改进**：所有 docs/ 下文件都欢迎 PR
+## 🔗 链接
 
-**Code of Conduct**：所有参与者请遵守 [CODE_OF_CONDUCT.md](CODE_OF_CONDUCT.md)。
-
-## 💬 社区
-
-- **GitHub Discussions**：[讨论区](https://github.com/opc007/codex-gx/discussions)（问答 / 分享 / 提案）
-- **GitHub Issues**：[bug / feature](https://github.com/opc007/codex-gx/issues)
-- **微信公众号**：搜索 `AgentShell 社区`（即将开通）
-
-## 📊 项目状态
-
-- 🚧 **v0.1.0-alpha**：规划中（设计已完成 100%，代码 0%）
-- 📋 **7700+ 行设计文档**：[docs/开发文档.md](docs/开发文档.md)
-- ⭐ **Star History**：[![](https://img.shields.io/github/stars/opc007/codex-gx?style=social)](https://github.com/opc007/codex-gx/stargazers)
-
-## 📜 许可证
-
-本项目采用 **MIT 许可证** — 详见 [LICENSE](LICENSE) 文件。
-
-```
-MIT License
-
-Copyright (c) 2026 AgentShell Contributors
-
-Permission is hereby granted, free of charge, to any person obtaining a copy
-of this software and associated documentation files (the "Software"), to deal
-in the Software without restriction, including without limitation the rights
-to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
-copies of the Software, and to permit persons to whom the Software is
-furnished to do so, subject to the following conditions:
-
-The above copyright notice and this permission notice shall be included in all
-copies or substantial portions of the Software.
-
-THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
-IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
-FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
-AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
-LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
-OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
-SOFTWARE.
-```
-
-## 🙏 致谢
-
-- [OpenAI Codex](https://github.com/openai/codex) — 架构与命令系统的主要参考
-- [MiniMax M3](https://www.minimax.io/models/text/m3) — 默认模型，MSA 架构 + 1M context + 多模态
-- [Anthropic Claude Code](https://github.com/anthropics/claude-code) — 权限模型与 Skill 系统
-- [Tauri](https://tauri.app/) — 跨平台桌面壳
-- 所有 [Contributors](https://github.com/opc007/codex-gx/graphs/contributors) — 谢谢你们的 PR！
-
----
-
-**⭐ 如果这个项目对你有帮助，请给我们一个 Star！**
+- [GitHub Releases](https://github.com/opc007/codex-gx/releases)
+- [开发文档](docs/开发文档.md)
+- [Issues](https://github.com/opc007/codex-gx/issues)

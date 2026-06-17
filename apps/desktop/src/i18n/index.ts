@@ -2,10 +2,8 @@ import { useMemo } from "react";
 import { useLocale, useDict as _useDict, setLocale as _setLocale } from "../stores/locale";
 import type { Dict, Locale } from "./types";
 import { DEFAULT_LOCALE, SUPPORTED_LOCALES, LOCALE_LABELS } from "./types";
-import { zh } from "./zh";
-import { en } from "./en";
-
-export const DICTS: Record<Locale, Dict> = { zh, en };
+import { DICTS } from "./dicts";
+export { DICTS } from "./dicts";
 
 export { SUPPORTED_LOCALES, DEFAULT_LOCALE, LOCALE_LABELS };
 export type { Locale, Dict } from "./types";

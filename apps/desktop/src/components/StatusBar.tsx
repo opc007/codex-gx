@@ -1,4 +1,6 @@
-import { useSessionsStore } from "../stores/sessions";
+import { useSessionsStore, type PersistedMessage } from "../stores/sessions";
+
+const EMPTY_MESSAGES: PersistedMessage[] = [];
 
 type Props = {
   sessionId: string | null;
@@ -9,7 +11,7 @@ export function StatusBar({ sessionId }: Props) {
     sessionId ? s.sessions.find((x) => x.id === sessionId) : undefined
   );
   const messages = useSessionsStore((s) =>
-    sessionId ? s.messages[sessionId] || [] : []
+    sessionId ? (s.messages[sessionId] ?? EMPTY_MESSAGES) : EMPTY_MESSAGES
   );
 
   // 累计 token

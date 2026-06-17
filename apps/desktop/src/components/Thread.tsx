@@ -1,6 +1,8 @@
 import { useEffect, useRef } from "react";
-import { useSessionsStore } from "../stores/sessions";
+import { useSessionsStore, type PersistedMessage } from "../stores/sessions";
 import { MessageBubble } from "./MessageBubble";
+
+const EMPTY_MESSAGES: PersistedMessage[] = [];
 
 type Props = {
   sessionId: string | null;
@@ -9,7 +11,7 @@ type Props = {
 export function Thread({ sessionId }: Props) {
   const scrollRef = useRef<HTMLDivElement>(null);
   const messages = useSessionsStore((s) =>
-    sessionId ? s.messages[sessionId] || [] : []
+    sessionId ? (s.messages[sessionId] ?? EMPTY_MESSAGES) : EMPTY_MESSAGES
   );
   const session = useSessionsStore((s) =>
     s.sessions.find((x) => x.id === sessionId)

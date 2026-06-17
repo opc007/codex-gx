@@ -59,47 +59,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "agentshell-desktop"
-version = "0.1.0-alpha"
-dependencies = [
- "agent-core",
- "anyhow",
- "async-trait",
- "base64 0.22.1",
- "chrono",
- "computer-use",
- "context",
- "futures",
- "learning",
- "license",
- "lint",
- "marketplace",
- "mcp",
- "memory",
- "p2p",
- "patch",
- "plugin",
- "provider",
- "queue",
- "reqwest 0.12.28",
- "sandbox",
- "serde",
- "serde_json",
- "tauri",
- "tauri-build",
- "tauri-plugin-dialog",
- "tauri-plugin-fs",
- "tauri-plugin-os",
- "tauri-plugin-shell",
- "tauri-plugin-store",
- "thiserror 1.0.69",
- "tokio",
- "uuid",
- "vault",
- "voice",
-]
-
-[[package]]
 name = "aho-corasick"
 version = "1.1.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -471,6 +430,47 @@ checksum = "773f3b9af64447d2ce9850330c473515014aa235e6a783b02db81ff39e4a3dad"
 dependencies = [
  "crypto-common",
  "inout",
+]
+
+[[package]]
+name = "codex-gx-desktop"
+version = "0.1.0-alpha"
+dependencies = [
+ "agent-core",
+ "anyhow",
+ "async-trait",
+ "base64 0.22.1",
+ "chrono",
+ "computer-use",
+ "context",
+ "futures",
+ "learning",
+ "license",
+ "lint",
+ "marketplace",
+ "mcp",
+ "memory",
+ "p2p",
+ "patch",
+ "plugin",
+ "provider",
+ "queue",
+ "reqwest 0.12.28",
+ "sandbox",
+ "serde",
+ "serde_json",
+ "tauri",
+ "tauri-build",
+ "tauri-plugin-dialog",
+ "tauri-plugin-fs",
+ "tauri-plugin-os",
+ "tauri-plugin-shell",
+ "tauri-plugin-store",
+ "thiserror 1.0.69",
+ "tokio",
+ "uuid",
+ "vault",
+ "voice",
 ]
 
 [[package]]
@@ -2062,6 +2062,7 @@ dependencies = [
 name = "license"
 version = "0.1.0-alpha"
 dependencies = [
+ "async-trait",
  "base64 0.22.1",
  "chrono",
  "hmac",
@@ -2070,6 +2071,7 @@ dependencies = [
  "sha2",
  "tempfile",
  "thiserror 1.0.69",
+ "tokio",
  "toml 0.8.2",
 ]
 
@@ -2938,6 +2940,7 @@ name = "queue"
 version = "0.1.0-alpha"
 dependencies = [
  "async-trait",
+ "futures",
  "lint",
  "serde",
  "serde_json",

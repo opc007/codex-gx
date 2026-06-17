@@ -20,6 +20,7 @@ import { TtsPanel } from "./TtsPanel";
 import { FlowGraphView } from "./FlowGraphView";
 import { SyncPanel } from "./SyncPanel";
 import { PluginPanel } from "./PluginPanel";
+import { LicensePanel } from "./LicensePanel";
 import {
   useCurrentWorkspaceId,
   useWorkspaceList,
@@ -42,11 +43,18 @@ type UpdateInfo = {
   releaseNotes: string | null;
 };
 
-type LicenseStatus = {
-  active: boolean;
-  tier: string;
-  tierDisplay: string;
-  remainingDays: number | null;
+type LicenseStatusKind =
+  | { kind: "unactivated" }
+  | { kind: "valid"; tier: string; remainingDays: number | null; activatedAt: number; expiresAt: number | null }
+  | { kind: "expiring"; tier: string; daysLeft: number }
+  | { kind: "expired"; tier: string; expiredAt: number }
+  | { kind: "offlinegrace"; daysOffline: number }
+  | { kind: "invalid"; reason: string };
+
+type LicenseSummary = {
+  status: LicenseStatusKind;
+  lastValidatedAt: number;
+  offline: boolean;
 };
 
 type Props = {
@@ -57,7 +65,7 @@ type Props = {
 
 export function TopBar({ themeMode, setThemeMode, onLicenseClick }: Props) {
   const [busy, setBusy] = useState(false);
-  const [license, setLicense] = useState<LicenseStatus | null>(null);
+  const [license, setLicense] = useState<LicenseSummary | null>(null);
   const [updateInfo, setUpdateInfo] = useState<UpdateInfo | null>(null);
   const [updateBusy, setUpdateBusy] = useState(false);
   const [marketplaceOpen, setMarketplaceOpen] = useState(false);
@@ -76,12 +84,29 @@ export function TopBar({ themeMode, setThemeMode, onLicenseClick }: Props) {
   const [flowOpen, setFlowOpen] = useState(false);
   const [syncOpen, setSyncOpen] = useState(false);
   const [pluginOpen, setPluginOpen] = useState(false);
+  const [licenseOpen, setLicenseOpen] = useState(false);
   const { locale, setLocale } = useLocaleSwitcher();
 
   const refreshLicense = async () => {
     try {
-      const s = await invoke<LicenseStatus>("get_license_status");
+      const s = await invoke<LicenseSummary>("license_status");
       setLicense(s);
+      // v1.6 联动：未激活 / 过期 / 离线宽限 → 自动打开 LicensePanel
+      if (s.status.kind === "unactivated" ||
+          s.status.kind === "expired" ||
+          s.status.kind === "offlinegrace") {
+        setLicenseOpen(true);
+      }
+      // v1.6 联动：只读模式广播
+      const readonly =
+        s.status.kind === "expired" ||
+        s.status.kind === "offlinegrace" ||
+        s.status.kind === "invalid";
+      window.dispatchEvent(
+        new CustomEvent("agentshell:license-readonly", {
+          detail: { readonly, status: s.status },
+        })
+      );
     } catch {
       setLicense(null);
     }
@@ -117,8 +142,8 @@ export function TopBar({ themeMode, setThemeMode, onLicenseClick }: Props) {
   return (
     <header className="topbar">
       <div className="topbar-left">
-        <strong>AgentShell</strong>
-        <span className="topbar-version">v1.5.0</span>
+        <strong>Codex gx</strong>
+        <span className="topbar-version">v1.6.0</span>
         <WorkspaceSelector />
       </div>
       <div className="topbar-right">
@@ -145,7 +170,7 @@ export function TopBar({ themeMode, setThemeMode, onLicenseClick }: Props) {
           onClick={onLicenseClick}
           title="License"
         >
-          🔑 {license?.active ? license.tierDisplay : "未激活"}
+          🔑 {formatLicenseBadge(license)}
         </button>
         <button
           className="topbar-btn"
@@ -251,6 +276,13 @@ export function TopBar({ themeMode, setThemeMode, onLicenseClick }: Props) {
           title="插件热加载 (v1.5)"
         >
           🧩
+        </button>
+        <button
+          className="topbar-btn"
+          onClick={() => setLicenseOpen(true)}
+          title="License 授权 (v1.6)"
+        >
+          🔐
         </button>
         <UserMenu
           open={userMenuOpen}
@@ -383,8 +415,31 @@ export function TopBar({ themeMode, setThemeMode, onLicenseClick }: Props) {
 
       {/* v1.5: Plugin Panel 弹窗 */}
       {pluginOpen && <PluginPanel onClose={() => setPluginOpen(false)} />}
+      {/* v1.6: License Panel 弹窗 */}
+      {licenseOpen && <LicensePanel onClose={() => setLicenseOpen(false)} />}
     </header>
   );
+}
+
+// v1.6: License 状态 → TopBar 角标
+function formatLicenseBadge(license: LicenseSummary | null): string {
+  if (!license) return "检测中…";
+  const s = license.status;
+  switch (s.kind) {
+    case "unactivated":
+      return "未激活";
+    case "valid":
+      if (s.remainingDays == null) return "终身";
+      return `还剩 ${s.remainingDays} 天`;
+    case "expiring":
+      return `临期 ${s.daysLeft} 天`;
+    case "expired":
+      return "已过期";
+    case "offlinegrace":
+      return `离线 ${s.daysOffline} 天`;
+    case "invalid":
+      return "异常";
+  }
 }
 
 // ------------------ v1.3：Workspace selector ------------------

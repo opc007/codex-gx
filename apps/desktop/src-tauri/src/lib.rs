@@ -26,6 +26,7 @@ mod lint_tauri;
 mod queue_tauri;
 mod p2p_tauri;
 mod learning_tauri;
+mod license_tauri;
 
 use agent_core::tool::ToolRegistry;
 use serde::{Deserialize, Serialize};
@@ -108,6 +109,7 @@ pub fn run() {
         .manage::<BugReportState>(Arc::new(bugreport_tauri::BugReportState::new()))
         .manage::<queue_tauri::QueueState>(queue_tauri::build_state())
         .manage(p2p_tauri::P2pState::new())
+        .manage::<license_tauri::LicenseManagerState>(license_tauri::build_state())
         .setup(|app| {
             // v1.3：安装 panic hook
             if let Some(state) = app.try_state::<BugReportState>() {
@@ -122,6 +124,7 @@ pub fn run() {
             }
             // v1.4：启动队列事件 forwarder
             if let Some(state) = app.try_state::<queue_tauri::QueueState>() {
+                queue_tauri::start_scheduler(state.inner().clone());
                 queue_tauri::spawn_event_forwarder(app.handle().clone(), state.inner().clone());
             }
             // v0.8：异步初始化 memory manager
@@ -160,9 +163,12 @@ pub fn run() {
             list_providers,
             list_tools,
             execute_tool,
-            activate_license,
-            get_license_status,
-            deactivate_license,
+            license_tauri::license_status,    // v1.6
+            license_tauri::license_activate,   // v1.6
+            license_tauri::license_deactivate, // v1.6
+            license_tauri::license_refresh,    // v1.6
+            license_tauri::license_tiers,      // v1.6
+            license_tauri::license_demo_code,  // v1.6 dev
             get_ide_context,
             get_git_diff,
             list_git_branches,
@@ -732,110 +738,14 @@ struct McpServerDto {
     tool_count: usize,
 }
 
-/// 激活码 demo 密钥（生产用 RSA public key 从服务端下发的 license_verify.pem）
-const LICENSE_DEMO_KEY: &[u8] = b"agentshell-demo-license-key-v0.2";
-
-fn license_storage_path() -> PathBuf {
-    let home = std::env::var("HOME")
-        .or_else(|_| std::env::var("USERPROFILE"))
-        .unwrap_or_else(|_| ".".into());
-    PathBuf::from(home)
-        .join(".agentshell")
-        .join("license.toml")
-}
-
-/// 激活 License
-#[tauri::command]
-fn activate_license(app: AppHandle, code: String) -> Result<LicenseStatusDto, String> {
-    let parsed = license::LicenseCode::from_user_code(&code)
-        .map_err(|e| format!("码格式错误: {}", e))?;
-    let device = license::DeviceFingerprint::current();
-    license::verify::verify_code(&parsed, &device, LICENSE_DEMO_KEY)
-        .map_err(|e| e.to_string())?;
-
-    // 存储
-    let path = license_storage_path();
-    let storage = license::LicenseStorage::new(&path);
-    let stored = license::StoredLicense {
-        code: parsed.clone(),
-        installed_at: chrono_now(),
-        device_id: device.to_id(),
-    };
-    storage.save(&stored).map_err(|e| format!("保存失败: {}", e))?;
-
-    let _ = app.emit("license:changed", ());
-
-    Ok(LicenseStatusDto::from(&parsed))
-}
-
-/// 查看 License 状态
-#[tauri::command]
-fn get_license_status() -> LicenseStatusDto {
-    let path = license_storage_path();
-    let storage = license::LicenseStorage::new(&path);
-    match storage.load() {
-        Ok(Some(stored)) => LicenseStatusDto::from(&stored.code),
-        _ => LicenseStatusDto::none(),
-    }
-}
-
-/// 清除 License
-#[tauri::command]
-fn deactivate_license(app: AppHandle) -> Result<(), String> {
-    let path = license_storage_path();
-    let storage = license::LicenseStorage::new(&path);
-    storage.clear().map_err(|e| e.to_string())?;
-    let _ = app.emit("license:changed", ());
-    Ok(())
-}
-
-fn chrono_now() -> i64 {
-    std::time::SystemTime::now()
-        .duration_since(std::time::UNIX_EPOCH)
-        .map(|d| d.as_secs() as i64)
-        .unwrap_or(0)
-}
-
-#[derive(Serialize)]
-#[serde(rename_all = "camelCase")]
-struct LicenseStatusDto {
-    active: bool,
-    tier: String,
-    tier_display: String,
-    activated_at: Option<String>,
-    expires_at: Option<String>,
-    remaining_days: Option<i64>,
-    device_id: Option<String>,
-}
-
-impl LicenseStatusDto {
-    fn none() -> Self {
-        Self {
-            active: false,
-            tier: "none".into(),
-            tier_display: "未激活".into(),
-            activated_at: None,
-            expires_at: None,
-            remaining_days: None,
-            device_id: None,
-        }
-    }
-
-    fn from(code: &license::LicenseCode) -> Self {
-        let now = chrono::Utc::now();
-        let remaining = code.payload.remaining_days(now);
-        let active = code.payload.is_active(now);
-        Self {
-            active,
-            tier: format!("{:?}", code.payload.tier).to_lowercase(),
-            tier_display: code.payload.tier.display_name().into(),
-            activated_at: Some(code.payload.activated_at.to_rfc3339()),
-            expires_at: code.payload.expires_at.map(|e| e.to_rfc3339()),
-            remaining_days: remaining,
-            device_id: Some(code.payload.device.to_id()),
-        }
-    }
-}
+/// 激活码 demo 密钥已迁到 `license_tauri::ActivationCodeProvider::default_demo`（v1.6）
+/// 旧实现 `activate_license` / `get_license_status` / `deactivate_license` 替换为：
+/// - `license_tauri::license_status`
+/// - `license_tauri::license_activate`
+/// - `license_tauri::license_deactivate`
+/// - `license_tauri::license_refresh`
+/// - `license_tauri::license_tiers`
+/// - `license_tauri::license_demo_code`（dev 工具）
 
 fn build_chat_request(model: &str, message: &str, stream: bool) -> ChatRequest {
     let mut req = ChatRequest::new(model)

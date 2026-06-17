@@ -1,0 +1,22 @@
+{
+  "$schema": "../gen/schemas/desktop-schema.json",
+  "identifier": "default",
+  "description": "AgentShell 默认 capability：app 自身 + shell / fs / dialog / store / os",
+  "windows": ["main"],
+  "permissions": [
+    "core:default",
+    "core:window:default",
+    "core:webview:default",
+    "core:app:default",
+    "core:event:default",
+    "core:path:default",
+    "core:resources:default",
+    "core:menu:default",
+    "core:tray:default",
+    "shell:default",
+    "fs:default",
+    "dialog:default",
+    "store:default",
+    "os:default"
+  ]
+}

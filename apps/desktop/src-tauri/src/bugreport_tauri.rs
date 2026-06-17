@@ -104,7 +104,7 @@ pub struct RecordCrashArgs {
 
 #[tauri::command]
 pub fn bug_report_record(
-    state: tauri::State<'_, BugReportState>,
+    state: tauri::State<'_, std::sync::Arc<BugReportState>>,
     args: RecordCrashArgs,
 ) -> Result<String, String> {
     let id = format!("crash_{}_{}", chrono_now(), short_id(&args.message));
@@ -127,12 +127,12 @@ pub fn bug_report_record(
 }
 
 #[tauri::command]
-pub fn bug_report_list(state: tauri::State<'_, BugReportState>) -> Vec<CrashEntry> {
+pub fn bug_report_list(state: tauri::State<'_, std::sync::Arc<BugReportState>>) -> Vec<CrashEntry> {
     state.list()
 }
 
 #[tauri::command]
-pub fn bug_report_clear(state: tauri::State<'_, BugReportState>) -> Result<(), String> {
+pub fn bug_report_clear(state: tauri::State<'_, std::sync::Arc<BugReportState>>) -> Result<(), String> {
     let mut g = state.reports.lock().unwrap();
     g.clear();
     Ok(())

@@ -64,20 +64,139 @@ impl DeviceFingerprint {
         let hostname = std::env::var("HOSTNAME")
             .or_else(|_| std::env::var("COMPUTERNAME"))
             .unwrap_or_else(|_| "unknown".into());
-        // MAC hash 简化：实际会用 getifaddrs
-        let mac_hash = format!("{:x}", md5_like_hash(hostname.as_bytes()));
+        // MAC hash：用真实 MAC 地址
+        let mac_hash = get_primary_mac_hash();
+        // 磁盘序列号
+        let disk_serial = get_disk_serial();
         Self {
             os,
             hostname,
             mac_hash,
-            disk_serial: None,
+            disk_serial,
         }
     }
 
     /// 转字符串
     pub fn to_id(&self) -> String {
-        format!("{}|{}|{}", self.os, self.hostname, self.mac_hash)
+        format!(
+            "{}|{}|{}|{}",
+            self.os,
+            self.hostname,
+            self.mac_hash,
+            self.disk_serial.as_deref().unwrap_or("none")
+        )
     }
+}
+
+/// 取主网卡 MAC 地址（跨平台 best-effort）
+#[cfg(target_os = "macos")]
+fn get_primary_mac_hash() -> String {
+    use std::process::Command;
+    // 用 `ifconfig en0` 解析 MAC（最稳的便携方式）
+    let output = Command::new("ifconfig").arg("en0").output().ok();
+    if let Some(out) = output {
+        let s = String::from_utf8_lossy(&out.stdout);
+        for line in s.lines() {
+            if line.contains("ether ") {
+                if let Some(mac) = line.split("ether ").nth(1) {
+                    let mac = mac.split_whitespace().next().unwrap_or("");
+                    return format!("{:x}", md5_like_hash(mac.as_bytes()));
+                }
+            }
+        }
+    }
+    // fallback
+    format!("{:x}", md5_like_hash(b"unknown-mac"))
+}
+
+#[cfg(target_os = "linux")]
+fn get_primary_mac_hash() -> String {
+    use std::process::Command;
+    if let Ok(out) = Command::new("ip").args(["link", "show", "eth0"]).output() {
+        let s = String::from_utf8_lossy(&out.stdout);
+        for line in s.lines() {
+            if line.contains("link/ether ") {
+                if let Some(mac) = line.split("link/ether ").nth(1) {
+                    let mac = mac.split_whitespace().next().unwrap_or("");
+                    return format!("{:x}", md5_like_hash(mac.as_bytes()));
+                }
+            }
+        }
+    }
+    format!("{:x}", md5_like_hash(b"unknown-mac"))
+}
+
+#[cfg(target_os = "windows")]
+fn get_primary_mac_hash() -> String {
+    use std::process::Command;
+    if let Ok(out) = Command::new("getmac").output() {
+        let s = String::from_utf8_lossy(&out.stdout);
+        for line in s.lines() {
+            // 格式: "  00-11-22-33-44-55  \Device\Tcpip_{...}"
+            if let Some(mac) = line.split_whitespace().next() {
+                if mac.contains('-') && mac.len() >= 17 {
+                    return format!("{:x}", md5_like_hash(mac.as_bytes()));
+                }
+            }
+        }
+    }
+    format!("{:x}", md5_like_hash(b"unknown-mac"))
+}
+
+/// 取磁盘序列号
+#[cfg(target_os = "macos")]
+fn get_disk_serial() -> Option<String> {
+    use std::process::Command;
+    let output = Command::new("ioreg")
+        .args(["-rd1", "-c", "IOPlatformExpertDevice"])
+        .output()
+        .ok()?;
+    let s = String::from_utf8_lossy(&output.stdout);
+    for line in s.lines() {
+        if line.contains("IOPlatformSerialNumber") {
+            if let Some(serial) = line.split('"').nth(3) {
+                return Some(serial.to_string());
+            }
+        }
+    }
+    None
+}
+
+#[cfg(target_os = "linux")]
+fn get_disk_serial() -> Option<String> {
+    use std::fs;
+    // /sys/class/block/sda/device/serial
+    for path in [
+        "/sys/class/block/sda/device/serial",
+        "/sys/class/block/nvme0n1/device/serial",
+        "/sys/class/block/vda/device/serial",
+    ] {
+        if let Ok(s) = fs::read_to_string(path) {
+            let s = s.trim().to_string();
+            if !s.is_empty() {
+                return Some(s);
+            }
+        }
+    }
+    None
+}
+
+#[cfg(target_os = "windows")]
+fn get_disk_serial() -> Option<String> {
+    use std::process::Command;
+    if let Ok(out) = Command::new("wmic")
+        .args(["diskdrive", "get", "serialnumber"])
+        .output()
+    {
+        let s = String::from_utf8_lossy(&out.stdout);
+        for line in s.lines() {
+            let trimmed = line.trim();
+            if !trimmed.is_empty() && trimmed != "SerialNumber" {
+                return Some(trimmed.to_string());
+            }
+        }
+    }
+    None
 }
 
 fn md5_like_hash(data: &[u8]) -> u64 {

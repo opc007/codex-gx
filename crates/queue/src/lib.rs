@@ -9,6 +9,7 @@
 //! - 可取消：发送 oneshot 信号
 //! - 并发度可配（默认 2）
 
+use futures::future::BoxFuture;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::sync::Arc;
@@ -124,6 +125,8 @@ pub struct Queue {
     tasks: Arc<RwLock<HashMap<String, Arc<Mutex<Task>>>>>,
     order: Arc<RwLock<Vec<String>>>,
     sender: mpsc::UnboundedSender<TaskCommand>,
+    /// 调度器 receiver，new() 时不取走，留给 start() 在 tokio context 内 spawn
+    receiver: std::sync::Mutex<Option<mpsc::UnboundedReceiver<TaskCommand>>>,
     pub event_tx: broadcast::Sender<TaskEvent>,
     cancel_txs: Arc<RwLock<HashMap<String, tokio::sync::watch::Sender<bool>>>>,
     concurrency: usize,
@@ -136,6 +139,7 @@ enum TaskCommand {
 }
 
 impl Queue {
+    /// 构造 Queue（**不**启动调度器 — 必须在 tokio context 内调 `start`）
     pub fn new(concurrency: usize) -> Arc<Self> {
         let (sender, receiver) = mpsc::unbounded_channel::<TaskCommand>();
         let (event_tx, _) = broadcast::channel(256);
@@ -143,16 +147,40 @@ impl Queue {
             tasks: Arc::new(RwLock::new(HashMap::new())),
             order: Arc::new(RwLock::new(Vec::new())),
             sender,
+            receiver: std::sync::Mutex::new(Some(receiver)),
             event_tx: event_tx.clone(),
             cancel_txs: Arc::new(RwLock::new(HashMap::new())),
             concurrency: concurrency.max(1),
         });
-        // 启动调度器
-        let q_clone = q.clone();
-        tokio::spawn(async move {
-            Self::scheduler_loop(receiver, q_clone, concurrency).await;
-        });
         q
+    }
+
+    /// 取出 receiver 并在调用方提供的 spawn 函数里启动 scheduler。
+    /// **调用方应传入 `tauri::async_runtime::spawn`（在 tauri 端），避免 main thread panic**。
+    pub fn start_with<F>(self: &Arc<Self>, spawn: F)
+    where
+        F: FnOnce(BoxFuture<'static, ()>),
+    {
+        let rx = self
+            .receiver
+            .lock()
+            .ok()
+            .and_then(|mut g| g.take());
+        if let Some(receiver) = rx {
+            let q_clone = self.clone();
+            let concurrency = self.concurrency;
+            let fut: BoxFuture<'static, ()> = Box::pin(async move {
+                Self::scheduler_loop(receiver, q_clone, concurrency).await;
+            });
+            spawn(fut);
+        }
+    }
+
+    /// 兼容 API：内部直接 `tokio::spawn`。**仅**在已有 tokio runtime 的上下文中调用。
+    pub fn start(self: &Arc<Self>) {
+        self.start_with(|fut| {
+            tokio::spawn(fut);
+        });
     }
 
     pub fn subscribe(&self) -> broadcast::Receiver<TaskEvent> {
@@ -225,7 +253,7 @@ impl Queue {
         original - order.len()
     }
 
-    async fn scheduler_loop(
+    pub async fn scheduler_loop(
         mut receiver: mpsc::UnboundedReceiver<TaskCommand>,
         q: Arc<Self>,
         concurrency: usize,
@@ -519,13 +547,25 @@ mod tests {
     #[tokio::test]
     async fn queue_clear_finished() {
         let q = Queue::new(1);
+        q.start();
         let _id = q
             .enqueue(
                 Task::new(TaskKind::Command, "echo done", serde_json::json!({"cmd": "echo done"})),
             )
             .await;
-        // 等完成
-        tokio::time::sleep(std::time::Duration::from_millis(2000)).await;
+        // 轮询等待完成（避免固定 sleep 在慢机器上 flaky）
+        let deadline = tokio::time::Instant::now() + std::time::Duration::from_secs(5);
+        loop {
+            if let Some(t) = q.get(&_id).await {
+                if matches!(t.status, TaskStatus::Completed | TaskStatus::Failed) {
+                    break;
+                }
+            }
+            if tokio::time::Instant::now() >= deadline {
+                break;
+            }
+            tokio::time::sleep(std::time::Duration::from_millis(50)).await;
+        }
         let n = q.clear_finished().await;
         assert!(n >= 1);
     }

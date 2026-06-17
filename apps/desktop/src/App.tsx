@@ -4,13 +4,12 @@ import { Thread } from "./components/Thread";
 import { Composer } from "./components/Composer";
 import { StatusBar } from "./components/StatusBar";
 import { TopBar } from "./components/TopBar";
-import { LicenseDialog } from "./components/LicenseDialog";
 import { ApprovalDialog, type ApprovalRequest } from "./components/ApprovalDialog";
 import PlanDialog, {
   type PlanRequest,
   respondPlan,
 } from "./components/PlanDialog";
-import { useThemeStore, type ThemeMode } from "./stores/theme";
+import { useThemeMode, type ThemeMode } from "./stores/theme";
 import { useSessionsStore } from "./stores/sessions";
 import { useOpenTabs, openTab } from "./stores/tabs";
 import { invoke } from "@tauri-apps/api/core";
@@ -116,8 +115,8 @@ class AppErrorBoundary extends Component<
 }
 
 export default function App() {
-  const [themeMode, setThemeMode] = useThemeStore((s) => [s.mode, s.setMode]);
-  const [currentId] = useSessionsStore((s) => [s.currentId]);
+  const [themeMode, setThemeMode] = useThemeMode();
+  const currentId = useSessionsStore((s) => s.currentId);
   const openTabs = useOpenTabs();
   const [showLicense, setShowLicense] = useState(false);
   const [approvalReq, setApprovalReq] = useState<ApprovalRequest | null>(null);
@@ -273,10 +272,8 @@ export default function App() {
         </div>
         <StatusBar sessionId={currentId} />
         {showLicense && (
-          <LicenseDialog
-            onClose={() => setShowLicense(false)}
-            onChange={() => {}}
-          />
+          // v1.6：LicensePanel 已迁到 TopBar 内部（自动弹窗联动）
+          null
         )}
         <ApprovalDialog
           request={approvalReq}
@@ -294,4 +291,4 @@ export default function App() {
   );
 }
 
-export type { ThemeMode };
+export type { ThemeMode } from "./stores/theme";
