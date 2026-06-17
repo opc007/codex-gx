@@ -567,6 +567,16 @@ kbd {
 .flow-detail h4 { margin: 0 0 4px 0; font-size: 13px; }
 .flow-detail pre { background: var(--bg); padding: 6px; border-radius: 3px; max-height: 200px; overflow: auto; font-size: 11px; margin: 4px 0 0 0; }
 
+/* v1.5: sync */
+.sync-summary { display: flex; justify-content: space-between; padding: 8px 12px; background: var(--bg-secondary); border-radius: 6px; margin-bottom: 10px; font-size: 12px; }
+.sync-toolbar { display: flex; align-items: center; gap: 6px; margin-bottom: 10px; flex-wrap: wrap; }
+.sync-auto { display: inline-flex; align-items: center; gap: 4px; font-size: 12px; color: var(--text-muted); }
+.sync-list { margin-top: 10px; max-height: 40vh; overflow-y: auto; }
+.sync-list h4 { margin: 0 0 6px 0; font-size: 13px; color: var(--text-muted); }
+.sync-row { border: 1px solid var(--border); border-radius: 6px; padding: 8px 10px; background: var(--bg-secondary); margin-bottom: 4px; }
+.sync-row-head { display: flex; align-items: center; gap: 6px; font-size: 12px; flex-wrap: wrap; }
+.sync-row-meta { font-size: 10px; color: var(--text-muted); margin-top: 2px; }
+
 /* v1.1：标签栏 */
 .tab-bar {
   display: flex;

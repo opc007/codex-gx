@@ -251,6 +251,60 @@ export function Composer({ sessionId }: Props) {
         return;
       }
     }
+    // v1.5：同步当前 session
+    if (trimmed === "/sync") {
+      const sid = sessionId;
+      try {
+        const cur = getSessionsState();
+        const all = cur.sessions;
+        const msgs = cur.messages;
+        const sess = all.find((s) => s.id === sid);
+        if (!sess) {
+          appendMessage(sid, {
+            id: crypto.randomUUID(),
+            role: "assistant",
+            text: "⚠️ 没有当前 session",
+            createdAt: Date.now(),
+          });
+          return;
+        }
+        const version = await invoke<number>("sync_schema_version");
+        const bundle = {
+          schema_version: version,
+          session_id: sess.id,
+          title: sess.title,
+          created_at: sess.createdAt,
+          updated_at: sess.updatedAt,
+          owner_id: sess.ownerId ?? null,
+          workspace_id: sess.workspaceId ?? null,
+          messages: msgs[sess.id] || [],
+          source_device: navigator.platform || "device",
+          synced_at: Date.now(),
+        };
+        await invoke("sync_publish", { bundle });
+        const list = await invoke<{
+          cached: number;
+          total_size: number;
+          sessions: Array<{ title: string; size: number }>;
+        }>("sync_list");
+        appendMessage(sid, {
+          id: crypto.randomUUID(),
+          role: "assistant",
+          text: `☁️ 同步完成：${list.cached} 个 session · ${(list.total_size / 1024).toFixed(1)} KB\n最新：${sess.title}`,
+          createdAt: Date.now(),
+        });
+      } catch (e) {
+        appendMessage(sid, {
+          id: crypto.randomUUID(),
+          role: "assistant",
+          text: `❌ ${e}`,
+          createdAt: Date.now(),
+        });
+      }
+      setText("");
+      return;
+    }
+
     // v1.5：流程图
     if (trimmed === "/flow") {
       window.dispatchEvent(new CustomEvent("open-flow-panel"));
@@ -785,6 +839,7 @@ M3 / Claude / GPT 会自动调用：
 - /tts                  - 打开 TTS 语音输出设置
 - /speak <text>         - 朗读一段文本（需先在 TopBar 🔊 启用 TTS）
 - /flow                 - 打开 Agent 流程图（v1.5）
+- /sync                 - 同步当前 session 到本地缓存（v1.5）
 - Top bar 🏠 打开模型管理 UI
 - 模型 ID 格式：ollama:<name> / llamacpp:<name>
 - 自动 discover Ollama (http://127.0.0.1:11434) 和 llama.cpp server

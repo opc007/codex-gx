@@ -18,6 +18,7 @@ import { LearningPanel } from "./LearningPanel";
 import { SkillsLibraryDialog } from "./SkillsLibraryDialog";
 import { TtsPanel } from "./TtsPanel";
 import { FlowGraphView } from "./FlowGraphView";
+import { SyncPanel } from "./SyncPanel";
 import {
   useCurrentWorkspaceId,
   useWorkspaceList,
@@ -72,6 +73,7 @@ export function TopBar({ themeMode, setThemeMode, onLicenseClick }: Props) {
   const [skillsOpen, setSkillsOpen] = useState(false);
   const [ttsOpen, setTtsOpen] = useState(false);
   const [flowOpen, setFlowOpen] = useState(false);
+  const [syncOpen, setSyncOpen] = useState(false);
   const { locale, setLocale } = useLocaleSwitcher();
 
   const refreshLicense = async () => {
@@ -234,6 +236,13 @@ export function TopBar({ themeMode, setThemeMode, onLicenseClick }: Props) {
         >
           🕸️
         </button>
+        <button
+          className="topbar-btn"
+          onClick={() => setSyncOpen(true)}
+          title="Session 同步 (v1.5)"
+        >
+          ☁️
+        </button>
         <UserMenu
           open={userMenuOpen}
           onToggle={() => setUserMenuOpen(!userMenuOpen)}
@@ -359,6 +368,9 @@ export function TopBar({ themeMode, setThemeMode, onLicenseClick }: Props) {
 
       {/* v1.5: Flow Graph 弹窗 */}
       {flowOpen && <FlowGraphView onClose={() => setFlowOpen(false)} />}
+
+      {/* v1.5: Sync Panel 弹窗 */}
+      {syncOpen && <SyncPanel onClose={() => setSyncOpen(false)} />}
     </header>
   );
 }

@@ -11,6 +11,7 @@ mod mcp_tool;
 mod skills;
 mod tts;
 mod graph;
+mod sync;
 mod subagent_tool;
 mod tools;
 mod voice_tauri;
@@ -183,6 +184,12 @@ pub fn run() {
             tts_speak_with, // v1.5
             graph_from_plan, // v1.5
             graph_to_mermaid, // v1.5
+            sync_publish, // v1.5
+            sync_fetch, // v1.5
+            sync_list, // v1.5
+            sync_remove, // v1.5
+            sync_clear_all, // v1.5
+            sync_schema_version, // v1.5
             compress_session, // v1.0
             check_update, // v1.0
             voice_tauri::voice_check, // v1.2
@@ -1082,6 +1089,40 @@ async fn graph_from_plan(plan: String, title: Option<String>) -> Result<graph::G
 #[tauri::command]
 async fn graph_to_mermaid(g: graph::Graph) -> Result<String, String> {
     Ok(g.to_mermaid())
+}
+
+// =============================================================================
+// v1.5 Session Sync 命令
+// =============================================================================
+
+#[tauri::command]
+async fn sync_publish(bundle: sync::SessionBundle) -> Result<(), String> {
+    sync::publish(bundle)
+}
+
+#[tauri::command]
+async fn sync_fetch(session_id: String) -> Result<Option<sync::SessionBundle>, String> {
+    sync::fetch(&session_id)
+}
+
+#[tauri::command]
+async fn sync_list() -> Result<sync::SyncStatus, String> {
+    sync::list()
+}
+
+#[tauri::command]
+async fn sync_remove(session_id: String) -> Result<(), String> {
+    sync::remove(&session_id)
+}
+
+#[tauri::command]
+async fn sync_clear_all() -> Result<usize, String> {
+    sync::clear_all()
+}
+
+#[tauri::command]
+async fn sync_schema_version() -> Result<u32, String> {
+    Ok(sync::schema_version())
 }
 
 // ============================================================
