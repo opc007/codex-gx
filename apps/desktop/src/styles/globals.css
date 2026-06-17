@@ -461,6 +461,28 @@ kbd {
 .queue-item-error { font-size: 11px; color: var(--danger); margin-top: 6px; }
 .queue-item-meta { font-size: 10px; color: var(--text-muted); margin-top: 6px; }
 
+/* v1.4：devices panel */
+.devices-section { margin-bottom: 16px; padding: 12px; background: var(--bg-secondary); border-radius: 6px; }
+.devices-section h4 { margin: 0 0 8px 0; font-size: 13px; }
+.devices-status { padding: 8px 12px; background: var(--bg-secondary); border-radius: 4px; font-size: 12px; font-family: ui-monospace, monospace; color: var(--text-muted); }
+
+.pairing-code-box { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.pairing-code { font-family: ui-monospace, monospace; font-size: 24px; font-weight: 700; letter-spacing: 4px; padding: 6px 12px; background: var(--bg); border-radius: 4px; color: var(--primary); }
+
+.pairing-request { padding: 12px; border: 2px solid var(--primary); border-radius: 6px; margin-bottom: 12px; background: var(--bg); }
+.pairing-request h4 { margin: 0 0 6px 0; font-size: 13px; }
+
+.connect-row { display: flex; gap: 6px; flex-wrap: wrap; }
+.connect-row .vault-password-input { flex: 2; min-width: 180px; }
+.connect-row .pairing-input { flex: 1; min-width: 100px; max-width: 120px; }
+
+.peer-list { display: flex; flex-direction: column; gap: 4px; }
+.peer-item { display: flex; align-items: center; gap: 8px; padding: 6px 10px; border: 1px solid var(--border); border-radius: 4px; font-size: 12px; flex-wrap: wrap; }
+.peer-name { font-weight: 500; }
+.peer-platform { font-size: 10px; padding: 1px 6px; background: var(--bg); border-radius: 3px; color: var(--text-muted); }
+.peer-addr { font-family: ui-monospace, monospace; font-size: 11px; color: var(--text-muted); }
+.peer-status { font-size: 10px; padding: 1px 6px; background: var(--bg); border-radius: 3px; color: var(--text-muted); margin-left: auto; }
+
 /* v1.1：标签栏 */
 .tab-bar {
   display: flex;

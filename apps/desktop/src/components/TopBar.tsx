@@ -13,6 +13,7 @@ import { TeamPanel } from "./TeamPanel";
 import { LocalModelDialog } from "./LocalModelDialog";
 import { CodeReviewDialog } from "./CodeReviewDialog";
 import { QueuePanel } from "./QueuePanel";
+import { DevicesPanel } from "./DevicesPanel";
 import {
   useCurrentWorkspaceId,
   useWorkspaceList,
@@ -62,6 +63,7 @@ export function TopBar({ themeMode, setThemeMode, onLicenseClick }: Props) {
   const [localOpen, setLocalOpen] = useState(false);
   const [reviewOpen, setReviewOpen] = useState(false);
   const [queueOpen, setQueueOpen] = useState(false);
+  const [devicesOpen, setDevicesOpen] = useState(false);
   const { locale, setLocale } = useLocaleSwitcher();
 
   const refreshLicense = async () => {
@@ -189,6 +191,13 @@ export function TopBar({ themeMode, setThemeMode, onLicenseClick }: Props) {
         >
           📋
         </button>
+        <button
+          className="topbar-btn"
+          onClick={() => setDevicesOpen(true)}
+          title="P2P 设备协同 (v1.4)"
+        >
+          📡
+        </button>
         <UserMenu
           open={userMenuOpen}
           onToggle={() => setUserMenuOpen(!userMenuOpen)}
@@ -299,6 +308,9 @@ export function TopBar({ themeMode, setThemeMode, onLicenseClick }: Props) {
 
       {/* v1.4: Queue Panel 弹窗 */}
       {queueOpen && <QueuePanel onClose={() => setQueueOpen(false)} />}
+
+      {/* v1.4: Devices Panel 弹窗 */}
+      {devicesOpen && <DevicesPanel onClose={() => setDevicesOpen(false)} />}
     </header>
   );
 }

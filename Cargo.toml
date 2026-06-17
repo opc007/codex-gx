@@ -15,6 +15,7 @@ members = [
     "crates/vault",
     "crates/lint",
     "crates/queue",
+    "crates/p2p",
     "apps/desktop/src-tauri",
 ]
 
@@ -90,6 +91,7 @@ marketplace = { path = "crates/marketplace" }
 vault = { path = "crates/vault" }
 lint = { path = "crates/lint" }
 queue = { path = "crates/queue" }
+p2p = { path = "crates/p2p" }
 
 # regex
 regex-lite = "0.1"

@@ -35,6 +35,7 @@ marketplace = { path = "../../../crates/marketplace" }
 vault = { path = "../../../crates/vault" }
 lint = { path = "../../../crates/lint" }
 queue = { path = "../../../crates/queue" }
+p2p = { path = "../../../crates/p2p" }
 base64.workspace = true
 tokio.workspace = true
 async-trait.workspace = true
@@ -44,6 +45,7 @@ thiserror.workspace = true
 futures.workspace = true
 chrono.workspace = true
 reqwest.workspace = true
+uuid.workspace = true
 
 [features]
 default = ["custom-protocol"]

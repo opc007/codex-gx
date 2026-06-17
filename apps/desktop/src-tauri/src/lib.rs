@@ -21,6 +21,7 @@ mod bugreport_tauri;
 mod local_tauri;
 mod lint_tauri;
 mod queue_tauri;
+mod p2p_tauri;
 
 use agent_core::tool::ToolRegistry;
 use serde::{Deserialize, Serialize};
@@ -102,6 +103,7 @@ pub fn run() {
         )))
         .manage::<BugReportState>(Arc::new(bugreport_tauri::BugReportState::new()))
         .manage::<queue_tauri::QueueState>(queue_tauri::build_state())
+        .manage(p2p_tauri::P2pState::new())
         .setup(|app| {
             // v1.3：安装 panic hook
             if let Some(state) = app.try_state::<BugReportState>() {
@@ -189,6 +191,13 @@ pub fn run() {
             queue_tauri::queue_enqueue, // v1.4
             queue_tauri::queue_cancel, // v1.4
             queue_tauri::queue_clear_finished, // v1.4
+            p2p_tauri::p2p_start_host, // v1.4
+            p2p_tauri::p2p_stop_host, // v1.4
+            p2p_tauri::p2p_generate_pairing, // v1.4
+            p2p_tauri::p2p_accept_pairing, // v1.4
+            p2p_tauri::p2p_reject_pairing, // v1.4
+            p2p_tauri::p2p_list_peers, // v1.4
+            p2p_tauri::p2p_connect, // v1.4
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
