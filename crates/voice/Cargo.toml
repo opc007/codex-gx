@@ -1,0 +1,27 @@
+[package]
+name = "voice"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+authors.workspace = true
+license.workspace = true
+repository.workspace = true
+description = "Voice input — 本地 Whisper 转写 + 模型管理"
+
+[dependencies]
+# workspace
+serde.workspace = true
+serde_json.workspace = true
+thiserror.workspace = true
+anyhow.workspace = true
+tracing.workspace = true
+tokio.workspace = true
+async-trait.workspace = true
+futures.workspace = true
+chrono.workspace = true
+reqwest.workspace = true
+base64.workspace = true
+sha2.workspace = true
+
+[dev-dependencies]
+tokio = { workspace = true }

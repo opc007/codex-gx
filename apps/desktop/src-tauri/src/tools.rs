@@ -43,6 +43,15 @@ impl Tool for BashTool {
     fn description(&self) -> &str {
         "执行 shell 命令（macOS/Linux 用 sh，Windows 用 cmd）。返回 stdout + stderr + 退出码。"
     }
+    fn permission_level(&self) -> agent_core::PermissionLevel {
+        agent_core::PermissionLevel::Moderate
+    }
+    fn risk_patterns(&self) -> Vec<String> {
+        agent_core::DEFAULT_BASH_RISK_PATTERNS
+            .iter()
+            .map(|s| s.to_string())
+            .collect()
+    }
     fn parameters_schema(&self) -> serde_json::Value {
         json!({
             "type": "object",
@@ -161,6 +170,9 @@ impl Tool for WriteFileTool {
     }
     fn description(&self) -> &str {
         "写入或创建文件（覆盖已有内容）。会自动创建父目录。"
+    }
+    fn permission_level(&self) -> agent_core::PermissionLevel {
+        agent_core::PermissionLevel::Moderate
     }
     fn parameters_schema(&self) -> serde_json::Value {
         json!({

@@ -1,0 +1,23 @@
+[package]
+name = "marketplace"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+authors.workspace = true
+license.workspace = true
+repository.workspace = true
+description = "v1.2: 社区插件市场 — skill / tool / mcp-server 一键安装"
+
+[dependencies]
+serde.workspace = true
+serde_json.workspace = true
+serde_yaml.workspace = true
+thiserror.workspace = true
+anyhow.workspace = true
+tracing.workspace = true
+tokio.workspace = true
+async-trait.workspace = true
+chrono.workspace = true
+reqwest.workspace = true
+sha2.workspace = true
+hex = "0.4"

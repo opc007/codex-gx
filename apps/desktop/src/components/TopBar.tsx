@@ -5,6 +5,7 @@ import type { ThemeMode } from "../stores/theme";
 import { useLocaleSwitcher, SUPPORTED_LOCALES, LOCALE_LABELS } from "../i18n";
 import type { Locale } from "../i18n";
 import { open as openUrl } from "@tauri-apps/plugin-shell";
+import { MarketplaceDialog } from "./MarketplaceDialog";
 
 type UpdateInfo = {
   currentVersion: string;
@@ -32,6 +33,7 @@ export function TopBar({ themeMode, setThemeMode, onLicenseClick }: Props) {
   const [license, setLicense] = useState<LicenseStatus | null>(null);
   const [updateInfo, setUpdateInfo] = useState<UpdateInfo | null>(null);
   const [updateBusy, setUpdateBusy] = useState(false);
+  const [marketplaceOpen, setMarketplaceOpen] = useState(false);
   const { locale, setLocale } = useLocaleSwitcher();
 
   const refreshLicense = async () => {
@@ -102,6 +104,13 @@ export function TopBar({ themeMode, setThemeMode, onLicenseClick }: Props) {
         >
           🔑 {license?.active ? license.tierDisplay : "未激活"}
         </button>
+        <button
+          className="topbar-btn"
+          onClick={() => setMarketplaceOpen(true)}
+          title="Plugin marketplace (v1.2)"
+        >
+          🧩
+        </button>
         <button className="topbar-btn" onClick={pingBackend} disabled={busy}>
           {busy ? "..." : "Ping"}
         </button>
@@ -162,6 +171,11 @@ export function TopBar({ themeMode, setThemeMode, onLicenseClick }: Props) {
             </div>
           </div>
         </div>
+      )}
+
+      {/* v1.2: Plugin marketplace 弹窗 */}
+      {marketplaceOpen && (
+        <MarketplaceDialog onClose={() => setMarketplaceOpen(false)} />
       )}
     </header>
   );

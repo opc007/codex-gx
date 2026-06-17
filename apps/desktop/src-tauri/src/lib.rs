@@ -11,6 +11,9 @@ mod mcp_tool;
 mod skills;
 mod subagent_tool;
 mod tools;
+mod voice_tauri;
+mod marketplace_tauri;
+mod vault_tauri;
 
 use agent_core::tool::ToolRegistry;
 use serde::{Deserialize, Serialize};
@@ -32,6 +35,15 @@ type SharedToolRegistry = Arc<Mutex<ToolRegistry>>;
 
 /// v0.8：跨会话长期记忆
 type SharedMemory = Arc<Mutex<memory::MemoryManager>>;
+
+/// v1.2：voice 模块共享状态
+pub type VoiceState = Arc<Mutex<voice::VoiceManager>>;
+
+/// v1.2：marketplace 模块共享状态
+pub type MarketplaceState = Arc<Mutex<marketplace::MarketplaceManager>>;
+
+/// v1.2：vault 模块共享状态
+pub type VaultState = Arc<Mutex<vault::Vault>>;
 
 /// v0.4：每个 session 一个 cancel handle + approval sender
 #[derive(Default)]
@@ -57,6 +69,21 @@ pub fn run() {
         .manage(ProviderCache::default())
         .manage(SharedToolRegistry::default())
         .manage(SessionControl::default())
+        .manage::<VoiceState>(Arc::new(Mutex::new(
+            voice::VoiceManager::new().expect("voice manager init"),
+        )))
+        .manage::<MarketplaceState>(Arc::new(Mutex::new(
+            marketplace::MarketplaceManager::new().expect("marketplace init"),
+        )))
+        .manage::<VaultState>(Arc::new(Mutex::new(
+            vault::Vault::new(
+                std::env::var("HOME")
+                    .or_else(|_| std::env::var("USERPROFILE"))
+                    .map(|h| std::path::PathBuf::from(h).join(".agentshell").join("vault"))
+                    .unwrap_or_else(|_| std::env::temp_dir().join("agentshell_vault")),
+            )
+            .expect("vault init"),
+        )))
         .setup(|app| {
             // v0.8：异步初始化 memory manager
             let app_handle = app.handle().clone();
@@ -101,6 +128,22 @@ pub fn run() {
             run_skill, // v0.8
             compress_session, // v1.0
             check_update, // v1.0
+            voice_tauri::voice_check, // v1.2
+            voice_tauri::voice_download_model, // v1.2
+            voice_tauri::voice_transcribe, // v1.2
+            voice_tauri::voice_cleanup, // v1.2
+            voice_tauri::voice_delete_model, // v1.2
+            marketplace_tauri::marketplace_fetch_index, // v1.2
+            marketplace_tauri::marketplace_list_installed, // v1.2
+            marketplace_tauri::marketplace_install, // v1.2
+            marketplace_tauri::marketplace_uninstall, // v1.2
+            marketplace_tauri::marketplace_set_index_url, // v1.2
+            marketplace_tauri::marketplace_get_index_url, // v1.2
+            vault_tauri::vault_is_encrypted, // v1.2
+            vault_tauri::vault_list_encrypted, // v1.2
+            vault_tauri::vault_encrypt_session, // v1.2
+            vault_tauri::vault_decrypt_session, // v1.2
+            vault_tauri::vault_remove_session, // v1.2
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

@@ -1,7 +1,8 @@
 import { useSessionsStore, type SessionMeta, type PersistedMessage } from "../stores/sessions";
 import { exportSession, type ExportFormat } from "../lib/export";
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useOpenTabs, openTab, closeTab, closeOtherTabs, closeAllTabs } from "../stores/tabs";
+import { invoke } from "@tauri-apps/api/core";
 
 export function Sidebar() {
   const sessions = useSessionsStore((s) => s.sessions);
@@ -10,11 +11,35 @@ export function Sidebar() {
   const create = useSessionsStore((s) => s.create);
   const remove = useSessionsStore((s) => s.remove);
   const messages = useSessionsStore((s) => s.messages);
+  const setMessages = useSessionsStore((s) => s.setMessages);
   const openTabs = useOpenTabs();
 
   const [exportOpen, setExportOpen] = useState<string | null>(null);
   const [tabMenuOpen, setTabMenuOpen] = useState(false);
   const [redactOnExport, setRedactOnExport] = useState(true);
+
+  // v1.2：vault 加密
+  const [encryptedSet, setEncryptedSet] = useState<Set<string>>(new Set());
+  const [vaultPrompt, setVaultPrompt] = useState<null | {
+    sessionId: string;
+    mode: "encrypt" | "decrypt";
+  }>(null);
+  const [vaultPassword, setVaultPassword] = useState("");
+  const [vaultError, setVaultError] = useState<string | null>(null);
+  const [vaultBusy, setVaultBusy] = useState(false);
+
+  const refreshEncrypted = async () => {
+    try {
+      const list = await invoke<{ session_id: string }[]>("vault_list_encrypted");
+      setEncryptedSet(new Set(list.map((l) => l.session_id)));
+    } catch (e) {
+      // 后端未启动等
+    }
+  };
+
+  useEffect(() => {
+    void refreshEncrypted();
+  }, []);
 
   const doExport = async (s: SessionMeta, fmt: ExportFormat) => {
     const msgs: PersistedMessage[] = messages[s.id] ?? [];
@@ -117,6 +142,33 @@ export function Sidebar() {
           >
             <span className="session-title">{s.title}</span>
             <div className="session-actions">
+              {encryptedSet.has(s.id) ? (
+                <button
+                  className="session-vault-locked"
+                  title="已加密 — 点击解锁"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    setVaultError(null);
+                    setVaultPassword("");
+                    setVaultPrompt({ sessionId: s.id, mode: "decrypt" });
+                  }}
+                >
+                  🔒
+                </button>
+              ) : (
+                <button
+                  className="session-vault"
+                  title="标记为敏感（加密）"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    setVaultError(null);
+                    setVaultPassword("");
+                    setVaultPrompt({ sessionId: s.id, mode: "encrypt" });
+                  }}
+                >
+                  🔓
+                </button>
+              )}
               <button
                 className="session-export"
                 onClick={(e) => {
@@ -159,6 +211,83 @@ export function Sidebar() {
           </li>
         ))}
       </ul>
+
+      {vaultPrompt && (
+        <div className="update-dialog-overlay" onClick={() => setVaultPrompt(null)}>
+          <div className="update-dialog" onClick={(e) => e.stopPropagation()}>
+            <div className="update-dialog-header">
+              <h2>
+                {vaultPrompt.mode === "encrypt" ? "🔒 加密 Session" : "🔓 解锁 Session"}
+              </h2>
+              <button className="update-cancel" onClick={() => setVaultPrompt(null)}>×</button>
+            </div>
+            <div className="update-dialog-body">
+              <p style={{ fontSize: 13, color: "var(--text-muted)" }}>
+                {vaultPrompt.mode === "encrypt"
+                  ? "此 session 的内容将用 AES-256-GCM 加密存储。请设置一个密码。忘记密码无法恢复。"
+                  : "请输入密码以解锁此 session。"}
+              </p>
+              <input
+                type="password"
+                value={vaultPassword}
+                onChange={(e) => setVaultPassword(e.target.value)}
+                placeholder="密码"
+                className="vault-password-input"
+                autoFocus
+              />
+              {vaultError && (
+                <div className="mp-error">❌ {vaultError}</div>
+              )}
+            </div>
+            <div className="update-dialog-footer">
+              <button className="update-cancel" onClick={() => setVaultPrompt(null)}>取消</button>
+              <button
+                className="update-go"
+                disabled={vaultBusy || !vaultPassword}
+                onClick={async () => {
+                  if (!vaultPrompt) return;
+                  setVaultBusy(true);
+                  setVaultError(null);
+                  try {
+                    if (vaultPrompt.mode === "encrypt") {
+                      const msgs = messages[vaultPrompt.sessionId] ?? [];
+                      const plain = JSON.stringify(msgs);
+                      await invoke("vault_encrypt_session", {
+                        args: {
+                          session_id: vaultPrompt.sessionId,
+                          plaintext: plain,
+                          password: vaultPassword,
+                        },
+                      });
+                      await refreshEncrypted();
+                      setVaultPrompt(null);
+                      setVaultPassword("");
+                    } else {
+                      // 解密 — 把解密后的 JSON 写回 messages
+                      const text = await invoke<string>("vault_decrypt_session", {
+                        args: {
+                          session_id: vaultPrompt.sessionId,
+                          password: vaultPassword,
+                        },
+                      });
+                      const restored = JSON.parse(text) as PersistedMessage[];
+                      setMessages(vaultPrompt.sessionId, restored);
+                      setVaultPrompt(null);
+                      setVaultPassword("");
+                    }
+                  } catch (e: any) {
+                    setVaultError(String(e));
+                  } finally {
+                    setVaultBusy(false);
+                  }
+                }}
+              >
+                {vaultBusy ? "..." : vaultPrompt.mode === "encrypt" ? "加密" : "解锁"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </aside>
   );
 }

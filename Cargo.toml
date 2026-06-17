@@ -10,6 +10,9 @@ members = [
     "crates/computer-use",
     "crates/license",
     "crates/memory",
+    "crates/voice",
+    "crates/marketplace",
+    "crates/vault",
     "apps/desktop/src-tauri",
 ]
 
@@ -80,6 +83,9 @@ sandbox = { path = "crates/sandbox" }
 computer-use = { path = "crates/computer-use" }
 memory = { path = "crates/memory" }
 license = { path = "crates/license" }
+voice = { path = "crates/voice" }
+marketplace = { path = "crates/marketplace" }
+vault = { path = "crates/vault" }
 
 [profile.dev]
 opt-level = 0

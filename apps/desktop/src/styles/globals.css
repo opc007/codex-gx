@@ -404,6 +404,89 @@ kbd {
 }
 .update-go:hover { filter: brightness(0.92); }
 
+/* v1.2：Marketplace */
+.marketplace-dialog {
+  width: 720px;
+  max-width: 90vw;
+  max-height: 80vh;
+  overflow: auto;
+}
+.mp-section { margin-bottom: 18px; }
+.mp-section h3 {
+  margin: 0 0 8px 0;
+  font-size: 14px;
+  color: var(--text-muted);
+  font-weight: 600;
+}
+.mp-url-row { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+.mp-url { font-size: 12px; color: var(--text-muted); word-break: break-all; flex: 1; }
+.mp-url-edit { display: flex; gap: 6px; }
+.mp-url-input {
+  flex: 1;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  color: var(--text);
+  padding: 4px 8px;
+  border-radius: 4px;
+  font-family: monospace;
+  font-size: 12px;
+}
+.mp-error {
+  color: var(--accent);
+  background: var(--bg-elevated);
+  border: 1px solid var(--accent);
+  border-radius: 4px;
+  padding: 6px 10px;
+  font-size: 13px;
+  margin: 8px 0;
+}
+.mp-empty { color: var(--text-muted); font-size: 13px; padding: 8px 0; }
+.mp-installed-list, .mp-plugin-list { list-style: none; margin: 0; padding: 0; }
+.mp-installed-item {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 6px 8px;
+  border-bottom: 1px solid var(--border);
+  font-size: 13px;
+}
+.mp-plugin-item {
+  background: var(--bg-elevated);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 10px 12px;
+  margin-bottom: 8px;
+}
+.mp-plugin-head { font-size: 13px; margin-bottom: 4px; }
+.mp-plugin-desc { font-size: 13px; color: var(--text-muted); margin-bottom: 4px; }
+.mp-plugin-tags { display: flex; gap: 4px; margin-bottom: 6px; flex-wrap: wrap; }
+.mp-plugin-actions { display: flex; gap: 6px; margin-top: 4px; }
+.mp-version { color: var(--text-muted); font-size: 12px; }
+.mp-tag {
+  background: var(--bg-3);
+  color: var(--text-muted);
+  font-size: 11px;
+  padding: 1px 6px;
+  border-radius: 3px;
+  margin-left: 4px;
+}
+.mp-tag-small {
+  background: var(--bg-3);
+  color: var(--text-muted);
+  font-size: 10px;
+  padding: 1px 5px;
+  border-radius: 3px;
+}
+.mp-author { color: var(--text-muted); font-size: 11px; margin-left: 6px; }
+.mp-install-btn {
+  background: var(--accent);
+  color: white;
+  border-color: var(--accent);
+}
+.mp-install-btn:hover:not(:disabled) {
+  filter: brightness(1.1);
+}
+
 /* v0.9：附件 */
 .composer-attach { cursor: pointer; padding: 4px 8px; border-radius: 4px; }
 .composer-attach:hover { background: var(--bg-hover); }
@@ -496,6 +579,32 @@ kbd {
 }
 .session-item:hover .session-del { opacity: 0.7; }
 .session-del:hover { opacity: 1 !important; background: transparent; }
+
+/* v1.2：vault 加密按钮 */
+.session-vault, .session-vault-locked {
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  padding: 0 4px;
+  font-size: 14px;
+  color: var(--text-muted);
+  border-radius: 3px;
+}
+.session-vault:hover { color: var(--accent); }
+.session-vault-locked {
+  color: var(--accent);
+}
+.vault-password-input {
+  width: 100%;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  color: var(--text);
+  padding: 8px 10px;
+  border-radius: 4px;
+  font-size: 14px;
+  margin: 8px 0;
+  font-family: monospace;
+}
 .session-empty {
   padding: 20px; text-align: center; color: var(--muted); font-size: 12px;
 }
@@ -587,6 +696,31 @@ kbd {
   font-size: 14px;
   padding: 4px 8px;
 }
+
+/* v1.2：voice input */
+.composer-voice.recording {
+  background: var(--accent);
+  color: white;
+  border-color: var(--accent);
+  animation: voice-pulse 1s ease-in-out infinite;
+}
+.composer-voice.busy {
+  opacity: 0.6;
+  cursor: wait;
+}
+@keyframes voice-pulse {
+  0%, 100% { transform: scale(1); }
+  50% { transform: scale(1.08); }
+}
+.composer-voice-status {
+  font-size: 12px;
+  color: var(--text-muted);
+  padding: 4px 6px;
+  background: var(--bg-elevated);
+  border-radius: 4px;
+  margin: 4px 0;
+}
+
 .composer-input {
   background: var(--bg);
   border: 1px solid var(--border);

@@ -8,6 +8,7 @@ use std::collections::HashMap;
 use std::sync::Arc;
 
 use crate::error::Result;
+use crate::permission::PermissionLevel;
 
 /// Tool 输入（JSON Value）
 pub type ToolInput = serde_json::Value;
@@ -79,6 +80,17 @@ pub trait Tool: Send + Sync + std::fmt::Debug {
 
     /// 工具描述
     fn description(&self) -> &str;
+
+    /// v1.2：权限级别（默认 safe）
+    fn permission_level(&self) -> PermissionLevel {
+        PermissionLevel::Safe
+    }
+
+    /// v1.2：风险模式（用于检查工具输入里的危险子串，比如 bash 命令）
+    /// 命中任意一个 → 升级到 Dangerous
+    fn risk_patterns(&self) -> Vec<String> {
+        Vec::new()
+    }
 
     /// 参数 schema（OpenAI function calling 格式）
     fn parameters_schema(&self) -> serde_json::Value {

@@ -1,0 +1,25 @@
+[package]
+name = "vault"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+authors.workspace = true
+license.workspace = true
+repository.workspace = true
+description = "v1.2: 敏感 session 加密存储（AES-256-GCM + PBKDF2）"
+
+[dependencies]
+serde.workspace = true
+serde_json.workspace = true
+thiserror.workspace = true
+anyhow.workspace = true
+tracing.workspace = true
+tokio.workspace = true
+async-trait.workspace = true
+chrono.workspace = true
+base64.workspace = true
+sha2.workspace = true
+hmac.workspace = true
+aes-gcm = "0.10"
+rand = "0.8"
+pbkdf2 = "0.12"

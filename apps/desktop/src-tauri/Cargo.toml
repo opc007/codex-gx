@@ -30,6 +30,9 @@ sandbox = { path = "../../../crates/sandbox" }
 computer-use = { path = "../../../crates/computer-use" }
 license = { path = "../../../crates/license" }
 memory = { path = "../../../crates/memory" }
+voice = { path = "../../../crates/voice" }
+marketplace = { path = "../../../crates/marketplace" }
+vault = { path = "../../../crates/vault" }
 base64.workspace = true
 tokio.workspace = true
 async-trait.workspace = true

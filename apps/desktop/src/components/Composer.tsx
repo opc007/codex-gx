@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { invoke } from "@tauri-apps/api/core";
+import { listen } from "@tauri-apps/api/event";
 import { open as openDialog } from "@tauri-apps/plugin-dialog";
 import { useSessionsStore, getSessionsState, setSessionsState, type PersistedMessage } from "../stores/sessions";
 import { useTranslation, setLocale as i18nSetLocale } from "../i18n";
@@ -38,9 +39,45 @@ export function Composer({ sessionId }: Props) {
   const [stages, setStages] = useState<Stage[]>([]);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
 
+  // v1.2：voice input 状态
+  const [recording, setRecording] = useState(false);
+  const [voiceBusy, setVoiceBusy] = useState(false);
+  const [voiceHint, setVoiceHint] = useState<string | null>(null);
+  const mediaRecorderRef = useRef<MediaRecorder | null>(null);
+  const recordedChunksRef = useRef<Blob[]>([]);
+
   useEffect(() => {
     void loadProviders().then(setProviders);
   }, []);
+
+  // v1.2：监听 voice 模型下载进度
+  useEffect(() => {
+    let unlisten: (() => void) | undefined;
+    listen<{ model: string; pct: number; downloaded: number; total: number; done: boolean; error: string | null }>(
+      "voice:download_progress",
+      (e) => {
+        const p = e.payload;
+        if (p.error) {
+          setVoiceHint(`下载失败: ${p.error}`);
+        } else if (p.done) {
+          setVoiceHint(`✅ 模型 ${p.model} 下载完成 (${(p.downloaded / 1024 / 1024).toFixed(1)} MB)`);
+          if (sessionId) {
+            appendMessage(sessionId, {
+              id: crypto.randomUUID(),
+              role: "assistant",
+              text: `✅ 模型 ${p.model} 下载完成`,
+              createdAt: Date.now(),
+            });
+          }
+        } else {
+          setVoiceHint(`⏬ 下载 ${p.model}: ${(p.pct * 100).toFixed(1)}% (${(p.downloaded / 1024 / 1024).toFixed(1)}/${(p.total / 1024 / 1024).toFixed(1)} MB)`);
+        }
+      },
+    ).then((u) => (unlisten = u));
+    return () => {
+      unlisten?.();
+    };
+  }, [sessionId, appendMessage]);
 
   // busy 时初始化 / 重置 stages
   useEffect(() => {
@@ -81,6 +118,75 @@ export function Composer({ sessionId }: Props) {
     }
   };
 
+  // v1.2：voice input 处理
+  const startRecording = async () => {
+    if (recording) return;
+    setVoiceHint(null);
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      // 优先选 webm/opus；whisper-cli 接受 wav，但我们输出 webm 也行——浏览器只支持 webm/ogg
+      const mime = MediaRecorder.isTypeSupported("audio/webm;codecs=opus")
+        ? "audio/webm;codecs=opus"
+        : "audio/webm";
+      const mr = new MediaRecorder(stream, { mimeType: mime });
+      recordedChunksRef.current = [];
+      mr.ondataavailable = (e) => {
+        if (e.data.size > 0) recordedChunksRef.current.push(e.data);
+      };
+      mr.onstop = async () => {
+        stream.getTracks().forEach((t) => t.stop());
+        setRecording(false);
+        const blob = new Blob(recordedChunksRef.current, { type: mime });
+        await transcribeBlob(blob);
+      };
+      mr.start();
+      mediaRecorderRef.current = mr;
+      setRecording(true);
+    } catch (e: any) {
+      setVoiceHint(`麦克风访问失败: ${e?.message || e}`);
+    }
+  };
+
+  const stopRecording = () => {
+    if (mediaRecorderRef.current && mediaRecorderRef.current.state === "recording") {
+      mediaRecorderRef.current.stop();
+    }
+  };
+
+  const transcribeBlob = async (blob: Blob) => {
+    setVoiceBusy(true);
+    setVoiceHint("转写中…");
+    try {
+      const buf = await blob.arrayBuffer();
+      const bytes = new Uint8Array(buf);
+      // 转 base64（分块避免调用栈溢出）
+      let bin = "";
+      const chunk = 0x8000;
+      for (let i = 0; i < bytes.length; i += chunk) {
+        bin += String.fromCharCode.apply(
+          null,
+          Array.from(bytes.subarray(i, i + chunk)),
+        );
+      }
+      const base64 = btoa(bin);
+      const r = await invoke<{ text: string; model: string; elapsed_ms: number }>(
+        "voice_transcribe",
+        { args: { base64, filename: "rec.webm", model: null } },
+      );
+      setVoiceHint(null);
+      if (r.text.trim()) {
+        // 追加到现有文本
+        setText((prev) => (prev ? prev + " " + r.text : r.text));
+      } else {
+        setVoiceHint("未识别到语音");
+      }
+    } catch (e: any) {
+      setVoiceHint(`转写失败: ${e}`);
+    } finally {
+      setVoiceBusy(false);
+    }
+  };
+
   const onSend = async () => {
     if (!sessionId || !text.trim() || busy) return;
 
@@ -113,6 +219,76 @@ export function Composer({ sessionId }: Props) {
       }
       setText("");
       return;
+    }
+    // v1.2：voice 状态 + 下载模型
+    if (trimmed === "/voice" || trimmed.startsWith("/voice ")) {
+      const arg = trimmed.slice(6).trim();
+      if (!arg || arg === "status") {
+        try {
+          const status = await invoke<any>("voice_check");
+          const lines = [
+            `🎙 Voice (v1.2)`,
+            `whisper-cli: ${status.cli_available ? "✅ " + status.cli_path : "❌ 未找到"}`,
+            ...(status.cli_hint ? [`💡 ${status.cli_hint}`] : []),
+            `默认模型: ${status.default_model ?? "(无)"}`,
+            `已下载模型:`,
+            ...status.models.map(
+              (m: any) =>
+                `  ${m.downloaded ? "✅" : "  "} ${m.name}  ${m.display_name}  (${m.description})`,
+            ),
+            "",
+            "用法: /voice download <模型名>    下载模型",
+            "     /voice cleanup             清理临时文件",
+            "     /voice status              查看状态",
+          ];
+          appendMessage(sessionId, {
+            id: crypto.randomUUID(),
+            role: "assistant",
+            text: lines.join("\n"),
+            createdAt: Date.now(),
+          });
+        } catch (e: any) {
+          appendMessage(sessionId, {
+            id: crypto.randomUUID(),
+            role: "assistant",
+            text: `❌ ${e}`,
+            createdAt: Date.now(),
+          });
+        }
+        setText("");
+        return;
+      }
+      if (arg.startsWith("download ")) {
+        const model = arg.slice(9).trim();
+        appendMessage(sessionId, {
+          id: crypto.randomUUID(),
+          role: "assistant",
+          text: `⏬ 开始下载模型 ${model}…（窗口下方会显示进度）`,
+          createdAt: Date.now(),
+        });
+        // 不 await，让下载在后台跑，进度通过 voice:download_progress 事件显示
+        invoke("voice_download_model", { args: { model } }).catch((e) => {
+          appendMessage(sessionId, {
+            id: crypto.randomUUID(),
+            role: "assistant",
+            text: `❌ 下载失败: ${e}`,
+            createdAt: Date.now(),
+          });
+        });
+        setText("");
+        return;
+      }
+      if (arg === "cleanup") {
+        await invoke("voice_cleanup");
+        appendMessage(sessionId, {
+          id: crypto.randomUUID(),
+          role: "assistant",
+          text: "🧹 临时文件已清理",
+          createdAt: Date.now(),
+        });
+        setText("");
+        return;
+      }
     }
     // v1.0：长会话压缩
     if (trimmed === "/compress" || trimmed.startsWith("/compress ")) {
@@ -257,6 +433,12 @@ M3 / Claude / GPT 会自动调用：
 
 🔒 v1.1 脱敏测试：
 /redact <文本>             - 测试脱敏（api key/email/IPv4/JWT/PEM...）
+
+🎙 v1.2 语音输入（本地 Whisper）：
+/voice status              - 查看 whisper-cli 状态和模型
+/voice download <模型名>   - 下载 Whisper 模型（tiny/base/small/medium）
+/voice cleanup             - 清理临时音频
+按钮: 🎙 - 录音；⏹ - 结束；转写文本自动填到输入框
 
 💡 模型切换：Top bar 下拉
 💡 所有会话和消息自动保存到本地`,
@@ -1041,13 +1223,29 @@ ${diff.diff.slice(0, 5000)}${diff.truncated ? "\n... [truncated, view full in gi
           📎
         </button>
         <button
-          className="composer-attachment"
-          title="Computer Use (浏览器层)"
-          disabled
+          className={`composer-attachment composer-voice ${recording ? "recording" : ""} ${voiceBusy ? "busy" : ""}`}
+          title={
+            recording
+              ? "点击停止录音"
+              : voiceBusy
+                ? "转写中…"
+                : "语音输入（v1.2：本地 Whisper）"
+          }
+          disabled={voiceBusy}
+          onClick={() => {
+            if (recording) stopRecording();
+            else void startRecording();
+          }}
         >
-          🖥️
+          {recording ? "⏹" : voiceBusy ? "⏳" : "🎙"}
         </button>
       </div>
+      {(recording || voiceHint) && (
+        <div className="composer-voice-status">
+          {recording && "🔴 正在录音… 再次点击结束"}
+          {voiceHint && !recording && `🔊 ${voiceHint}`}
+        </div>
+      )}
       {attachedImages.length > 0 && (
         <div className="composer-attachments">
           {attachedImages.map((img, i) => (
