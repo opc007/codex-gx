@@ -223,7 +223,108 @@ kbd {
   font-size: 13px;
 }
 .export-menu button:hover { background: var(--bg-hover); }
+.export-redact {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 10px 4px 10px;
+  font-size: 12px;
+  color: var(--text-muted);
+  border-bottom: 1px solid var(--border);
+  cursor: pointer;
+}
+.export-redact input { cursor: pointer; }
 .session-item { position: relative; }
+.session-item.tabbed { background: var(--bg-hover); }
+
+/* v1.1：标签栏 */
+.tab-bar {
+  display: flex;
+  align-items: center;
+  border-bottom: 1px solid var(--border);
+  background: var(--bg-elevated);
+  padding-right: 4px;
+  min-height: 32px;
+}
+.tab-list {
+  display: flex;
+  flex: 1;
+  overflow-x: auto;
+  overflow-y: hidden;
+  scrollbar-width: thin;
+}
+.tab {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 4px 8px;
+  border-right: 1px solid var(--border);
+  cursor: pointer;
+  font-size: 12px;
+  color: var(--text-muted);
+  max-width: 140px;
+  min-width: 60px;
+  white-space: nowrap;
+  user-select: none;
+  transition: background 0.1s;
+}
+.tab:hover { background: var(--bg-hover); }
+.tab.active {
+  background: var(--bg);
+  color: var(--text);
+  border-bottom: 2px solid var(--accent);
+  margin-bottom: -1px;
+}
+.tab-title {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  flex: 1;
+}
+.tab-close {
+  border: none;
+  background: transparent;
+  color: var(--text-muted);
+  cursor: pointer;
+  padding: 0 2px;
+  font-size: 14px;
+  line-height: 1;
+  border-radius: 3px;
+}
+.tab-close:hover { background: var(--bg-elevated); color: var(--accent); }
+.tab-menu-wrap { position: relative; }
+.tab-menu-btn {
+  border: none;
+  background: transparent;
+  cursor: pointer;
+  padding: 4px 8px;
+  color: var(--text-muted);
+  font-size: 14px;
+  border-radius: 3px;
+}
+.tab-menu-btn:hover { background: var(--bg-hover); color: var(--text); }
+.tab-menu {
+  position: absolute;
+  right: 0;
+  top: 100%;
+  background: var(--bg-elevated);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.15);
+  z-index: 10;
+  min-width: 130px;
+  display: flex;
+  flex-direction: column;
+}
+.tab-menu button {
+  border: none;
+  background: transparent;
+  text-align: left;
+  padding: 6px 10px;
+  cursor: pointer;
+  color: var(--text);
+  font-size: 13px;
+}
+.tab-menu button:hover { background: var(--bg-hover); }
 
 /* v1.0：更新弹窗 */
 .update-dialog-overlay {

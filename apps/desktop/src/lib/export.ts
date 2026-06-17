@@ -2,6 +2,7 @@
 import type { PersistedMessage, SessionMeta } from "../stores/sessions";
 import { writeTextFile } from "@tauri-apps/plugin-fs";
 import { save } from "@tauri-apps/plugin-dialog";
+import { redactSimple } from "./redact";
 
 export type ExportFormat = "markdown" | "json" | "html";
 
@@ -11,8 +12,9 @@ export async function exportSession(
   messages: PersistedMessage[],
   format: ExportFormat,
   targetPath?: string,
+  redactSecrets: boolean = false,
 ): Promise<string> {
-  const content = renderSession(session, messages, format);
+  const content = renderSession(session, messages, format, redactSecrets);
   // 没指定路径就弹保存对话框
   const path =
     targetPath ??
@@ -45,13 +47,19 @@ function renderSession(
   session: SessionMeta,
   messages: PersistedMessage[],
   format: ExportFormat,
+  redactSecrets: boolean = false,
 ): string {
-  if (format === "json") return renderJson(session, messages);
-  if (format === "html") return renderHtml(session, messages);
-  return renderMarkdown(session, messages);
+  if (format === "json") return renderJson(session, messages, redactSecrets);
+  if (format === "html") return renderHtml(session, messages, redactSecrets);
+  return renderMarkdown(session, messages, redactSecrets);
 }
 
-function renderMarkdown(session: SessionMeta, messages: PersistedMessage[]): string {
+/** 统一脱敏入口 */
+function r(s: string, redactSecrets: boolean): string {
+  return redactSecrets ? redactSimple(s) : s;
+}
+
+function renderMarkdown(session: SessionMeta, messages: PersistedMessage[], redactSecrets: boolean = false): string {
   const lines: string[] = [];
   lines.push(`# ${session.title}`);
   lines.push("");
@@ -71,12 +79,13 @@ function renderMarkdown(session: SessionMeta, messages: PersistedMessage[]): str
     lines.push(`## ${roleEmoji(role)} ${capitalize(role)} · ${time}`);
     lines.push("");
     if (m.thinking) {
+      const t = r(m.thinking, redactSecrets);
       lines.push("> 💭 思考：");
-      lines.push("> " + m.thinking.replace(/\n/g, "\n> "));
+      lines.push("> " + t.replace(/\n/g, "\n> "));
       lines.push("");
     }
     if (m.text) {
-      lines.push(m.text);
+      lines.push(r(m.text, redactSecrets));
       lines.push("");
     }
     if (m.toolCalls && m.toolCalls.length > 0) {
@@ -85,28 +94,24 @@ function renderMarkdown(session: SessionMeta, messages: PersistedMessage[]): str
       for (const tc of m.toolCalls) {
         lines.push(`- **${tc.name}**` + (tc.success === false ? " ❌" : ""));
         if (tc.arguments !== undefined) {
+          const argStr = r(JSON.stringify(tc.arguments, null, 2), redactSecrets);
           lines.push(
             "  ```json",
-            JSON.stringify(tc.arguments, null, 2)
-              .split("\n")
-              .map((l) => "  " + l)
-              .join("\n"),
+            argStr.split("\n").map((l) => "  " + l).join("\n"),
             "  ```",
           );
         }
         if (tc.result) {
+          const resStr = r(tc.result, redactSecrets);
           lines.push("  - 结果：");
           lines.push("    ```");
           lines.push(
-            tc.result
-              .split("\n")
-              .map((l) => "    " + l)
-              .join("\n"),
+            resStr.split("\n").map((l) => "    " + l).join("\n"),
             "    ```",
           );
         }
         if (tc.error) {
-          lines.push(`  - ❌ ${tc.error}`);
+          lines.push(`  - ❌ ${r(tc.error, redactSecrets)}`);
         }
       }
       lines.push("");
@@ -123,20 +128,34 @@ function renderMarkdown(session: SessionMeta, messages: PersistedMessage[]): str
   return lines.join("\n");
 }
 
-function renderJson(session: SessionMeta, messages: PersistedMessage[]): string {
-  return JSON.stringify(
-    {
-      version: 1,
-      session,
-      messages,
-      exportedAt: new Date().toISOString(),
-    },
-    null,
-    2,
-  );
+function renderJson(session: SessionMeta, messages: PersistedMessage[], redactSecrets: boolean = false): string {
+  const data = {
+    version: 1,
+    session,
+    messages: redactSecrets
+      ? messages.map((m) => ({
+          ...m,
+          text: m.text ? r(m.text, true) : m.text,
+          thinking: m.thinking ? r(m.thinking, true) : m.thinking,
+          toolCalls: m.toolCalls?.map((tc) => ({
+            ...tc,
+            result: tc.result ? r(tc.result, true) : tc.result,
+            error: tc.error ? r(tc.error, true) : tc.error,
+            arguments:
+              typeof tc.arguments === "string"
+                ? r(tc.arguments, true)
+                : tc.arguments !== undefined
+                  ? JSON.parse(r(JSON.stringify(tc.arguments), true))
+                  : tc.arguments,
+          })),
+        }))
+      : messages,
+    exportedAt: new Date().toISOString(),
+  };
+  return JSON.stringify(data, null, 2);
 }
 
-function renderHtml(session: SessionMeta, messages: PersistedMessage[]): string {
+function renderHtml(session: SessionMeta, messages: PersistedMessage[], redactSecrets: boolean = false): string {
   const esc = (s: string) =>
     s.replace(/[&<>"']/g, (c) => ({
       "&": "&amp;",
@@ -145,20 +164,21 @@ function renderHtml(session: SessionMeta, messages: PersistedMessage[]): string 
       '"': "&quot;",
       "'": "&#39;",
     }[c]!));
+  const s = (v: string) => esc(r(v, redactSecrets));
   const body = messages
     .map((m) => {
       const time = new Date(m.createdAt).toLocaleString();
       const tcHtml = (m.toolCalls ?? [])
         .map(
-          (tc) => `<div class="tool"><b>${esc(tc.name)}</b>${tc.success === false ? " ❌" : ""}<pre>${esc(
+          (tc) => `<div class="tool"><b>${esc(tc.name)}</b>${tc.success === false ? " ❌" : ""}<pre>${s(
             JSON.stringify(tc.arguments, null, 2),
-          )}</pre>${tc.result ? `<pre class="result">${esc(tc.result)}</pre>` : ""}${tc.error ? `<div class="error">${esc(tc.error)}</div>` : ""}</div>`,
+          )}</pre>${tc.result ? `<pre class="result">${s(tc.result)}</pre>` : ""}${tc.error ? `<div class="error">${s(tc.error)}</div>` : ""}</div>`,
         )
         .join("\n");
       return `<div class="msg ${esc(m.role)}">
   <div class="meta"><b>${esc(m.role)}</b> · ${esc(time)}</div>
-  ${m.thinking ? `<blockquote>💭 ${esc(m.thinking)}</blockquote>` : ""}
-  <div class="text">${esc(m.text).replace(/\n/g, "<br/>")}</div>
+  ${m.thinking ? `<blockquote>💭 ${s(m.thinking)}</blockquote>` : ""}
+  <div class="text">${s(m.text).replace(/\n/g, "<br/>")}</div>
   ${tcHtml}
 </div>`;
     })

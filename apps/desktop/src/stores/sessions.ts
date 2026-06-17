@@ -63,17 +63,89 @@ function getStore(): LazyStore | null {
   }
 }
 
-async function persist(sessions: SessionMeta[], currentId: string | null, messages: Record<string, PersistedMessage[]>) {
+// v1.1：debounce + 增量同步
+let persistTimer: number | null = null;
+let pendingDirty = new Set<string>(); // session ids whose messages changed
+let pendingSessionsList = false;
+let pendingCurrentId: string | null | undefined = undefined;
+
+function schedulePersist(
+  sessions: SessionMeta[],
+  currentId: string | null,
+  dirtySessionIds: string[] | "all",
+) {
+  if (dirtySessionIds === "all") {
+    const snap = getSnapshot();
+    pendingDirty = new Set(Object.keys(snap.messages));
+    pendingSessionsList = true;
+  } else {
+    for (const id of dirtySessionIds) pendingDirty.add(id);
+  }
+  if (currentId !== undefined) pendingCurrentId = currentId;
+  pendingSessionsList = pendingSessionsList || true;
+
+  if (persistTimer !== null) return;
+  persistTimer = window.setTimeout(() => {
+    void flushPersist(sessions, currentId);
+  }, 800);
+}
+
+async function flushPersist(
+  sessionsRef: SessionMeta[],
+  _currentIdRef: string | null,
+) {
+  persistTimer = null;
   const s = getStore();
   if (!s) return;
   try {
-    await s.set("sessions", sessions);
-    await s.set("currentId", currentId);
-    await s.set("messages", messages);
+    if (pendingSessionsList) {
+      await s.set("sessions", sessionsRef);
+      pendingSessionsList = false;
+    }
+    if (pendingCurrentId !== undefined) {
+      await s.set("currentId", pendingCurrentId);
+      pendingCurrentId = undefined;
+    }
+    if (pendingDirty.size > 0) {
+      // v1.1：只写改动的 session 的 messages
+      const snap = getSnapshot();
+      for (const id of pendingDirty) {
+        const list = snap.messages[id] ?? [];
+        await s.set(`msg:${id}`, list);
+      }
+      pendingDirty = new Set();
+    }
     await s.save();
   } catch (e) {
     console.warn("persist sessions failed:", e);
   }
+}
+
+async function persist(
+  sessions: SessionMeta[],
+  currentId: string | null,
+  messages: Record<string, PersistedMessage[]>,
+  dirty: string[] | "all" = "all",
+) {
+  // 兼容老 API：立即全量
+  const s = getStore();
+  if (!s) return;
+  if (dirty === "all") {
+    try {
+      await s.set("sessions", sessions);
+      await s.set("currentId", currentId);
+      await s.set("messages", messages);
+      await s.save();
+    } catch (e) {
+      console.warn("persist sessions failed:", e);
+    }
+  } else {
+    schedulePersist(sessions, currentId, dirty);
+  }
+}
+
+function getSnapshot(): SessionsStore {
+  return state;
 }
 
 async function load(): Promise<{
@@ -86,7 +158,19 @@ async function load(): Promise<{
   try {
     const sessions = (await s.get<SessionMeta[]>("sessions")) || [];
     const currentId = (await s.get<string | null>("currentId")) || null;
-    const messages = (await s.get<Record<string, PersistedMessage[]>>("messages")) || {};
+    const messages: Record<string, PersistedMessage[]> = {};
+    // v1.1：优先读分片 msg:<id>，没有再 fallback 老的 messages 单 key
+    for (const sess of sessions) {
+      const shard = await s.get<PersistedMessage[]>(`msg:${sess.id}`);
+      if (shard) {
+        messages[sess.id] = shard;
+      }
+    }
+    if (Object.keys(messages).length === 0) {
+      // 兼容老格式
+      const old = (await s.get<Record<string, PersistedMessage[]>>("messages")) || {};
+      Object.assign(messages, old);
+    }
     return { sessions, currentId, messages };
   } catch {
     return { sessions: [], currentId: null, messages: {} };
@@ -103,7 +187,8 @@ let state: SessionsStore = {
   messages: initial.messages,
   setCurrent: (id) => {
     state = { ...state, currentId: id };
-    void persist(state.sessions, state.currentId, state.messages);
+    pendingCurrentId = id;
+    schedulePersist(state.sessions, state.currentId, []);
     listeners.forEach((l) => l());
   },
   create: (title) => {
@@ -119,7 +204,9 @@ let state: SessionsStore = {
       sessions: [s, ...state.sessions],
       currentId: s.id,
     };
-    void persist(state.sessions, state.currentId, state.messages);
+    pendingSessionsList = true;
+    pendingCurrentId = s.id;
+    schedulePersist(state.sessions, state.currentId, []);
     listeners.forEach((l) => l());
     return s;
   },
@@ -128,7 +215,13 @@ let state: SessionsStore = {
     const currentId = state.currentId === id ? null : state.currentId;
     const { [id]: _, ...messages } = state.messages;
     state = { ...state, sessions, currentId, messages };
-    void persist(sessions, currentId, messages);
+    pendingSessionsList = true;
+    pendingDirty.delete(id);
+    pendingCurrentId = currentId;
+    schedulePersist(sessions, currentId, []);
+    // v1.1：清掉 store key
+    const st = getStore();
+    if (st) void st.delete(`msg:${id}`);
     listeners.forEach((l) => l());
   },
   rename: (id, title) => {
@@ -136,7 +229,8 @@ let state: SessionsStore = {
       s.id === id ? { ...s, title, updatedAt: Date.now() } : s
     );
     state = { ...state, sessions };
-    void persist(sessions, state.currentId, state.messages);
+    pendingSessionsList = true;
+    schedulePersist(sessions, state.currentId, []);
     listeners.forEach((l) => l());
   },
   appendMessage: (sessionId, msg) => {
@@ -147,13 +241,18 @@ let state: SessionsStore = {
       s.id === sessionId ? { ...s, updatedAt: Date.now() } : s
     );
     state = { ...state, messages, sessions };
-    void persist(sessions, state.currentId, messages);
+    // v1.1：增量 + debounce
+    pendingDirty.add(sessionId);
+    pendingSessionsList = true;
+    schedulePersist(sessions, state.currentId, [sessionId]);
     listeners.forEach((l) => l());
   },
   setMessages: (sessionId, msgs) => {
     const messages = { ...state.messages, [sessionId]: msgs };
     state = { ...state, messages };
-    void persist(state.sessions, state.currentId, messages);
+    // v1.1：增量
+    pendingDirty.add(sessionId);
+    schedulePersist(state.sessions, state.currentId, [sessionId]);
     listeners.forEach((l) => l());
   },
 };
@@ -164,6 +263,17 @@ void load().then((loaded) => {
   listeners.forEach((l) => l());
 });
 
+// v1.1：关闭前立即 flush
+if (typeof window !== "undefined") {
+  window.addEventListener("beforeunload", () => {
+    if (persistTimer !== null) {
+      clearTimeout(persistTimer);
+      persistTimer = null;
+      void flushPersist(state.sessions, state.currentId);
+    }
+  });
+}
+
 const listeners = new Set<() => void>();
 
 function subscribe(listener: () => void): () => void {
@@ -171,10 +281,6 @@ function subscribe(listener: () => void): () => void {
   return () => {
     listeners.delete(listener);
   };
-}
-
-function getSnapshot(): SessionsStore {
-  return state;
 }
 
 export function useSessionsStore<T>(selector: (s: SessionsStore) => T): T {

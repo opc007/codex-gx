@@ -3,6 +3,7 @@ import { invoke } from "@tauri-apps/api/core";
 import { open as openDialog } from "@tauri-apps/plugin-dialog";
 import { useSessionsStore, getSessionsState, setSessionsState, type PersistedMessage } from "../stores/sessions";
 import { useTranslation, setLocale as i18nSetLocale } from "../i18n";
+import { redactSimple, detectTypes } from "../lib/redact";
 import { sendChatStream } from "../lib/chat";
 import { loadProviders, type ProviderInfo } from "../lib/providers";
 import { StageTimeline, type Stage } from "./StageTimeline";
@@ -87,6 +88,29 @@ export function Composer({ sessionId }: Props) {
     const trimmed = text.trim();
     if (trimmed === "/clear") {
       setMessages(sessionId, []);
+      setText("");
+      return;
+    }
+    // v1.1：脱敏测试
+    if (trimmed.startsWith("/redact ") || trimmed === "/redact") {
+      const input = trimmed.slice(8).trim();
+      if (!input) {
+        appendMessage(sessionId, {
+          id: crypto.randomUUID(),
+          role: "assistant",
+          text: "🔒 用法: `/redact <文本>` — 测试脱敏。\n\n会检测：api key、email、IPv4、JWT、bearer token、PEM 私钥、64 字符 hex",
+          createdAt: Date.now(),
+        });
+      } else {
+        const types = detectTypes(input);
+        const out = redactSimple(input);
+        appendMessage(sessionId, {
+          id: crypto.randomUUID(),
+          role: "assistant",
+          text: `🔒 脱敏结果：\n\n检测到: ${types.length > 0 ? types.join(", ") : "无"}\n\n输入:\n${input}\n\n输出:\n${out}`,
+          createdAt: Date.now(),
+        });
+      }
       setText("");
       return;
     }
@@ -230,6 +254,9 @@ M3 / Claude / GPT 会自动调用：
 
 🗜 v1.0 长会话压缩：
 /compress [保留最近N条]    - 用 LLM 摘要压缩当前会话（默认保留 6 条）
+
+🔒 v1.1 脱敏测试：
+/redact <文本>             - 测试脱敏（api key/email/IPv4/JWT/PEM...）
 
 💡 模型切换：Top bar 下拉
 💡 所有会话和消息自动保存到本地`,

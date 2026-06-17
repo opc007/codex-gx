@@ -12,16 +12,25 @@ import PlanDialog, {
 } from "./components/PlanDialog";
 import { useThemeStore, type ThemeMode } from "./stores/theme";
 import { useSessionsStore } from "./stores/sessions";
+import { useOpenTabs, openTab } from "./stores/tabs";
 import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
 
 export default function App() {
   const [themeMode, setThemeMode] = useThemeStore((s) => [s.mode, s.setMode]);
   const [currentId] = useSessionsStore((s) => [s.currentId]);
+  const openTabs = useOpenTabs();
   const [showLicense, setShowLicense] = useState(false);
   const [approvalReq, setApprovalReq] = useState<ApprovalRequest | null>(null);
   // v0.6：plan mode
   const [planReq, setPlanReq] = useState<PlanRequest | null>(null);
+
+  // v1.1：自动同步 currentId 到 tab 列表
+  useEffect(() => {
+    if (currentId && !openTabs.includes(currentId)) {
+      openTab(currentId);
+    }
+  }, [currentId, openTabs]);
 
   // 跟随系统
   useEffect(() => {
