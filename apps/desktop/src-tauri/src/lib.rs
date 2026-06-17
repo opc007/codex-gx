@@ -18,6 +18,7 @@ mod background_tauri;
 mod screenshot_tauri;
 mod desktop_perm_tauri;
 mod mobile_tauri;
+mod pocket_tauri;
 mod lint_tauri;
 mod local_tauri;
 mod marketplace_tauri;
@@ -131,6 +132,7 @@ pub fn run() {
         .manage::<background_tauri::BackgroundState>(background_tauri::build_state())
         .manage::<desktop_perm_tauri::PermListState>(desktop_perm_tauri::build_state())
         .manage::<mobile_tauri::MobileState>(mobile_tauri::build_state())
+        .manage::<pocket_tauri::PocketState>(pocket_tauri::build_state())
         .setup(|app| {
             // v1.3：安装 panic hook
             if let Some(state) = app.try_state::<BugReportState>() {
@@ -253,6 +255,14 @@ pub fn run() {
             mobile_tauri::mobile_list_devices,               // v1.9.1 5.30 Mobile
             mobile_tauri::mobile_verify,                     // v1.9.1 5.30 Mobile
             mobile_tauri::mobile_call,                       // v1.9.1 5.30 Mobile
+            pocket_tauri::pocket_list_sources,                // v1.9.2 5.29 Pocket
+            pocket_tauri::pocket_list_pairings,               // v1.9.2 5.29 Pocket
+            pocket_tauri::pocket_add_pairing,                 // v1.9.2 5.29 Pocket
+            pocket_tauri::pocket_remove_pairing,              // v1.9.2 5.29 Pocket
+            pocket_tauri::pocket_handle_request,              // v1.9.2 5.29 Pocket
+            pocket_tauri::pocket_sign,                        // v1.9.2 5.29 Pocket
+            pocket_tauri::pocket_webhook_url,                 // v1.9.2 5.29 Pocket
+            pocket_tauri::pocket_status,                      // v1.9.2 5.29 Pocket
             get_ide_context,
             get_git_diff,
             list_git_branches,

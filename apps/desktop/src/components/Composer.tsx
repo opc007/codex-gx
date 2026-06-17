@@ -1250,6 +1250,55 @@ M3 / Claude / GPT 会自动调用：
       return;
     }
 
+    // v1.9.2: /pocket
+    if (trimmed === "/pocket" || trimmed.startsWith("/pocket ")) {
+      const arg = trimmed.slice(7).trim();
+      try {
+        if (arg === "" || arg === "status") {
+          const st = await invoke<{ sourceCount: number; pairingCount: number; enabledPairings: number; sources: Array<{ name: string; label: string; paired: boolean }>; configPath: string }>("pocket_status");
+          const url = await invoke<string>("pocket_webhook_url");
+          const src = st.sources.map((s) => `  ${s.paired ? "✅" : "○"} ${s.label}`).join("\n");
+          appendMessage(sessionId, { id: crypto.randomUUID(), role: "assistant", createdAt: Date.now(), text: `📨 Pocket 状态：\n\n  sources:        ${st.sourceCount}\n  pairings:       ${st.pairingCount} (${st.enabledPairings} enabled)\n  config:         ${st.configPath}\n  webhook URL:    ${url}\n\n**Sources**：\n${src}\n\n命令：/pocket pair <source> <user_id> <user_name> <chat_id> | /pocket list | /pocket unpair <id> | /pocket sign <key> <body> | /pocket test <pairing_id>` });
+        } else if (arg === "list") {
+          const list = await invoke<Array<{ id: string; source: string; userId: string; userName: string; chatId: string; chatType: string; signatureKey: string; pairedAt: number; enabled: boolean }>>("pocket_list_pairings");
+          if (list.length === 0) { appendMessage(sessionId, { id: crypto.randomUUID(), role: "assistant", createdAt: Date.now(), text: "📨 还没配对任何 source" }); return; }
+          const txt = list.map((p) => `  ${p.enabled ? "🟢" : "🔴"} **${p.source}** — ${p.userName} (${p.userId})\n    chat: ${p.chatType}/${p.chatId}\n    key: \`${p.signatureKey.slice(0, 16)}...\`\n    id: ${p.id}`).join("\n\n");
+          appendMessage(sessionId, { id: crypto.randomUUID(), role: "assistant", createdAt: Date.now(), text: `📨 配对列表 (${list.length})：\n\n${txt}` });
+        } else if (arg.startsWith("pair ")) {
+          // pair <source> <user_id> <user_name> <chat_id>
+          const m = arg.slice(5).match(/^(\S+)\s+(\S+)\s+(\S+)\s+(\S+)$/);
+          if (!m) { appendMessage(sessionId, { id: crypto.randomUUID(), role: "assistant", createdAt: Date.now(), text: "❌ 用法: /pocket pair <source> <user_id> <user_name> <chat_id>" }); return; }
+          const p = await invoke<{ id: string; source: string; signatureKey: string }>("pocket_add_pairing", { args: { source: m[1], userId: m[2], userName: m[3], chatId: m[4] } });
+          appendMessage(sessionId, { id: crypto.randomUUID(), role: "assistant", createdAt: Date.now(), text: `✅ 配对创建：\n\n  source: ${p.source}\n  id:     ${p.id}\n  key:    \`${p.signatureKey}\`\n\n⚠️ 保存 key 到消息 App 的 webhook 配置（HMAC 共享密钥）。` });
+        } else if (arg.startsWith("unpair ")) {
+          const id = arg.slice(7).trim();
+          const ok = await invoke<boolean>("pocket_remove_pairing", { id });
+          appendMessage(sessionId, { id: crypto.randomUUID(), role: "assistant", createdAt: Date.now(), text: ok ? `🗑️ 配对已删除：${id}` : `❌ 没找到：${id}` });
+        } else if (arg.startsWith("sign ")) {
+          // sign <key> <body>
+          const m = arg.slice(5).match(/^(\S+)\s+(.+)$/);
+          if (!m) { appendMessage(sessionId, { id: crypto.randomUUID(), role: "assistant", createdAt: Date.now(), text: "❌ 用法: /pocket sign <key> <body>" }); return; }
+          const sig = await invoke<string>("pocket_sign", { args: { key: m[1], body: m[2] } });
+          appendMessage(sessionId, { id: crypto.randomUUID(), role: "assistant", createdAt: Date.now(), text: `🔏 HMAC-SHA256 签名：\n\n  body: ${m[2]}\n  sig:  \`${sig}\`` });
+        } else if (arg.startsWith("test ")) {
+          // 模拟 webhook 调用
+          const id = arg.slice(5).trim();
+          const list = await invoke<Array<{ id: string; source: string; userId: string; chatId: string; signatureKey: string }>>("pocket_list_pairings");
+          const p = list.find((x) => x.id === id);
+          if (!p) { appendMessage(sessionId, { id: crypto.randomUUID(), role: "assistant", createdAt: Date.now(), text: `❌ 没找到配对：${id}` }); return; }
+          const body = `{"user_id":"${p.userId}","chat_id":"${p.chatId}","text":"test from slash cmd"}`;
+          const sig = await invoke<string>("pocket_sign", { args: { key: p.signatureKey, body } });
+          const r = await invoke<{ status: string; threadId: string; message: string }>("pocket_handle_request", { req: { source: p.source, userId: p.userId, userName: "Test", chatId: p.chatId, chatType: "direct", text: "test from slash cmd", signature: sig } });
+          appendMessage(sessionId, { id: crypto.randomUUID(), role: "assistant", createdAt: Date.now(), text: `🧪 模拟 webhook 调用：\n\n  status:   ${r.status}\n  thread:   ${r.threadId || "—"}\n  message:  ${r.message}` });
+        } else {
+          appendMessage(sessionId, { id: crypto.randomUUID(), role: "assistant", createdAt: Date.now(), text: "❌ 用法: /pocket status | list | pair <source> <uid> <name> <cid> | unpair <id> | sign <key> <body> | test <id>" });
+        }
+      } catch (e) {
+        appendMessage(sessionId, { id: crypto.randomUUID(), role: "assistant", createdAt: Date.now(), text: `❌ /pocket 失败: ${e}` });
+      }
+      return;
+    }
+
     // v1.9.1: /mobile (Mobile Remote 管理)
     if (trimmed === "/mobile" || trimmed.startsWith("/mobile ")) {
       const arg = trimmed.slice(7).trim();
@@ -1415,6 +1464,8 @@ M3 / Claude / GPT 会自动调用：
           "screenshot", "ss", "coord", "perm",
           // v1.9.1
           "mobile",
+          // v1.9.2
+          "pocket",
         ]);
         if (!known.has(name)) {
           try {
