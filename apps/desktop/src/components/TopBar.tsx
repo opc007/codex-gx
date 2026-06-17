@@ -6,6 +6,7 @@ import { useLocaleSwitcher, SUPPORTED_LOCALES, LOCALE_LABELS } from "../i18n";
 import type { Locale } from "../i18n";
 import { open as openUrl } from "@tauri-apps/plugin-shell";
 import { MarketplaceDialog } from "./MarketplaceDialog";
+import { ThemeStudioDialog } from "./ThemeStudioDialog";
 import {
   useCurrentWorkspaceId,
   useWorkspaceList,
@@ -42,6 +43,7 @@ export function TopBar({ themeMode, setThemeMode, onLicenseClick }: Props) {
   const [updateInfo, setUpdateInfo] = useState<UpdateInfo | null>(null);
   const [updateBusy, setUpdateBusy] = useState(false);
   const [marketplaceOpen, setMarketplaceOpen] = useState(false);
+  const [themeStudioOpen, setThemeStudioOpen] = useState(false);
   const { locale, setLocale } = useLocaleSwitcher();
 
   const refreshLicense = async () => {
@@ -120,6 +122,13 @@ export function TopBar({ themeMode, setThemeMode, onLicenseClick }: Props) {
         >
           🧩
         </button>
+        <button
+          className="topbar-btn"
+          onClick={() => setThemeStudioOpen(true)}
+          title="主题市场 (v1.3)"
+        >
+          🎨
+        </button>
         <button className="topbar-btn" onClick={pingBackend} disabled={busy}>
           {busy ? "..." : "Ping"}
         </button>
@@ -185,6 +194,11 @@ export function TopBar({ themeMode, setThemeMode, onLicenseClick }: Props) {
       {/* v1.2: Plugin marketplace 弹窗 */}
       {marketplaceOpen && (
         <MarketplaceDialog onClose={() => setMarketplaceOpen(false)} />
+      )}
+
+      {/* v1.3: Theme Studio 弹窗 */}
+      {themeStudioOpen && (
+        <ThemeStudioDialog onClose={() => setThemeStudioOpen(false)} />
       )}
     </header>
   );
