@@ -483,6 +483,36 @@ kbd {
 .peer-addr { font-family: ui-monospace, monospace; font-size: 11px; color: var(--text-muted); }
 .peer-status { font-size: 10px; padding: 1px 6px; background: var(--bg); border-radius: 3px; color: var(--text-muted); margin-left: auto; }
 
+/* v1.4：learning panel */
+.learning-section { margin-bottom: 16px; padding: 12px; background: var(--bg-secondary); border-radius: 6px; }
+.learning-section h4 { margin: 0 0 8px 0; font-size: 13px; }
+
+.learning-prefs { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 8px; }
+.learning-pref { display: flex; flex-direction: column; gap: 2px; font-size: 12px; }
+.learning-pref-label { color: var(--text-muted); font-size: 11px; }
+.learning-pref code { background: var(--bg); padding: 2px 6px; border-radius: 3px; font-size: 11px; }
+
+.learning-stats { display: flex; gap: 8px; flex-wrap: wrap; }
+.learning-stat { flex: 1; min-width: 80px; padding: 6px 10px; background: var(--bg); border-radius: 4px; text-align: center; }
+.learning-stat-n { display: block; font-size: 18px; font-weight: 600; }
+.learning-stat-l { display: block; font-size: 10px; color: var(--text-muted); }
+
+.learning-table { width: 100%; border-collapse: collapse; font-size: 12px; }
+.learning-table td { padding: 4px 6px; border-bottom: 1px solid var(--border); }
+.learning-table code { font-family: ui-monospace, monospace; font-size: 11px; }
+
+.learning-bar { display: flex; align-items: center; gap: 6px; font-size: 11px; }
+.learning-bar-fill { height: 6px; background: var(--primary); border-radius: 3px; min-width: 4px; transition: width 0.3s; }
+.learning-bar span { font-size: 10px; color: var(--text-muted); }
+.learning-bar { background: var(--bg); border-radius: 3px; height: 12px; padding: 3px 4px; }
+
+.learning-tokens { display: flex; flex-wrap: wrap; gap: 4px; }
+.learning-token { padding: 2px 8px; background: var(--bg); border-radius: 3px; font-size: 11px; }
+.learning-token small { color: var(--text-muted); margin-left: 2px; }
+
+.learning-actions { display: flex; align-items: center; gap: 8px; margin-top: 16px; padding: 12px; background: var(--bg-secondary); border-radius: 6px; }
+.learning-actions .btn.danger { background: var(--danger); color: white; }
+
 /* v1.1：标签栏 */
 .tab-bar {
   display: flex;

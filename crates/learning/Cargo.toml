@@ -1,0 +1,12 @@
+[package]
+name = "learning"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+description = "AgentShell v1.4 Agent 学习 / 个性化：跟踪用户习惯推断偏好"
+
+[dependencies]
+serde.workspace = true
+serde_json.workspace = true
+tokio.workspace = true

@@ -14,6 +14,7 @@ import { LocalModelDialog } from "./LocalModelDialog";
 import { CodeReviewDialog } from "./CodeReviewDialog";
 import { QueuePanel } from "./QueuePanel";
 import { DevicesPanel } from "./DevicesPanel";
+import { LearningPanel } from "./LearningPanel";
 import {
   useCurrentWorkspaceId,
   useWorkspaceList,
@@ -64,6 +65,7 @@ export function TopBar({ themeMode, setThemeMode, onLicenseClick }: Props) {
   const [reviewOpen, setReviewOpen] = useState(false);
   const [queueOpen, setQueueOpen] = useState(false);
   const [devicesOpen, setDevicesOpen] = useState(false);
+  const [learningOpen, setLearningOpen] = useState(false);
   const { locale, setLocale } = useLocaleSwitcher();
 
   const refreshLicense = async () => {
@@ -198,6 +200,13 @@ export function TopBar({ themeMode, setThemeMode, onLicenseClick }: Props) {
         >
           📡
         </button>
+        <button
+          className="topbar-btn"
+          onClick={() => setLearningOpen(true)}
+          title="Agent 学习 / 个性化 (v1.4)"
+        >
+          🧠
+        </button>
         <UserMenu
           open={userMenuOpen}
           onToggle={() => setUserMenuOpen(!userMenuOpen)}
@@ -311,6 +320,9 @@ export function TopBar({ themeMode, setThemeMode, onLicenseClick }: Props) {
 
       {/* v1.4: Devices Panel 弹窗 */}
       {devicesOpen && <DevicesPanel onClose={() => setDevicesOpen(false)} />}
+
+      {/* v1.4: Learning Panel 弹窗 */}
+      {learningOpen && <LearningPanel onClose={() => setLearningOpen(false)} />}
     </header>
   );
 }

@@ -197,6 +197,60 @@ export function Composer({ sessionId }: Props) {
       setText("");
       return;
     }
+    // v1.4：学习面板
+    if (trimmed === "/learn" || trimmed.startsWith("/learn ")) {
+      const args = trimmed.slice(6).trim();
+      try {
+        if (args === "reset") {
+          await invoke("learning_reset");
+          appendMessage(sessionId, {
+            id: crypto.randomUUID(),
+            role: "assistant",
+            text: "🧠 学习数据已重置。",
+            createdAt: Date.now(),
+          });
+        } else if (args === "feedback" || args.startsWith("feedback ")) {
+          const sub = args.slice("feedback".length).trim();
+          const positive = !/bad|down|negative/i.test(sub);
+          await invoke("learning_record_feedback", { positive });
+          appendMessage(sessionId, {
+            id: crypto.randomUUID(),
+            role: "assistant",
+            text: `🧠 反馈已记录：${positive ? "👍 正面" : "👎 负面"}`,
+            createdAt: Date.now(),
+          });
+        } else {
+          const l = await invoke<{
+            signals: { total_chats: number; total_tool_calls: number; positive_feedback: number; negative_feedback: number };
+            preferences: { default_model: string | null; confidence: number; favorite_tools: string[] };
+          }>("learning_get");
+          let text = `🧠 **学习数据**\n\n`;
+          text += `- 总 chat: ${l.signals.total_chats} | 工具调用: ${l.signals.total_tool_calls}\n`;
+          text += `- 👍 ${l.signals.positive_feedback} / 👎 ${l.signals.negative_feedback}\n`;
+          text += `- 默认模型: ${l.preferences.default_model ?? "—"}\n`;
+          text += `- 常用工具: ${l.preferences.favorite_tools.join(", ") || "—"}\n`;
+          text += `- 置信度: ${Math.round(l.preferences.confidence * 100)}%\n\n`;
+          text += `💡 用法: \n  - \`/learn\` 看统计\n  - \`/learn feedback\` / \`/learn feedback bad\` 反馈\n  - \`/learn reset\` 重置\n  - Top bar 🧠 打开完整面板`;
+          appendMessage(sessionId, {
+            id: crypto.randomUUID(),
+            role: "assistant",
+            text,
+            createdAt: Date.now(),
+          });
+        }
+        setText("");
+        return;
+      } catch (e) {
+        appendMessage(sessionId, {
+          id: crypto.randomUUID(),
+          role: "assistant",
+          text: `❌ 失败: ${e}`,
+          createdAt: Date.now(),
+        });
+        setText("");
+        return;
+      }
+    }
     // v1.4：本地 LLM 探测
     if (trimmed.startsWith("/local ") || trimmed === "/local") {
       const args = trimmed.slice(6).trim();
@@ -1176,6 +1230,11 @@ ${diff.diff.slice(0, 5000)}${diff.truncated ? "\n... [truncated, view full in gi
       createdAt: Date.now(),
     };
     appendMessage(sessionId, userMsg);
+    // v1.4：记录学习信号（不阻塞 UI）
+    void invoke("learning_record_chat", {
+      model: model,
+      userMsg: trimmed,
+    }).catch(() => {});
     setText("");
     setBusy(true);
 

@@ -22,6 +22,7 @@ mod local_tauri;
 mod lint_tauri;
 mod queue_tauri;
 mod p2p_tauri;
+mod learning_tauri;
 
 use agent_core::tool::ToolRegistry;
 use serde::{Deserialize, Serialize};
@@ -126,6 +127,17 @@ pub fn run() {
                     }
                 }
             });
+            // v1.4：异步初始化 learning
+            let app_handle = app.handle().clone();
+            tauri::async_runtime::spawn(async move {
+                let s = learning_tauri::LearningState::new().await;
+                eprintln!(
+                    "[learning] 已加载 ~/.agentshell/learning.json (chats: {}, tools: {})",
+                    s.inner.read().await.signals.total_chats,
+                    s.inner.read().await.signals.total_tool_calls,
+                );
+                app_handle.manage(s);
+            });
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![
@@ -198,6 +210,13 @@ pub fn run() {
             p2p_tauri::p2p_reject_pairing, // v1.4
             p2p_tauri::p2p_list_peers, // v1.4
             p2p_tauri::p2p_connect, // v1.4
+            learning_tauri::learning_get, // v1.4
+            learning_tauri::learning_record_chat, // v1.4
+            learning_tauri::learning_record_tool, // v1.4
+            learning_tauri::learning_record_slash, // v1.4
+            learning_tauri::learning_record_feedback, // v1.4
+            learning_tauri::learning_reset, // v1.4
+            learning_tauri::learning_inject, // v1.4
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
