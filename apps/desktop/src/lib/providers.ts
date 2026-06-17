@@ -22,6 +22,13 @@ export async function loadProviders(): Promise<ProviderInfo[]> {
         defaultModel: "MiniMax-M3",
         envKey: "MINIMAX_API_KEY",
       },
+      {
+        id: "deepseek",
+        name: "DeepSeek",
+        models: ["deepseek-v4-pro", "deepseek-chat", "deepseek-reasoner"],
+        defaultModel: "deepseek-v4-pro",
+        envKey: "DEEPSEEK_API_KEY",
+      },
     ];
   }
 }

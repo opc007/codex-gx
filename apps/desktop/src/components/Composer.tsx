@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
 import { open as openDialog } from "@tauri-apps/plugin-dialog";
@@ -14,6 +14,30 @@ type Props = {
   sessionId: string | null;
 };
 
+type ApiKeysStatus = {
+  minimax_configured: boolean;
+  anthropic_configured: boolean;
+  deepseek_configured: boolean;
+  openai_configured: boolean;
+};
+
+const MODEL_STORAGE_KEY = "codex-gx-model";
+
+function providerConfigured(id: string, status: ApiKeysStatus): boolean {
+  switch (id) {
+    case "minimax":
+      return status.minimax_configured;
+    case "deepseek":
+      return status.deepseek_configured;
+    case "anthropic":
+      return status.anthropic_configured;
+    case "openai":
+      return status.openai_configured;
+    default:
+      return false;
+  }
+}
+
 export function Composer({ sessionId }: Props) {
   const t = useTranslation();
   const appendMessage = useSessionsStore((s) => s.appendMessage);
@@ -21,7 +45,13 @@ export function Composer({ sessionId }: Props) {
 
   const [text, setText] = useState("");
   const [busy, setBusy] = useState(false);
-  const [model, setModel] = useState("MiniMax-M3");
+  const [model, setModel] = useState(() => {
+    try {
+      return localStorage.getItem(MODEL_STORAGE_KEY) || "MiniMax-M3";
+    } catch {
+      return "MiniMax-M3";
+    }
+  });
   const [requireApproval, setRequireApproval] = useState(true);
   // v0.9：附件图片
   const [attachedImages, setAttachedImages] = useState<Array<{ path: string; mime: string; name: string }>>([]);
@@ -36,10 +66,51 @@ export function Composer({ sessionId }: Props) {
     result?: string | null;
     error?: string | null;
   }>>([]);
-  // _providers 是 Codex 模型列表的源 — v1.9 模型选择改为 inline prompt 弹窗，保留 state 以备未来 dropdown 切换使用
-  const [_providers, setProviders] = useState<ProviderInfo[]>([]);
+  const [providers, setProviders] = useState<ProviderInfo[]>([]);
+  const [keyStatus, setKeyStatus] = useState<ApiKeysStatus | null>(null);
   const [stages, setStages] = useState<Stage[]>([]);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
+
+  const refreshModelOptions = async () => {
+    const [p, s] = await Promise.all([
+      loadProviders(),
+      invoke<ApiKeysStatus>("api_keys_status"),
+    ]);
+    setProviders(p);
+    setKeyStatus(s);
+  };
+
+  const availableModels = useMemo(() => {
+    const opts: Array<{ value: string; label: string; group: string }> = [
+      { value: "auto", label: "Auto 路由", group: "智能" },
+    ];
+    if (keyStatus) {
+      for (const p of providers) {
+        if (!providerConfigured(p.id, keyStatus)) continue;
+        for (const m of p.models) {
+          opts.push({ value: m, label: m, group: p.name });
+        }
+      }
+    }
+    if (model !== "auto" && !opts.some((o) => o.value === model)) {
+      opts.push({ value: model, label: `${model}（需配置 Key）`, group: "当前" });
+    }
+    return opts;
+  }, [providers, keyStatus, model]);
+
+  const modelReady =
+    model === "auto" ||
+    (keyStatus !== null &&
+      providers.some(
+        (p) => providerConfigured(p.id, keyStatus) && p.models.includes(model),
+      ));
+
+  useEffect(() => {
+    void refreshModelOptions();
+    const onKeys = () => void refreshModelOptions();
+    window.addEventListener("api-keys:changed", onKeys);
+    return () => window.removeEventListener("api-keys:changed", onKeys);
+  }, []);
 
   // v1.2：voice input 状态
   const [recording, setRecording] = useState(false);
@@ -47,10 +118,6 @@ export function Composer({ sessionId }: Props) {
   const [voiceHint, setVoiceHint] = useState<string | null>(null);
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const recordedChunksRef = useRef<Blob[]>([]);
-
-  useEffect(() => {
-    void loadProviders().then(setProviders);
-  }, []);
 
   // v1.2：监听 voice 模型下载进度
   useEffect(() => {
@@ -772,6 +839,11 @@ export function Composer({ sessionId }: Props) {
       setText("");
       return;
     }
+    if (trimmed === "/apikey" || trimmed === "/key") {
+      window.dispatchEvent(new CustomEvent("open-api-keys"));
+      setText("");
+      return;
+    }
     if (trimmed === "/help") {
       const helpMsg: PersistedMessage = {
         id: crypto.randomUUID(),
@@ -1280,6 +1352,29 @@ M3 / Claude / GPT 会自动调用：
           if (!m) { appendMessage(sessionId, { id: crypto.randomUUID(), role: "assistant", createdAt: Date.now(), text: "❌ 用法: /pocket sign <key> <body>" }); return; }
           const sig = await invoke<string>("pocket_sign", { args: { key: m[1], body: m[2] } });
           appendMessage(sessionId, { id: crypto.randomUUID(), role: "assistant", createdAt: Date.now(), text: `🔏 HMAC-SHA256 签名：\n\n  body: ${m[2]}\n  sig:  \`${sig}\`` });
+        } else if (arg.startsWith("server ")) {
+          // server <start|stop|status> [port]
+          const parts = arg.slice(7).trim().split(/\s+/);
+          const cmd = parts[0];
+          const port = parts[1] ? parseInt(parts[1], 10) : 8787;
+          if (cmd === "start") {
+            try {
+              const info = await invoke<{ status: string; bind: string; port: number; requestsHandled: number; lastError: string | null }>("pocket_server_start", { args: { bind: "127.0.0.1", port } });
+              appendMessage(sessionId, { id: crypto.randomUUID(), role: "assistant", createdAt: Date.now(), text: `🟢 Pocket HTTP server 启动：\n\n  bind:  ${info.bind}\n  port:  ${info.port}\n  status: ${info.status}\n\n测试：\n  curl http://${info.bind}:${info.port}/agentshell/health\n  curl -X POST http://${info.bind}:${info.port}/agentshell/pocket -H 'Content-Type: application/json' -d '{"source":"feishu","user_id":"u1","user_name":"U","chat_id":"c1","chat_type":"direct","text":"hi"}'` });
+            } catch (e) { appendMessage(sessionId, { id: crypto.randomUUID(), role: "assistant", createdAt: Date.now(), text: `❌ 启动失败: ${e}` }); }
+          } else if (cmd === "stop") {
+            try {
+              const info = await invoke<{ status: string; bind: string; port: number }>("pocket_server_stop");
+              appendMessage(sessionId, { id: crypto.randomUUID(), role: "assistant", createdAt: Date.now(), text: `🔴 Pocket HTTP server 已停止 (was on ${info.bind}:${info.port})` });
+            } catch (e) { appendMessage(sessionId, { id: crypto.randomUUID(), role: "assistant", createdAt: Date.now(), text: `❌ 停止失败: ${e}` }); }
+          } else if (cmd === "status") {
+            const info = await invoke<{ status: string; bind: string; port: number; startedAt: number; requestsHandled: number; lastRequestAt: number | null; lastError: string | null }>("pocket_server_status");
+            const log = await invoke<Array<{ timestamp: number; source: string; userId: string; chatId: string; text: string; signatureOk: boolean; threadId: string; status: string }>>("pocket_inbound_log", { args: { limit: 5 } });
+            const inboundTxt = log.length === 0 ? "  (无)" : log.map((l) => `  [${new Date(l.timestamp * 1000).toLocaleTimeString()}] ${l.source}/${l.userId} ${l.signatureOk ? "✅" : "❌"} → ${l.status}\n    "${l.text.slice(0, 60)}"\n    thread: ${l.threadId || "—"}`).join("\n");
+            appendMessage(sessionId, { id: crypto.randomUUID(), role: "assistant", createdAt: Date.now(), text: `📨 Pocket Server 状态：\n\n  status:    ${info.status}\n  bind:      ${info.bind}:${info.port}\n  started:   ${info.startedAt > 0 ? new Date(info.startedAt * 1000).toLocaleString() : "—"}\n  handled:   ${info.requestsHandled}\n  last req:  ${info.lastRequestAt ? new Date(info.lastRequestAt * 1000).toLocaleString() : "—"}\n  last err:  ${info.lastError || "—"}\n\n最近入站 (${log.length})：\n${inboundTxt}` });
+          } else {
+            appendMessage(sessionId, { id: crypto.randomUUID(), role: "assistant", createdAt: Date.now(), text: "❌ 用法: /pocket server start [port] | stop | status" });
+          }
         } else if (arg.startsWith("test ")) {
           // 模拟 webhook 调用
           const id = arg.slice(5).trim();
@@ -1291,7 +1386,7 @@ M3 / Claude / GPT 会自动调用：
           const r = await invoke<{ status: string; threadId: string; message: string }>("pocket_handle_request", { req: { source: p.source, userId: p.userId, userName: "Test", chatId: p.chatId, chatType: "direct", text: "test from slash cmd", signature: sig } });
           appendMessage(sessionId, { id: crypto.randomUUID(), role: "assistant", createdAt: Date.now(), text: `🧪 模拟 webhook 调用：\n\n  status:   ${r.status}\n  thread:   ${r.threadId || "—"}\n  message:  ${r.message}` });
         } else {
-          appendMessage(sessionId, { id: crypto.randomUUID(), role: "assistant", createdAt: Date.now(), text: "❌ 用法: /pocket status | list | pair <source> <uid> <name> <cid> | unpair <id> | sign <key> <body> | test <id>" });
+          appendMessage(sessionId, { id: crypto.randomUUID(), role: "assistant", createdAt: Date.now(), text: "❌ 用法: /pocket status | list | pair <source> <uid> <name> <cid> | unpair <id> | sign <key> <body> | server <start|stop|status> [port] | test <id>" });
         }
       } catch (e) {
         appendMessage(sessionId, { id: crypto.randomUUID(), role: "assistant", createdAt: Date.now(), text: `❌ /pocket 失败: ${e}` });
@@ -1829,6 +1924,10 @@ ${diff.diff.slice(0, 5000)}${diff.truncated ? "\n... [truncated, view full in gi
         });
       }
     } catch (e) {
+      const errText = String(e);
+      if (/API Key|未配置/i.test(errText)) {
+        window.dispatchEvent(new CustomEvent("open-api-keys"));
+      }
       if (streamingAssistantId) {
         updateAssistantMessage(sessionId, streamingAssistantId, {
           text: `[请求失败] ${String(e)}`,
@@ -1978,26 +2077,31 @@ ${diff.diff.slice(0, 5000)}${diff.truncated ? "\n... [truncated, view full in gi
             />
           </div>
           <div className="composer-bottom-row">
-            <button
-              className="composer-model-chip"
-              title="切换模型"
-              disabled={busy}
-              onClick={() => {
-                // Cycle through providers — keep simple: open settings menu / approval panel
-                const sel = window.prompt(
-                  "输入模型 id (留空切到 Auto 路由)：\n\n当前: " + model,
-                  model === "auto" ? "" : model,
-                );
-                if (sel === null) return;
-                setModel(sel.trim() || "auto");
-              }}
+            <label
+              className={`composer-model-chip${modelReady ? "" : " model-missing"}`}
+              title={modelReady ? "切换模型" : "当前模型未配置 Key，请点击 ⋯ → API Key 设置"}
             >
               <span style={{ fontSize: 12 }}>🧠</span>
-              <span style={{ fontSize: 12, fontWeight: 500 }}>
-                {model === "auto" ? "Auto" : model}
-              </span>
-              <span style={{ fontSize: 10, opacity: 0.6 }}>▾</span>
-            </button>
+              <select
+                value={model}
+                disabled={busy}
+                onChange={(e) => {
+                  const v = e.target.value;
+                  setModel(v);
+                  try {
+                    localStorage.setItem(MODEL_STORAGE_KEY, v);
+                  } catch {
+                    /* ignore */
+                  }
+                }}
+              >
+                {availableModels.map((o) => (
+                  <option key={o.value} value={o.value}>
+                    {o.group}: {o.label}
+                  </option>
+                ))}
+              </select>
+            </label>
             <button
               className="composer-icon-btn"
               title="添加图片"

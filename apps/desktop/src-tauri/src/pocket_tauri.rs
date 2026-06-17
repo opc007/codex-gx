@@ -10,17 +10,23 @@
 //! - `pocket_webhook_url`      — 显示 webhook URL（演示）
 
 use pocket::{
-    handle_request as lib_handle_request, sign_hmac, Pairing, PocketConfig, PocketRequest,
-    PocketResponse, PocketSource,
+    handle_request as lib_handle_request, read_inbound_log, server_start, server_stop, sign_hmac,
+    default_bind, InboundLogEntry, Pairing, PocketConfig, PocketRequest, PocketResponse, PocketSource,
+    ServerHandle, ServerInfo, ServerStatus,
 };
 use serde::{Deserialize, Serialize};
 use std::sync::{Arc, Mutex};
 use uuid::Uuid;
 
 pub type PocketState = Arc<Mutex<PocketConfig>>;
+pub type PocketServerState = Arc<Mutex<ServerHandle>>;
 
 pub fn build_state() -> PocketState {
     Arc::new(Mutex::new(PocketConfig::load()))
+}
+
+pub fn build_server_state() -> PocketServerState {
+    Arc::new(Mutex::new(ServerHandle::default()))
 }
 
 #[derive(Serialize)]
@@ -157,4 +163,79 @@ pub async fn pocket_status(state: tauri::State<'_, PocketState>) -> Result<Pocke
         sources,
         config_path: pocket::config_path().display().to_string(),
     })
+}
+
+#[derive(Deserialize)]
+pub struct ServerStartArgs {
+    #[serde(default = "default_port")]
+    pub port: u16,
+    #[serde(default = "default_bind_str")]
+    pub bind: String,
+}
+
+fn default_port() -> u16 {
+    8787
+}
+
+fn default_bind_str() -> String {
+    default_bind()
+}
+
+#[tauri::command]
+pub async fn pocket_server_start(
+    args: ServerStartArgs,
+    state: tauri::State<'_, PocketServerState>,
+) -> Result<ServerInfo, String> {
+    let handle = {
+        let guard = state.inner().lock().map_err(|e| e.to_string())?;
+        guard.clone()
+    };
+    {
+        let i = handle.info.lock().map_err(|e| e.to_string())?;
+        if i.status == ServerStatus::Running {
+            return Err(format!("server already running at {}:{}", i.bind, i.port));
+        }
+    }
+    server_start(
+        args.bind.clone(),
+        args.port,
+        handle.info.clone(),
+        handle.running.clone(),
+    )
+    .map_err(|e| e.to_string())?;
+    let i = handle.info.lock().map_err(|e| e.to_string())?;
+    Ok(i.clone())
+}
+
+#[tauri::command]
+pub async fn pocket_server_stop(state: tauri::State<'_, PocketServerState>) -> Result<ServerInfo, String> {
+    let handle = {
+        let guard = state.inner().lock().map_err(|e| e.to_string())?;
+        guard.clone()
+    };
+    server_stop(&handle.running, &handle.info);
+    let i = handle.info.lock().map_err(|e| e.to_string())?;
+    Ok(i.clone())
+}
+
+#[tauri::command]
+pub async fn pocket_server_status(state: tauri::State<'_, PocketServerState>) -> Result<ServerInfo, String> {
+    let guard = state.lock().map_err(|e| e.to_string())?;
+    let i = guard.info.lock().map_err(|e| e.to_string())?;
+    Ok(i.clone())
+}
+
+#[derive(Deserialize)]
+pub struct InboundArgs {
+    #[serde(default = "default_limit")]
+    pub limit: usize,
+}
+
+fn default_limit() -> usize {
+    50
+}
+
+#[tauri::command]
+pub fn pocket_inbound_log(args: InboundArgs) -> Vec<InboundLogEntry> {
+    read_inbound_log(args.limit)
 }

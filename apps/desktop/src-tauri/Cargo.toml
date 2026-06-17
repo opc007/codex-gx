@@ -5,6 +5,7 @@ edition.workspace = true
 rust-version.workspace = true
 license.workspace = true
 description = "AgentShell 桌面应用 (Tauri 2)"
+default-run = "codex-gx-desktop"
 
 [lib]
 name = "agentshell_lib"

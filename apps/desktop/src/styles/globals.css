@@ -2483,3 +2483,58 @@ kbd {
 .tab-list { display: none; }
 .tab { display: none; }
 .tab-menu-wrap { display: none; }
+
+/* API Keys dialog */
+.api-key-label {
+  display: block;
+  font-size: var(--fs-md);
+  font-weight: 500;
+  margin: 12px 0 6px;
+}
+.api-key-hint {
+  font-size: var(--fs-sm);
+  color: var(--text-muted);
+  margin: 0 0 8px;
+}
+.api-key-input {
+  width: 100%;
+  box-sizing: border-box;
+  padding: 10px 12px;
+  border-radius: var(--radius);
+  border: 1px solid var(--border);
+  background: var(--bg-2);
+  color: var(--text);
+  font-size: var(--fs-md);
+  font-family: ui-monospace, monospace;
+}
+.api-key-ok {
+  margin-top: 12px;
+  padding: 10px 12px;
+  border-radius: var(--radius);
+  background: rgba(46, 160, 67, 0.12);
+  color: var(--success);
+  font-size: var(--fs-sm);
+}
+.api-key-section {
+  margin-bottom: 16px;
+  padding-bottom: 16px;
+  border-bottom: 1px solid var(--border);
+}
+.api-key-section:last-of-type {
+  border-bottom: none;
+  margin-bottom: 0;
+  padding-bottom: 0;
+}
+.api-key-actions {
+  display: flex;
+  gap: 8px;
+  margin-top: 8px;
+  justify-content: flex-end;
+}
+.api-keys-dialog .update-dialog-body {
+  max-height: 70vh;
+  overflow-y: auto;
+}
+.composer-model-chip.model-missing {
+  color: var(--warning, #e6a700);
+}

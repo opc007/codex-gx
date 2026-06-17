@@ -197,6 +197,13 @@ pub fn config_path() -> PathBuf {
     PathBuf::from(home).join(".agentshell").join("pocket.json")
 }
 
+pub mod http_server;
+
+pub use http_server::{
+    start as server_start, stop as server_stop, default_bind, InboundLogEntry,
+    ServerHandle, ServerInfo, ServerState, ServerStatus, read_inbound_log,
+};
+
 /// HMAC-SHA256 签名
 pub fn sign_hmac(key: &str, body: &str) -> String {
     use hmac::{Hmac, Mac};

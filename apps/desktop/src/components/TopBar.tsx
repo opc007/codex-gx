@@ -21,6 +21,7 @@ import { FlowGraphView } from "./FlowGraphView";
 import { SyncPanel } from "./SyncPanel";
 import { PluginPanel } from "./PluginPanel";
 import { LicensePanel } from "./LicensePanel";
+import { ApiKeysDialog } from "./ApiKeysDialog";
 import {
   useCurrentWorkspaceId,
   useWorkspaceList,
@@ -85,6 +86,7 @@ export function TopBar({ themeMode, setThemeMode }: Props) {
   const [syncOpen, setSyncOpen] = useState(false);
   const [pluginOpen, setPluginOpen] = useState(false);
   const [licenseOpen, setLicenseOpen] = useState(false);
+  const [apiKeysOpen, setApiKeysOpen] = useState(false);
   const { locale, setLocale } = useLocaleSwitcher();
 
   const settingsRef = useRef<HTMLDivElement | null>(null);
@@ -116,9 +118,30 @@ export function TopBar({ themeMode, setThemeMode }: Props) {
 
   useEffect(() => {
     void refreshLicense();
+    // 首次启动：没有任何 Key 时引导填写
+    void invoke<{
+      minimax_configured: boolean;
+      deepseek_configured: boolean;
+      anthropic_configured: boolean;
+      openai_configured: boolean;
+    }>("api_keys_status")
+      .then((s) => {
+        const any =
+          s.minimax_configured ||
+          s.deepseek_configured ||
+          s.anthropic_configured ||
+          s.openai_configured;
+        if (!any) {
+          setApiKeysOpen(true);
+        }
+      })
+      .catch(() => {});
+    const onOpenApiKeys = () => setApiKeysOpen(true);
+    window.addEventListener("open-api-keys", onOpenApiKeys);
     // 监听 license 变更
     const unlistenP = listen("license:changed", () => void refreshLicense());
     return () => {
+      window.removeEventListener("open-api-keys", onOpenApiKeys);
       void unlistenP.then((u) => u());
     };
   }, []);
@@ -231,6 +254,7 @@ export function TopBar({ themeMode, setThemeMode }: Props) {
               onOpenSync={() => { setSettingsOpen(false); setSyncOpen(true); }}
               onOpenPlugins={() => { setSettingsOpen(false); setPluginOpen(true); }}
               onOpenLicense={() => { setSettingsOpen(false); setLicenseOpen(true); }}
+              onOpenApiKeys={() => { setSettingsOpen(false); setApiKeysOpen(true); }}
               onPing={() => { setSettingsOpen(false); void pingBackend(); }}
             />
           )}
@@ -351,6 +375,7 @@ export function TopBar({ themeMode, setThemeMode }: Props) {
       {pluginOpen && <PluginPanel onClose={() => setPluginOpen(false)} />}
       {/* v1.6: License Panel 弹窗 */}
       {licenseOpen && <LicensePanel onClose={() => setLicenseOpen(false)} />}
+      {apiKeysOpen && <ApiKeysDialog onClose={() => setApiKeysOpen(false)} />}
     </>
   );
 }
@@ -402,6 +427,7 @@ type SettingsMenuProps = {
   onOpenSync: () => void;
   onOpenPlugins: () => void;
   onOpenLicense: () => void;
+  onOpenApiKeys: () => void;
   onPing: () => void;
 };
 
@@ -432,6 +458,7 @@ function SettingsMenu(props: SettingsMenuProps) {
       <MenuItem icon="🐞" label="Bug 报告" onClick={props.onOpenBug} />
 
       <div className="settings-menu-section">系统</div>
+      <MenuItem icon="🔑" label="API Key 设置" onClick={props.onOpenApiKeys} />
       <MenuItem icon="🔐" label="License 授权" onClick={props.onOpenLicense} />
       <MenuItem
         icon="🆕"

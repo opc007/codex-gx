@@ -16,7 +16,8 @@ use crate::stream::ChatStream;
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "snake_case")]
 pub enum StopReason {
-    /// 自然结束
+    /// 自然结束（OpenAI 兼容格式为 `stop`）
+    #[serde(alias = "stop")]
     EndTurn,
     /// 触发了工具调用
     ToolUse,
@@ -32,12 +33,16 @@ pub enum StopReason {
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
 pub struct Usage {
     /// 输入 token 数
+    #[serde(default, alias = "prompt_tokens")]
     pub input_tokens: u32,
     /// 输出 token 数
+    #[serde(default, alias = "completion_tokens")]
     pub output_tokens: u32,
     /// 缓存命中（读取）token
+    #[serde(default)]
     pub cache_read_tokens: u32,
     /// 缓存写入（创建）token
+    #[serde(default)]
     pub cache_write_tokens: u32,
 }
 

@@ -5,6 +5,7 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
 mod agent;
+mod api_keys_tauri;
 mod bugreport_tauri;
 mod cu_tool;
 mod desktop_cua;
@@ -133,7 +134,9 @@ pub fn run() {
         .manage::<desktop_perm_tauri::PermListState>(desktop_perm_tauri::build_state())
         .manage::<mobile_tauri::MobileState>(mobile_tauri::build_state())
         .manage::<pocket_tauri::PocketState>(pocket_tauri::build_state())
+        .manage::<pocket_tauri::PocketServerState>(pocket_tauri::build_server_state())
         .setup(|app| {
+            api_keys_tauri::apply_secrets_to_env();
             // v1.3：安装 panic hook
             if let Some(state) = app.try_state::<BugReportState>() {
                 bugreport_tauri::install_panic_hook(state.inner().clone());
@@ -194,6 +197,10 @@ pub fn run() {
             list_providers,
             list_tools,
             execute_tool,
+            api_keys_tauri::api_keys_status,
+            api_keys_tauri::api_keys_set,
+            api_keys_tauri::api_keys_test,
+            api_keys_tauri::api_keys_test_minimax,
             license_tauri::license_status,     // v1.6
             license_tauri::license_activate,   // v1.6
             license_tauri::license_deactivate, // v1.6
@@ -263,6 +270,10 @@ pub fn run() {
             pocket_tauri::pocket_sign,                        // v1.9.2 5.29 Pocket
             pocket_tauri::pocket_webhook_url,                 // v1.9.2 5.29 Pocket
             pocket_tauri::pocket_status,                      // v1.9.2 5.29 Pocket
+            pocket_tauri::pocket_server_start,                // v1.9.3 5.29 Pocket HTTP server
+            pocket_tauri::pocket_server_stop,                 // v1.9.3 5.29 Pocket HTTP server
+            pocket_tauri::pocket_server_status,               // v1.9.3 5.29 Pocket HTTP server
+            pocket_tauri::pocket_inbound_log,                 // v1.9.3 5.29 Pocket HTTP server
             get_ide_context,
             get_git_diff,
             list_git_branches,
@@ -1423,24 +1434,26 @@ async fn create_provider(model: &str) -> Result<Box<dyn Model>, String> {
     match model {
         "MiniMax-M3" | "m3" => {
             let key = std::env::var("MINIMAX_API_KEY").map_err(|_| {
-                "MINIMAX_API_KEY 环境变量未设置。请 export MINIMAX_API_KEY=xxx".to_string()
+                "未配置 MiniMax API Key。请点击右上角 ⋯ →「API Key 设置」填写并保存。".to_string()
             })?;
             Ok(Box::new(MinimaxProvider::new(key, None)))
         }
         m if m.starts_with("claude-") => {
-            let key = std::env::var("ANTHROPIC_API_KEY")
-                .map_err(|_| "ANTHROPIC_API_KEY 环境变量未设置".to_string())?;
+            let key = std::env::var("ANTHROPIC_API_KEY").map_err(|_| {
+                "未配置 Anthropic API Key。请点击 ⋯ →「API Key 设置」填写。".to_string()
+            })?;
             Ok(Box::new(AnthropicProvider::new(m, key, None)))
         }
         m if m.starts_with("deepseek-") => {
-            let key = std::env::var("DEEPSEEK_API_KEY")
-                .map_err(|_| "DEEPSEEK_API_KEY 环境变量未设置".to_string())?;
+            let key = std::env::var("DEEPSEEK_API_KEY").map_err(|_| {
+                "未配置 DeepSeek API Key。请点击 ⋯ →「API Key 设置」填写。".to_string()
+            })?;
             Ok(Box::new(DeepSeekProvider::new(m, key, None)))
         }
         m if m.starts_with("gpt-") => {
-            // OpenAI 也走 OpenAI 兼容 provider
-            let key = std::env::var("OPENAI_API_KEY")
-                .map_err(|_| "OPENAI_API_KEY 环境变量未设置".to_string())?;
+            let key = std::env::var("OPENAI_API_KEY").map_err(|_| {
+                "未配置 OpenAI API Key。请点击 ⋯ →「API Key 设置」填写。".to_string()
+            })?;
             let info = provider::model::ModelInfo {
                 id: m.into(),
                 name: m.into(),
@@ -1501,7 +1514,11 @@ fn list_providers() -> Vec<ProviderInfo> {
         ProviderInfo {
             id: "deepseek".into(),
             name: "DeepSeek".into(),
-            models: vec!["deepseek-v4-pro".into()],
+            models: vec![
+                "deepseek-v4-pro".into(),
+                "deepseek-chat".into(),
+                "deepseek-reasoner".into(),
+            ],
             default_model: "deepseek-v4-pro".into(),
             env_key: "DEEPSEEK_API_KEY".into(),
         },

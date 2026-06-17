@@ -124,4 +124,23 @@ mod tests {
         assert_eq!(m.reasoning_content.as_deref(), Some("thinking..."));
         assert_eq!(r.usage.total(), 15);
     }
+
+    #[test]
+    fn test_openai_compat_finish_reason_stop() {
+        let json = r#"{
+            "id": "test",
+            "model": "MiniMax-M3",
+            "created": 123,
+            "choices": [{
+                "index": 0,
+                "message": { "role": "assistant", "content": "hi" },
+                "finish_reason": "stop"
+            }],
+            "usage": { "prompt_tokens": 10, "completion_tokens": 5 }
+        }"#;
+        let r: ChatResponse = serde_json::from_str(json).unwrap();
+        assert_eq!(r.stop_reason(), Some(crate::model::StopReason::EndTurn));
+        assert_eq!(r.usage.input_tokens, 10);
+        assert_eq!(r.usage.output_tokens, 5);
+    }
 }

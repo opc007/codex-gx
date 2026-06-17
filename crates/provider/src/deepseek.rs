@@ -83,3 +83,22 @@ impl Model for DeepSeekProvider {
         self.inner.chat_stream(req).await
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::model::Model;
+    use crate::request::ChatMessage;
+
+    #[tokio::test]
+    #[ignore = "需要 DEEPSEEK_API_KEY 环境变量"]
+    async fn live_deepseek_chat() {
+        let key = std::env::var("DEEPSEEK_API_KEY").expect("DEEPSEEK_API_KEY");
+        let provider = DeepSeekProvider::new("deepseek-v4-pro", key, None);
+        let req = ChatRequest::new("deepseek-v4-pro")
+            .with_message(ChatMessage::user("说一个字：好"));
+        let resp = provider.chat(req).await.expect("chat");
+        let text = resp.first_message().map(|m| m.content.as_str()).unwrap_or("");
+        assert!(!text.is_empty(), "empty response");
+    }
+}

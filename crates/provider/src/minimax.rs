@@ -77,3 +77,22 @@ impl Model for MinimaxProvider {
         self.inner.chat_stream(req).await
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::model::Model;
+    use crate::request::ChatMessage;
+
+    #[tokio::test]
+    #[ignore = "需要 MINIMAX_API_KEY 环境变量"]
+    async fn live_minimax_chat() {
+        let key = std::env::var("MINIMAX_API_KEY").expect("MINIMAX_API_KEY");
+        let provider = MinimaxProvider::new(key, None);
+        let req = ChatRequest::new("MiniMax-M3")
+            .with_message(ChatMessage::user("说一个字：好"));
+        let resp = provider.chat(req).await.expect("chat");
+        let text = resp.first_message().map(|m| m.content.as_str()).unwrap_or("");
+        assert!(!text.is_empty(), "empty response");
+    }
+}
