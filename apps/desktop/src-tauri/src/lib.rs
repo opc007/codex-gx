@@ -17,6 +17,7 @@ mod vault_tauri;
 mod workspace_tauri;
 mod routing;
 mod routing_tauri;
+mod bugreport_tauri;
 
 use agent_core::tool::ToolRegistry;
 use serde::{Deserialize, Serialize};
@@ -50,6 +51,9 @@ pub type VaultState = Arc<Mutex<vault::Vault>>;
 
 /// v1.3：routing engine 共享状态
 pub type RoutingState = Arc<Mutex<crate::routing::RoutingEngine>>;
+
+/// v1.3：bug report 状态
+pub type BugReportState = Arc<bugreport_tauri::BugReportState>;
 
 /// v0.4：每个 session 一个 cancel handle + approval sender
 #[derive(Default)]
@@ -93,7 +97,12 @@ pub fn run() {
         .manage::<RoutingState>(Arc::new(Mutex::new(
             crate::routing::RoutingEngine::load_or_default(),
         )))
+        .manage::<BugReportState>(Arc::new(bugreport_tauri::BugReportState::new()))
         .setup(|app| {
+            // v1.3：安装 panic hook
+            if let Some(state) = app.try_state::<BugReportState>() {
+                bugreport_tauri::install_panic_hook(state.inner().clone());
+            }
             // v0.8：异步初始化 memory manager
             let app_handle = app.handle().clone();
             tauri::async_runtime::spawn(async move {
@@ -158,6 +167,10 @@ pub fn run() {
             routing_tauri::routing_get_strategy, // v1.3
             routing_tauri::routing_set_strategy, // v1.3
             routing_tauri::routing_reset_to_default, // v1.3
+            bugreport_tauri::bug_report_record, // v1.3
+            bugreport_tauri::bug_report_list, // v1.3
+            bugreport_tauri::bug_report_clear, // v1.3
+            bugreport_tauri::bug_report_build, // v1.3
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

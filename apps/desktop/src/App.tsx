@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, Component, type ReactNode, type ErrorInfo } from "react";
 import { Sidebar } from "./components/Sidebar";
 import { Thread } from "./components/Thread";
 import { Composer } from "./components/Composer";
@@ -15,6 +15,105 @@ import { useSessionsStore } from "./stores/sessions";
 import { useOpenTabs, openTab } from "./stores/tabs";
 import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
+
+// v1.3：全局错误上报
+function reportError(source: string, severity: string, message: string, stack?: string) {
+  try {
+    void invoke("bug_report_record", {
+      args: {
+        source,
+        severity,
+        message,
+        stack: stack ?? null,
+        session_id: null,
+        model: null,
+        context: null,
+        user_note: null,
+      },
+    });
+  } catch (e) {
+    console.warn("report error failed:", e);
+  }
+}
+
+if (typeof window !== "undefined") {
+  window.addEventListener("error", (e) => {
+    reportError("frontend", "error", String(e.message), e.error?.stack);
+  });
+  window.addEventListener("unhandledrejection", (e) => {
+    const reasonStr =
+      e.reason instanceof Error ? e.reason.message : String(e.reason);
+    const reasonStack = e.reason instanceof Error ? e.reason.stack : undefined;
+    reportError("promise", "error", reasonStr, reasonStack);
+  });
+}
+
+// v1.3：React error boundary
+class AppErrorBoundary extends Component<
+  { children: ReactNode },
+  { error: Error | null }
+> {
+  state = { error: null as Error | null };
+  static getDerivedStateFromError(error: Error) {
+    return { error };
+  }
+  componentDidCatch(error: Error, info: ErrorInfo) {
+    reportError(
+      "react",
+      "fatal",
+      `React render error: ${error.message}`,
+      `${error.stack ?? ""}\n\nComponent stack:\n${info.componentStack ?? ""}`,
+    );
+  }
+  render() {
+    if (this.state.error) {
+      return (
+        <div
+          style={{
+            padding: 32,
+            color: "var(--text)",
+            background: "var(--bg)",
+            minHeight: "100vh",
+            display: "flex",
+            flexDirection: "column",
+            alignItems: "center",
+            justifyContent: "center",
+          }}
+        >
+          <h1 style={{ color: "var(--danger)" }}>💥 应用出错了</h1>
+          <p style={{ color: "var(--text-muted)", maxWidth: 600, textAlign: "center" }}>
+            错误已被记录到本地 crash log。可点击 🐞 按钮查看并提交 Issue。
+          </p>
+          <pre
+            style={{
+              background: "var(--bg-secondary)",
+              padding: 16,
+              borderRadius: 6,
+              maxWidth: 800,
+              maxHeight: 300,
+              overflow: "auto",
+              fontSize: 12,
+              marginTop: 16,
+            }}
+          >
+            {this.state.error.stack ?? this.state.error.message}
+          </pre>
+          <button
+            className="btn primary"
+            style={{ marginTop: 16 }}
+            onClick={() => {
+              this.setState({ error: null });
+              window.location.reload();
+            }}
+          >
+            重新加载
+          </button>
+        </div>
+      );
+    }
+    return this.props.children;
+  }
+}
 
 export default function App() {
   const [themeMode, setThemeMode] = useThemeStore((s) => [s.mode, s.setMode]);
@@ -158,38 +257,40 @@ export default function App() {
   };
 
   return (
-    <div className="app-shell">
-      <TopBar
-        themeMode={themeMode}
-        setThemeMode={setThemeMode}
-        onLicenseClick={() => setShowLicense(true)}
-      />
-      <div className="app-body">
-        <Sidebar />
-        <main className="main-pane">
-          <Thread sessionId={currentId} />
-          <Composer sessionId={currentId} />
-        </main>
-      </div>
-      <StatusBar sessionId={currentId} />
-      {showLicense && (
-        <LicenseDialog
-          onClose={() => setShowLicense(false)}
-          onChange={() => {}}
+    <AppErrorBoundary>
+      <div className="app-shell">
+        <TopBar
+          themeMode={themeMode}
+          setThemeMode={setThemeMode}
+          onLicenseClick={() => setShowLicense(true)}
         />
-      )}
-      <ApprovalDialog
-        request={approvalReq}
-        onApprove={onApprove}
-        onDeny={onDeny}
-      />
-      <PlanDialog
-        request={planReq}
-        onApprove={onPlanApprove}
-        onDeny={onPlanDeny}
-        onEdit={onPlanEdit}
-      />
-    </div>
+        <div className="app-body">
+          <Sidebar />
+          <main className="main-pane">
+            <Thread sessionId={currentId} />
+            <Composer sessionId={currentId} />
+          </main>
+        </div>
+        <StatusBar sessionId={currentId} />
+        {showLicense && (
+          <LicenseDialog
+            onClose={() => setShowLicense(false)}
+            onChange={() => {}}
+          />
+        )}
+        <ApprovalDialog
+          request={approvalReq}
+          onApprove={onApprove}
+          onDeny={onDeny}
+        />
+        <PlanDialog
+          request={planReq}
+          onApprove={onPlanApprove}
+          onDeny={onPlanDeny}
+          onEdit={onPlanEdit}
+        />
+      </div>
+    </AppErrorBoundary>
   );
 }
 

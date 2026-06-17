@@ -8,6 +8,7 @@ import { open as openUrl } from "@tauri-apps/plugin-shell";
 import { MarketplaceDialog } from "./MarketplaceDialog";
 import { ThemeStudioDialog } from "./ThemeStudioDialog";
 import { RoutingEditorDialog } from "./RoutingEditorDialog";
+import { BugReportDialog } from "./BugReportDialog";
 import {
   useCurrentWorkspaceId,
   useWorkspaceList,
@@ -46,6 +47,7 @@ export function TopBar({ themeMode, setThemeMode, onLicenseClick }: Props) {
   const [marketplaceOpen, setMarketplaceOpen] = useState(false);
   const [themeStudioOpen, setThemeStudioOpen] = useState(false);
   const [routingOpen, setRoutingOpen] = useState(false);
+  const [bugOpen, setBugOpen] = useState(false);
   const { locale, setLocale } = useLocaleSwitcher();
 
   const refreshLicense = async () => {
@@ -138,6 +140,13 @@ export function TopBar({ themeMode, setThemeMode, onLicenseClick }: Props) {
         >
           🧭
         </button>
+        <button
+          className="topbar-btn"
+          onClick={() => setBugOpen(true)}
+          title="Bug 报告 (v1.3)"
+        >
+          🐞
+        </button>
         <button className="topbar-btn" onClick={pingBackend} disabled={busy}>
           {busy ? "..." : "Ping"}
         </button>
@@ -214,6 +223,9 @@ export function TopBar({ themeMode, setThemeMode, onLicenseClick }: Props) {
       {routingOpen && (
         <RoutingEditorDialog onClose={() => setRoutingOpen(false)} />
       )}
+
+      {/* v1.3: Bug Report 弹窗 */}
+      {bugOpen && <BugReportDialog onClose={() => setBugOpen(false)} />}
     </header>
   );
 }

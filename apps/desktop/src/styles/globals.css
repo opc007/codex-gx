@@ -327,6 +327,23 @@ kbd {
 .routing-chip-x { background: none; border: none; color: var(--text-muted); cursor: pointer; padding: 0 2px; }
 .routing-chip-x:hover { color: var(--danger); }
 
+/* v1.3：Bug Report 弹窗 */
+.bug-form { padding: 12px; background: var(--bg-secondary); border-radius: 6px; margin-bottom: 16px; }
+.bug-form h4 { margin: 0 0 8px 0; font-size: 13px; }
+.bug-report-result { padding: 10px; background: var(--bg); border-radius: 4px; margin-top: 8px; }
+
+.bug-list h4 { margin: 12px 0 8px 0; font-size: 13px; display: flex; align-items: center; }
+.bug-entry { border: 1px solid var(--border); border-radius: 6px; margin-bottom: 6px; padding: 8px 12px; }
+.bug-entry.bug-fatal { border-left: 3px solid var(--danger); }
+.bug-entry.bug-error { border-left: 3px solid var(--warning); }
+.bug-entry.bug-warning { border-left: 3px solid var(--success); }
+.bug-entry-head { display: flex; align-items: center; gap: 8px; font-size: 12px; color: var(--text-muted); margin-bottom: 4px; }
+.bug-severity { font-size: 14px; }
+.bug-source { font-family: ui-monospace, monospace; background: var(--bg-secondary); padding: 1px 6px; border-radius: 3px; }
+.bug-time { margin-left: auto; }
+.bug-message { font-size: 13px; color: var(--text); }
+.bug-stack { font-size: 11px; color: var(--text-muted); background: var(--bg-secondary); padding: 6px 8px; border-radius: 3px; overflow: auto; max-height: 100px; margin: 4px 0 0 0; }
+
 /* v1.1：标签栏 */
 .tab-bar {
   display: flex;
