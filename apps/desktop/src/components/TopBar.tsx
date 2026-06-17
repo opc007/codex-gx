@@ -19,6 +19,7 @@ import { SkillsLibraryDialog } from "./SkillsLibraryDialog";
 import { TtsPanel } from "./TtsPanel";
 import { FlowGraphView } from "./FlowGraphView";
 import { SyncPanel } from "./SyncPanel";
+import { PluginPanel } from "./PluginPanel";
 import {
   useCurrentWorkspaceId,
   useWorkspaceList,
@@ -74,6 +75,7 @@ export function TopBar({ themeMode, setThemeMode, onLicenseClick }: Props) {
   const [ttsOpen, setTtsOpen] = useState(false);
   const [flowOpen, setFlowOpen] = useState(false);
   const [syncOpen, setSyncOpen] = useState(false);
+  const [pluginOpen, setPluginOpen] = useState(false);
   const { locale, setLocale } = useLocaleSwitcher();
 
   const refreshLicense = async () => {
@@ -243,6 +245,13 @@ export function TopBar({ themeMode, setThemeMode, onLicenseClick }: Props) {
         >
           ☁️
         </button>
+        <button
+          className="topbar-btn"
+          onClick={() => setPluginOpen(true)}
+          title="插件热加载 (v1.5)"
+        >
+          🧩
+        </button>
         <UserMenu
           open={userMenuOpen}
           onToggle={() => setUserMenuOpen(!userMenuOpen)}
@@ -371,6 +380,9 @@ export function TopBar({ themeMode, setThemeMode, onLicenseClick }: Props) {
 
       {/* v1.5: Sync Panel 弹窗 */}
       {syncOpen && <SyncPanel onClose={() => setSyncOpen(false)} />}
+
+      {/* v1.5: Plugin Panel 弹窗 */}
+      {pluginOpen && <PluginPanel onClose={() => setPluginOpen(false)} />}
     </header>
   );
 }

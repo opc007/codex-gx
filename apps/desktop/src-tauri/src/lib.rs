@@ -113,6 +113,13 @@ pub fn run() {
             if let Some(state) = app.try_state::<BugReportState>() {
                 bugreport_tauri::install_panic_hook(state.inner().clone());
             }
+            // v1.5：首次启动时安装默认 plugin
+            let reg = plugin::load_registry();
+            if reg.plugins.is_empty() {
+                if let Err(e) = plugin::install_defaults() {
+                    eprintln!("[plugin] install defaults failed: {e}");
+                }
+            }
             // v1.4：启动队列事件 forwarder
             if let Some(state) = app.try_state::<queue_tauri::QueueState>() {
                 queue_tauri::spawn_event_forwarder(app.handle().clone(), state.inner().clone());
@@ -190,6 +197,13 @@ pub fn run() {
             sync_remove, // v1.5
             sync_clear_all, // v1.5
             sync_schema_version, // v1.5
+            plugin_list, // v1.5
+            plugin_install, // v1.5
+            plugin_remove, // v1.5
+            plugin_reload, // v1.5
+            plugin_install_defaults, // v1.5
+            plugin_run_steps, // v1.5
+            plugin_invoke, // v1.5
             compress_session, // v1.0
             check_update, // v1.0
             voice_tauri::voice_check, // v1.2
@@ -1123,6 +1137,58 @@ async fn sync_clear_all() -> Result<usize, String> {
 #[tauri::command]
 async fn sync_schema_version() -> Result<u32, String> {
     Ok(sync::schema_version())
+}
+
+// =============================================================================
+// v1.5 Plugin 热加载命令
+// =============================================================================
+
+#[tauri::command]
+async fn plugin_list() -> Result<Vec<plugin::PluginManifest>, String> {
+    let reg = plugin::load_registry();
+    Ok(reg.plugins.into_values().collect())
+}
+
+#[tauri::command]
+async fn plugin_install(json: String) -> Result<String, String> {
+    plugin::install(&json)
+}
+
+#[tauri::command]
+async fn plugin_remove(name: String) -> Result<(), String> {
+    plugin::remove(&name)
+}
+
+#[tauri::command]
+async fn plugin_reload() -> Result<usize, String> {
+    let reg = plugin::load_registry();
+    Ok(reg.plugins.len())
+}
+
+#[tauri::command]
+async fn plugin_install_defaults() -> Result<Vec<String>, String> {
+    plugin::install_defaults()
+}
+
+#[tauri::command]
+async fn plugin_run_steps(steps: Vec<plugin::PluginStep>, input: String) -> Result<String, String> {
+    Ok(plugin::run_steps(&steps, &input))
+}
+
+#[tauri::command]
+async fn plugin_invoke(
+    kind: String,
+    command: Option<String>,
+    input: String,
+) -> Result<String, String> {
+    let k = match kind.as_str() {
+        "pre_send" | "PreSend" => plugin::HookKind::PreSend,
+        "post_recv" | "PostRecv" => plugin::HookKind::PostRecv,
+        "slash" | "Slash" => plugin::HookKind::Slash,
+        _ => return Err(format!("unknown hook kind: {kind}")),
+    };
+    let reg = plugin::load_registry();
+    Ok(plugin::invoke(&reg, k, command.as_deref(), &input))
 }
 
 // ============================================================

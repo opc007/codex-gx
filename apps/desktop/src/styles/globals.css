@@ -577,6 +577,21 @@ kbd {
 .sync-row-head { display: flex; align-items: center; gap: 6px; font-size: 12px; flex-wrap: wrap; }
 .sync-row-meta { font-size: 10px; color: var(--text-muted); margin-top: 2px; }
 
+/* v1.5: plugin */
+.plugin-list { max-height: 40vh; overflow-y: auto; }
+.plugin-row { border: 1px solid var(--border); border-radius: 6px; padding: 8px 10px; background: var(--bg-secondary); margin-bottom: 6px; cursor: pointer; }
+.plugin-row:hover { background: var(--bg-tertiary); }
+.plugin-sel { background: var(--bg-tertiary); border-color: var(--primary); }
+.plugin-row-head { display: flex; align-items: center; gap: 6px; font-size: 12px; flex-wrap: wrap; }
+.plugin-name { font-weight: 600; font-size: 13px; }
+.plugin-desc { font-size: 11px; color: var(--text-muted); margin-top: 4px; }
+.plugin-hooks { margin-top: 8px; padding-top: 8px; border-top: 1px solid var(--border); }
+.plugin-hook { padding: 4px 0; font-size: 12px; }
+.plugin-script { background: var(--bg); padding: 6px; border-radius: 3px; font-size: 10px; margin: 4px 0 0 0; }
+.plugin-debug { padding: 10px 12px; background: var(--bg-secondary); border-radius: 6px; margin-top: 10px; }
+.plugin-debug summary { cursor: pointer; font-size: 13px; }
+.plugin-debug input { width: 100%; }
+
 /* v1.1：标签栏 */
 .tab-bar {
   display: flex;

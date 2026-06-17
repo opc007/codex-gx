@@ -78,6 +78,7 @@ dependencies = [
  "memory",
  "p2p",
  "patch",
+ "plugin",
  "provider",
  "queue",
  "reqwest 0.12.28",
@@ -2763,6 +2764,14 @@ dependencies = [
  "quick-xml",
  "serde",
  "time",
+]
+
+[[package]]
+name = "plugin"
+version = "0.1.0"
+dependencies = [
+ "serde",
+ "serde_json",
 ]
 
 [[package]]

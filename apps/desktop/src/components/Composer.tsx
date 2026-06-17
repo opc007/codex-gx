@@ -251,6 +251,18 @@ export function Composer({ sessionId }: Props) {
         return;
       }
     }
+    // v1.5：插件
+    if (trimmed === "/plugin" || trimmed === "/plugins") {
+      window.dispatchEvent(new CustomEvent("open-plugin-panel"));
+      appendMessage(sessionId, {
+        id: crypto.randomUUID(),
+        role: "assistant",
+        text: "🧩 已触发：打开插件面板（请点 TopBar 🧩）",
+        createdAt: Date.now(),
+      });
+      return;
+    }
+
     // v1.5：同步当前 session
     if (trimmed === "/sync") {
       const sid = sessionId;
@@ -840,6 +852,7 @@ M3 / Claude / GPT 会自动调用：
 - /speak <text>         - 朗读一段文本（需先在 TopBar 🔊 启用 TTS）
 - /flow                 - 打开 Agent 流程图（v1.5）
 - /sync                 - 同步当前 session 到本地缓存（v1.5）
+- /plugin               - 打开插件热加载面板（v1.5）
 - Top bar 🏠 打开模型管理 UI
 - 模型 ID 格式：ollama:<name> / llamacpp:<name>
 - 自动 discover Ollama (http://127.0.0.1:11434) 和 llama.cpp server
