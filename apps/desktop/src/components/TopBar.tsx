@@ -108,7 +108,7 @@ export function TopBar({ themeMode, setThemeMode, onLicenseClick }: Props) {
     <header className="topbar">
       <div className="topbar-left">
         <strong>AgentShell</strong>
-        <span className="topbar-version">v1.3.0</span>
+        <span className="topbar-version">v1.4.0</span>
         <WorkspaceSelector />
       </div>
       <div className="topbar-right">

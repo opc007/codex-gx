@@ -649,7 +649,7 @@ export function Composer({ sessionId }: Props) {
       const helpMsg: PersistedMessage = {
         id: crypto.randomUUID(),
         role: "assistant",
-        text: `📖 AgentShell v1.3 命令帮助：
+        text: `📖 AgentShell v1.4 命令帮助：
 
 通用：
 /help      - 显示此帮助
@@ -719,7 +719,38 @@ M3 / Claude / GPT 会自动调用：
 🔐 会话加密：侧栏 session 旁 🔒 / 🔓 按钮
 📊 Token 用量：/usage
 💡 模型切换：Top bar 下拉
-💡 所有会话和消息自动保存到本地`,
+💡 所有会话和消息自动保存到本地
+
+🏠 v1.4 本地 LLM：
+- /local [ollama_url]   - 探测本机 Ollama 模型
+- Top bar 🏠 打开模型管理 UI
+- 模型 ID 格式：ollama:<name> / llamacpp:<name>
+- 自动 discover Ollama (http://127.0.0.1:11434) 和 llama.cpp server
+
+🔍 v1.4 代码 review：
+- /lint [path]          - 运行 clippy / tsc / TODO 扫描
+- Top bar 🔍 打开完整 UI（按 file/severity 分组，可筛选）
+- 自动跳过 node_modules / target / dist / .git
+
+📋 v1.4 任务队列：
+- /queue                - 列出所有任务
+- /queue <cmd>          - 后台跑 shell 命令不阻塞 chat
+- Top bar 📋 打开队列面板
+- 支持 cancel / clear finished / 实时进度事件
+
+📡 v1.4 P2P 设备协同：
+- Top bar 📡 打开设备面板
+- 启动主机生成 6 位配对码
+- 客户端输入 IP:port + 配对码连接
+- 自动 mDNS 广播（macOS / Linux）
+
+🧠 v1.4 Agent 学习：
+- /learn                - 查看学习统计
+- /learn feedback       - 👍 正面反馈
+- /learn feedback bad   - 👎 负面反馈
+- /learn reset          - 重置所有学习数据
+- Top bar 🧠 打开学习面板
+- 自动跟踪模型 / 工具 / 命令 / 提示长度 / 语言`,
         createdAt: Date.now(),
       };
       appendMessage(sessionId, helpMsg);
@@ -823,6 +854,10 @@ M3 / Claude / GPT 会自动调用：
       setText("");
       return;
     }
+    // v1.4：本地 LLM 探测
+    // v1.4：代码 review
+    // v1.4：任务队列
+    // v1.4：学习面板 — see /learn above
     // v0.8：长期记忆命令
     if (trimmed.startsWith("/remember ") || trimmed === "/remember") {
       const content = trimmed.slice(9).trim();
