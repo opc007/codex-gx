@@ -25,6 +25,9 @@ pub struct ToolOutput {
     /// 截断标记（输出过长）
     #[serde(default)]
     pub truncated: bool,
+    /// v1.2：结构化数据（如截图 base64 / 文件路径 / 元数据），供前端二次渲染或模型多模态理解
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub data: Option<serde_json::Value>,
 }
 
 impl ToolOutput {
@@ -35,6 +38,7 @@ impl ToolOutput {
             output: output.into(),
             error: None,
             truncated: false,
+            data: None,
         }
     }
 
@@ -45,6 +49,7 @@ impl ToolOutput {
             output: String::new(),
             error: Some(err.into()),
             truncated: false,
+            data: None,
         }
     }
 
