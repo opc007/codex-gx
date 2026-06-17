@@ -1,0 +1,15 @@
+[package]
+name = "vision"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+description = "AgentShell v1.9.4 Vision — 多模态 (图像/视频理解) 协议层"
+
+[dependencies]
+serde.workspace = true
+serde_json.workspace = true
+thiserror.workspace = true
+chrono.workspace = true
+uuid.workspace = true
+base64 = "0.22"

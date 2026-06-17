@@ -247,10 +247,7 @@ export default function App() {
   return (
     <AppErrorBoundary>
       <div className="app-shell">
-        <TopBar
-          themeMode={themeMode}
-          setThemeMode={setThemeMode}
-        />
+        <TopBar />
         <div className="app-body">
           <Sidebar />
           <main className="main-pane">

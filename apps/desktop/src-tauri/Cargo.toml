@@ -60,6 +60,7 @@ screenshot = { path = "../../../crates/screenshot" }
 desktop_perm = { path = "../../../crates/desktop_perm" }
 mobile_remote = { path = "../../../crates/mobile_remote" }
 pocket = { path = "../../../crates/pocket" }
+vision = { path = "../../../crates/vision" }
 base64.workspace = true
 tokio.workspace = true
 async-trait.workspace = true

@@ -20,6 +20,7 @@ mod screenshot_tauri;
 mod desktop_perm_tauri;
 mod mobile_tauri;
 mod pocket_tauri;
+mod vision_tauri;
 mod lint_tauri;
 mod local_tauri;
 mod marketplace_tauri;
@@ -275,6 +276,13 @@ pub fn run() {
             pocket_tauri::pocket_server_status,               // v1.9.3 5.29 Pocket HTTP server
             pocket_tauri::pocket_inbound_log,                 // v1.9.3 5.29 Pocket HTTP server
             get_ide_context,
+            vision_tauri::vision_status,                       // v1.9.4 5.31 Vision
+            vision_tauri::vision_meta,                         // v1.9.4 5.31 Vision
+            vision_tauri::vision_caption,                     // v1.9.4 5.31 Vision
+            vision_tauri::vision_ocr,                         // v1.9.4 5.31 Vision
+            vision_tauri::vision_annotate,                    // v1.9.4 5.31 Vision
+            vision_tauri::vision_formats,                     // v1.9.4 5.31 Vision
+            vision_tauri::vision_protocol_prompt,             // v1.9.4 5.31 Vision
             get_git_diff,
             list_git_branches,
             list_mcp_servers,

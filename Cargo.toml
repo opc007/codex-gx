@@ -27,6 +27,7 @@ members = [
     "crates/desktop_perm",
     "crates/mobile_remote",
     "crates/pocket",
+    "crates/vision",
     "apps/desktop/src-tauri",
 ]
 
@@ -114,6 +115,7 @@ screenshot = { path = "crates/screenshot" }
 desktop_perm = { path = "crates/desktop_perm" }
 mobile_remote = { path = "crates/mobile_remote" }
 pocket = { path = "crates/pocket" }
+vision = { path = "crates/vision" }
 
 # regex
 regex-lite = "0.1"

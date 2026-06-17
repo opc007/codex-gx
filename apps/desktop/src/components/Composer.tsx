@@ -1322,6 +1322,53 @@ M3 / Claude / GPT 会自动调用：
       return;
     }
 
+    // v1.9.4: /vision (多模态：图像/OCR/标注)
+    if (trimmed === "/vision" || trimmed.startsWith("/vision ")) {
+      const arg = trimmed.slice(7).trim();
+      try {
+        if (arg === "" || arg === "status") {
+          const st = await invoke<{ version: string; capabilities: string[]; promptExcerpt: string }>("vision_status");
+          const fmts = await invoke<Array<{ name: string; label: string; mime: string }>>("vision_formats");
+          const fmtTxt = fmts.map((f) => `  ${f.label.padEnd(6)} ${f.mime}`).join("\n");
+          appendMessage(sessionId, { id: crypto.randomUUID(), role: "assistant", createdAt: Date.now(), text: `📷 Vision 状态：\n\n  version:  ${st.version}\n  caps:     ${st.capabilities.join(", ")}\n\n支持格式：\n${fmtTxt}\n\n命令：/vision meta <path> | caption <path> | ocr <path> | annotate <path> | formats | prompt` });
+        } else if (arg === "formats") {
+          const fmts = await invoke<Array<{ name: string; label: string; mime: string }>>("vision_formats");
+          const fmtTxt = fmts.map((f) => `  ${f.label.padEnd(6)} ${f.mime}`).join("\n");
+          appendMessage(sessionId, { id: crypto.randomUUID(), role: "assistant", createdAt: Date.now(), text: `📷 支持的图像格式：\n\n${fmtTxt}` });
+        } else if (arg === "prompt") {
+          const p = await invoke<string>("vision_protocol_prompt");
+          appendMessage(sessionId, { id: crypto.randomUUID(), role: "assistant", createdAt: Date.now(), text: p });
+        } else if (arg.startsWith("meta ")) {
+          const path = arg.slice(5).trim();
+          const m = await invoke<{ format: string; mime: string; sizeBytes: number; width: number | null; height: number | null; aspectRatio: number | null; mode: string | null; source: string }>("vision_meta", { args: { path } });
+          appendMessage(sessionId, { id: crypto.randomUUID(), role: "assistant", createdAt: Date.now(), text: `📷 图像元数据：\n\n  format:  ${m.format}\n  mime:    ${m.mime}\n  size:    ${m.sizeBytes} bytes\n  width:   ${m.width ?? "—"}\n  height:  ${m.height ?? "—"}\n  aspect:  ${m.aspectRatio?.toFixed(2) ?? "—"}\n  mode:    ${m.mode ?? "—"}\n  source:  ${m.source}` });
+        } else if (arg.startsWith("caption ")) {
+          const path = arg.slice(8).trim();
+          const c = await invoke<{ short: string; detailed: string; tags: string[]; colors: string[]; mood: string | null }>("vision_caption", { args: { path } });
+          appendMessage(sessionId, { id: crypto.randomUUID(), role: "assistant", createdAt: Date.now(), text: `📷 图像描述：\n\n**Short**: ${c.short}\n\n**Detailed**: ${c.detailed}\n\n**Tags**: ${c.tags.join(", ")}\n**Colors**: ${c.colors.join(", ")}\n**Mood**: ${c.mood ?? "—"}` });
+        } else if (arg.startsWith("ocr ")) {
+          const path = arg.slice(4).trim();
+          const r = await invoke<{ text: string; lines: Array<{ text: string; bbox: [number, number, number, number]; confidence: number }>; confidence: number; language: string }>("vision_ocr", { args: { path } });
+          const linesTxt = r.lines.map((l) => `  [${(l.bbox[0] * 100).toFixed(0)},${(l.bbox[1] * 100).toFixed(0)}] ${l.text} (${(l.confidence * 100).toFixed(0)}%)`).join("\n");
+          appendMessage(sessionId, { id: crypto.randomUUID(), role: "assistant", createdAt: Date.now(), text: `📷 OCR 结果（${r.language}）：\n\n**Text**:\n${r.text}\n\n**Lines**:\n${linesTxt || "  (无)"}` });
+        } else if (arg.startsWith("annotate ")) {
+          // annotate <path> + demo box
+          const path = arg.slice(9).trim();
+          const demoBoxes = [
+            { id: "btn-1", label: "Submit button", x: 0.5, y: 0.6, w: 0.1, h: 0.05, confidence: 0.95, description: "blue submit button at center-bottom" },
+            { id: "txt-1", label: "Title text", x: 0.05, y: 0.05, w: 0.9, h: 0.08, confidence: 0.88, description: "large heading text" },
+          ];
+          const txt = await invoke<string>("vision_annotate", { args: { path, boxes: demoBoxes } });
+          appendMessage(sessionId, { id: crypto.randomUUID(), role: "assistant", createdAt: Date.now(), text: `📷 Screenshot 标注（demo 2 boxes）：\n\n${txt}\n（真实检测需要 VLM API）` });
+        } else {
+          appendMessage(sessionId, { id: crypto.randomUUID(), role: "assistant", createdAt: Date.now(), text: "❌ 用法: /vision status | formats | prompt | meta <path> | caption <path> | ocr <path> | annotate <path>" });
+        }
+      } catch (e) {
+        appendMessage(sessionId, { id: crypto.randomUUID(), role: "assistant", createdAt: Date.now(), text: `❌ /vision 失败: ${e}` });
+      }
+      return;
+    }
+
     // v1.9.2: /pocket
     if (trimmed === "/pocket" || trimmed.startsWith("/pocket ")) {
       const arg = trimmed.slice(7).trim();
@@ -1561,6 +1608,8 @@ M3 / Claude / GPT 会自动调用：
           "mobile",
           // v1.9.2
           "pocket",
+          // v1.9.4
+          "vision",
         ]);
         if (!known.has(name)) {
           try {

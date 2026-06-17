@@ -1487,13 +1487,22 @@ kbd {
   position: absolute;
   right: 0;
   top: calc(100% + 4px);
-  min-width: 220px;
+  min-width: 240px;
+  max-width: 280px;
+  max-height: 70vh;
+  overflow-y: auto;
   background: var(--bg-elevated);
   border: 1px solid var(--border);
-  border-radius: 8px;
-  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.15);
+  border-radius: 10px;
+  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.22);
   padding: 6px;
   z-index: 100;
+}
+.user-menu.user-menu-anchor {
+  left: 0;
+  right: auto;
+  bottom: calc(100% + 6px);
+  top: auto;
 }
 .user-menu-current {
   display: flex;
@@ -1541,6 +1550,65 @@ kbd {
   flex-shrink: 0;
 }
 .team-avatar.small { width: 22px; height: 22px; font-size: 12px; }
+
+.sidebar-bottom { position: relative; }
+.sidebar-user {
+  width: 100%;
+  border: none;
+  background: transparent;
+  font-family: inherit;
+}
+.sidebar-user-chevron {
+  font-size: 11px;
+  color: var(--text-muted);
+  margin-left: 4px;
+}
+.user-menu-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  font-size: 14px;
+}
+.user-menu-extra {
+  margin-left: auto;
+  font-size: 11px;
+  color: var(--text-muted);
+}
+.user-menu-locale {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 8px;
+  font-size: 13px;
+}
+.user-menu-locale .topbar-select {
+  margin-left: auto;
+  font-size: 12px;
+  padding: 2px 6px;
+}
+
+.topbar-update-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  height: 28px;
+  padding: 0 10px;
+  border-radius: 999px;
+  background: transparent;
+  border: 1px solid var(--border);
+  color: var(--fg-2);
+  font-size: 12px;
+  cursor: pointer;
+  font-family: inherit;
+}
+.topbar-update-pill:hover:not(:disabled) {
+  background: var(--bg-3);
+}
+.topbar-update-pill:disabled {
+  opacity: 0.6;
+  cursor: wait;
+}
 
 /* ==========================================================
    Modal (License & dialogs)
