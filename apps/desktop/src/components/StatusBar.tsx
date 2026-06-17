@@ -45,7 +45,7 @@ export function StatusBar({ sessionId }: Props) {
         </>
       )}
       <span className="status-spacer" />
-      <span className="status-item status-muted">v0.2.0-alpha</span>
+      <span className="status-item status-muted">v1.7.0</span>
     </footer>
   );
 }

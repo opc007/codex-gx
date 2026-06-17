@@ -54,6 +54,7 @@ personality = { path = "../../../crates/personality" }
 skills_md = { path = "../../../crates/skills_md" }
 goal = { path = "../../../crates/goal" }
 headless = { path = "../../../crates/headless" }
+background = { path = "../../../crates/background" }
 base64.workspace = true
 tokio.workspace = true
 async-trait.workspace = true

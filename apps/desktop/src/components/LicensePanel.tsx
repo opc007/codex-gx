@@ -125,90 +125,97 @@ export function LicensePanel({ onClose }: { onClose: () => void }) {
   };
 
   return (
-    <div className="panel license-panel">
-      <div className="panel-header">
-        <h2>🔐 License 授权</h2>
-        <button className="close-btn" onClick={onClose}>×</button>
-      </div>
+    <div className="update-dialog-overlay" onClick={onClose}>
+      <div
+        className="update-dialog license-panel"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div className="update-dialog-header">
+          <h2>🔐 License 授权</h2>
+          <button className="update-close" onClick={onClose}>×</button>
+        </div>
 
-      {err && <div className="error-banner">{err}</div>}
+        <div className="update-dialog-body">
+          {err && <div className="error-banner">{err}</div>}
 
-      {summary && (
-        <StatusCard
-          status={summary.status}
-          offline={summary.offline}
-          lastValidatedAt={summary.last_validated_at}
-        />
-      )}
-
-      {summary?.status.kind === "unactivated" ||
-      summary?.status.kind === "expired" ? (
-        <>
-          <h3>购买 / 续费</h3>
-          <div className="tier-grid">
-            {tiers.map((t) => (
-              <TierCard key={t.tier} tier={t} />
-            ))}
-          </div>
-
-          <h3>已有激活码？</h3>
-          <div className="activate-form">
-            <textarea
-              placeholder="把激活码粘到这里（Base64 字符串）"
-              value={code}
-              onChange={(e) => setCode(e.target.value)}
-              rows={3}
+          {summary && (
+            <StatusCard
+              status={summary.status}
+              offline={summary.offline}
+              lastValidatedAt={summary.last_validated_at}
             />
-            <div className="activate-actions">
-              <button className="primary" disabled={busy} onClick={onActivate}>
-                {busy ? "激活中..." : "立即激活"}
-              </button>
-              <button onClick={() => void openUrl("https://agentshell.io/buy")}>
-                我要购买
-              </button>
-            </div>
-            <p className="hint">
-              💡 购买链接：<code>https://agentshell.io/buy</code>{" "}
-              （v1.6 占位 — 真实环境会跳到 Lemon Squeezy / 微信小商店）
-            </p>
-          </div>
-
-          {/* 内部 dev 工具：仅 dev build 显示 */}
-          {import.meta.env.DEV && (
-            <details className="dev-tool" open={showDev}>
-              <summary onClick={(e) => { e.preventDefault(); setShowDev(!showDev); }}>
-                🛠️ 内部工具（仅开发可见）
-              </summary>
-              <div className="dev-tool-body">
-                <p>生成 demo 激活码（仅本地测试用，**生产环境禁止**）</p>
-                <div className="dev-tool-buttons">
-                  <button onClick={() => onGenerateDev("monthly")}>月卡</button>
-                  <button onClick={() => onGenerateDev("quarterly")}>季卡</button>
-                  <button onClick={() => onGenerateDev("yearly")}>年卡</button>
-                  <button onClick={() => onGenerateDev("lifetime")}>终身</button>
-                </div>
-                {devCode && (
-                  <pre className="dev-code">{devCode}</pre>
-                )}
-              </div>
-            </details>
           )}
-        </>
-      ) : null}
 
-      {summary &&
-        summary.status.kind !== "unactivated" &&
-        summary.status.kind !== "expired" && (
-          <div className="active-actions">
-            <button disabled={busy} onClick={() => void onRefresh()}>🔄 重新校验</button>
-            <button onClick={onDeactivate}>清除 License</button>
-          </div>
-        )}
+          {summary?.status.kind === "unactivated" ||
+          summary?.status.kind === "expired" ? (
+            <>
+              <h3>购买 / 续费</h3>
+              <div className="tier-grid">
+                {tiers.map((t) => (
+                  <TierCard key={t.tier} tier={t} />
+                ))}
+              </div>
 
-      <p className="eula-hint">
-        激活码从首次输入时刻起算有效期；到期后软件进入只读模式，需输入新激活码恢复；
-        新激活码从输入时刻重新累计，旧码剩余时间不合并。
-      </p>
+              <h3>已有激活码？</h3>
+              <div className="activate-form">
+                <textarea
+                  placeholder="把激活码粘到这里（Base64 字符串）"
+                  value={code}
+                  onChange={(e) => setCode(e.target.value)}
+                  rows={3}
+                />
+                <div className="activate-actions">
+                  <button className="primary" disabled={busy} onClick={onActivate}>
+                    {busy ? "激活中..." : "立即激活"}
+                  </button>
+                  <button onClick={() => void openUrl("https://codex.gx/buy")}>
+                    我要购买
+                  </button>
+                </div>
+                <p className="hint">
+                  💡 购买链接：<code>https://codex.gx/buy</code>{" "}
+                  （占位 — 真实环境会跳到 Lemon Squeezy / 微信小商店）
+                </p>
+              </div>
+
+              {/* 内部 dev 工具：仅 dev build 显示 */}
+              {import.meta.env.DEV && (
+                <details className="dev-tool" open={showDev}>
+                  <summary onClick={(e) => { e.preventDefault(); setShowDev(!showDev); }}>
+                    🛠️ 内部工具（仅开发可见）
+                  </summary>
+                  <div className="dev-tool-body">
+                    <p>生成 demo 激活码（仅本地测试用，**生产环境禁止**）</p>
+                    <div className="dev-tool-buttons">
+                      <button onClick={() => onGenerateDev("monthly")}>月卡</button>
+                      <button onClick={() => onGenerateDev("quarterly")}>季卡</button>
+                      <button onClick={() => onGenerateDev("yearly")}>年卡</button>
+                      <button onClick={() => onGenerateDev("lifetime")}>终身</button>
+                    </div>
+                    {devCode && (
+                      <pre className="dev-code">{devCode}</pre>
+                    )}
+                  </div>
+                </details>
+              )}
+            </>
+          ) : null}
+
+          {summary &&
+            summary.status.kind !== "unactivated" &&
+            summary.status.kind !== "expired" && (
+              <div className="active-actions">
+                <button disabled={busy} onClick={() => void onRefresh()}>🔄 重新校验</button>
+                <button onClick={onDeactivate}>清除 License</button>
+              </div>
+            )}
+
+          <p className="eula-hint">
+            激活码从首次输入时刻起算有效期；到期后软件进入只读模式，需输入新激活码恢复；
+            新激活码从输入时刻重新累计，旧码剩余时间不合并。
+          </p>
+        </div>
+      </div>
     </div>
   );
 }

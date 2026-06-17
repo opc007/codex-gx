@@ -775,7 +775,7 @@ export function Composer({ sessionId }: Props) {
       const helpMsg: PersistedMessage = {
         id: crypto.randomUUID(),
         role: "assistant",
-        text: `📖 AgentShell v1.4 命令帮助：
+        text: `📖 Codex gx v1.4 命令帮助：
 
 通用：
 /help      - 显示此帮助
@@ -1137,6 +1137,118 @@ M3 / Claude / GPT 会自动调用：
       setText("");
       return;
     }
+    // v1.8: /ps (背景进程列表)
+    if (trimmed === "/ps" || trimmed.startsWith("/ps ")) {
+      const arg = trimmed.slice(3).trim();
+      try {
+        if (arg === "") {
+          const list = await invoke<Array<{ id: string; label: string; command: string; statusLabel: string; pid: number; logPath: string | null }>>("bg_list");
+          if (list.length === 0) {
+            appendMessage(sessionId, { id: crypto.randomUUID(), role: "assistant", createdAt: Date.now(), text: "🟢 没有后台进程" });
+          } else {
+            const txt = list.map((b) => `  ${b.statusLabel} **${b.label}** (pid ${b.pid}) — ${b.command.slice(0, 50)}\n    id: ${b.id.slice(0, 12)}  log: ${b.logPath ?? "—"}`).join("\n\n");
+            appendMessage(sessionId, { id: crypto.randomUUID(), role: "assistant", createdAt: Date.now(), text: `📋 后台进程 (${list.length})：\n\n${txt}\n\n命令：/stop <id> | /ps <id>` });
+          }
+        } else {
+          const b = await invoke<{ id: string; label: string; command: string; statusLabel: string; pid: number; logPath: string | null; tail: string } | null>("bg_get", { id: arg });
+          if (b) {
+            const tailTrim = b.tail.length > 2000 ? b.tail.slice(-2000) : b.tail;
+            appendMessage(sessionId, { id: crypto.randomUUID(), role: "assistant", createdAt: Date.now(), text: `📋 **${b.label}** (${b.statusLabel})\n\n  pid:    ${b.pid}\n  cmd:    ${b.command}\n  log:    ${b.logPath ?? "—"}\n  id:     ${b.id}\n\n--- 最近输出 ---\n\`\`\`\n${tailTrim || "(无输出)"}\n\`\`\`` });
+          } else {
+            appendMessage(sessionId, { id: crypto.randomUUID(), role: "assistant", createdAt: Date.now(), text: `❌ 没找到 id：${arg}` });
+          }
+        }
+      } catch (e) {
+        appendMessage(sessionId, { id: crypto.randomUUID(), role: "assistant", createdAt: Date.now(), text: `❌ /ps 失败: ${e}` });
+      }
+      return;
+    }
+
+    // v1.8: /stop
+    if (trimmed === "/stop" || trimmed.startsWith("/stop ")) {
+      const arg = trimmed.slice(5).trim();
+      try {
+        if (arg === "" || arg === "all") {
+          const n = await invoke<number>("bg_stop_all");
+          appendMessage(sessionId, { id: crypto.randomUUID(), role: "assistant", createdAt: Date.now(), text: `🛑 停了 ${n} 个后台进程` });
+        } else {
+          const ok = await invoke<boolean>("bg_stop", { id: arg });
+          appendMessage(sessionId, { id: crypto.randomUUID(), role: "assistant", createdAt: Date.now(), text: ok ? `🛑 Stopped ${arg}` : `❌ 没找到：${arg}` });
+        }
+      } catch (e) {
+        appendMessage(sessionId, { id: crypto.randomUUID(), role: "assistant", createdAt: Date.now(), text: `❌ /stop 失败: ${e}` });
+      }
+      return;
+    }
+
+    // v1.8: /bg (启动后台进程)
+    if (trimmed.startsWith("/bg ") || trimmed.startsWith("/background ")) {
+      const raw = trimmed.startsWith("/bg ") ? trimmed.slice(4).trim() : trimmed.slice(12).trim();
+      const m = raw.match(/^"([^"]+)"\s+(.+)$/);
+      let label: string, rest: string;
+      if (m) { label = m[1]; rest = m[2]; }
+      else {
+        const parts = raw.split(/\s+/);
+        label = parts[0];
+        rest = parts.slice(1).join(" ");
+      }
+      const tokens = rest.split(/\s+/);
+      if (tokens.length === 0) {
+        appendMessage(sessionId, { id: crypto.randomUUID(), role: "assistant", createdAt: Date.now(), text: "❌ 用法: /bg <label> <command> [args...]" });
+        return;
+      }
+      const cmd = tokens[0];
+      const args = tokens.slice(1);
+      try {
+        const b = await invoke<{ id: string; pid: number; logPath: string | null }>("bg_spawn", { args: { label, command: cmd, args } });
+        appendMessage(sessionId, { id: crypto.randomUUID(), role: "assistant", createdAt: Date.now(), text: `🚀 后台启动：**${label}**\n\n  pid: ${b.pid}\n  id:  ${b.id}\n  log: ${b.logPath ?? "—"}\n\n命令：/ps 看状态、/stop ${b.id.slice(0, 12)} 关掉` });
+      } catch (e) {
+        appendMessage(sessionId, { id: crypto.randomUUID(), role: "assistant", createdAt: Date.now(), text: `❌ /bg 失败: ${e}` });
+      }
+      return;
+    }
+
+    // v1.8: /fork
+    if (trimmed === "/fork" || trimmed.startsWith("/fork ")) {
+      const label = trimmed.slice(5).trim();
+      const s = getSessionsState().fork(label || undefined);
+      if (s) {
+        appendMessage(sessionId, { id: crypto.randomUUID(), role: "assistant", createdAt: Date.now(), text: `🍴 Fork 创建：${s.title}\n\n  id:       ${s.id}\n  parentId: ${s.parentId}\n  point:    ${s.forkPointMessageId ?? "—"}\n\n已切换到 fork session。原 session 历史保留。` });
+      } else {
+        appendMessage(sessionId, { id: crypto.randomUUID(), role: "assistant", createdAt: Date.now(), text: "❌ /fork 失败：没有当前 session" });
+      }
+      return;
+    }
+
+    // v1.8: /side (旁问)
+    if (trimmed.startsWith("/side ") || trimmed === "/side") {
+      const question = trimmed.slice(5).trim();
+      if (!question) {
+        appendMessage(sessionId, { id: crypto.randomUUID(), role: "assistant", createdAt: Date.now(), text: "❌ 用法: /side <问题>（临时旁问，24h 后过期）" });
+        return;
+      }
+      const s = getSessionsState().side(question);
+      appendMessage(sessionId, { id: crypto.randomUUID(), role: "assistant", createdAt: Date.now(), text: `💬 Side 旁问创建："${question.slice(0, 40)}${question.length > 40 ? "…" : ""}"\n\n  id: ${s.id}\n  expires: 24h 后\n\n已切换到 side session。主 thread 历史保持干净。` });
+      return;
+    }
+
+    // v1.8: /voice (流式 TTS)
+    if (trimmed.startsWith("/voice ") || trimmed === "/voice") {
+      const text = trimmed.slice(6).trim();
+      if (!text) {
+        const st = await invoke<{ currentSession: number; maxConcurrent: number; supportedVoices: string[] }>("voice_duplex_status");
+        appendMessage(sessionId, { id: crypto.randomUUID(), role: "assistant", createdAt: Date.now(), text: `🔊 Voice duplex 状态：\n\n  current: ${st.currentSession}\n  max:     ${st.maxConcurrent}\n  voices:  ${st.supportedVoices.join(", ")}\n\n用法：/voice <文本> | /voice --voice nova <文本>` });
+        return;
+      }
+      let voice: string | undefined;
+      const voiceMatch = text.match(/--voice\s+(\w+)/);
+      if (voiceMatch) voice = voiceMatch[1];
+      const cleanText = text.replace(/--voice\s+\w+/, "").trim();
+      const sid = await invoke<number>("voice_duplex_start", { args: { text: cleanText, voice } });
+      appendMessage(sessionId, { id: crypto.randomUUID(), role: "assistant", createdAt: Date.now(), text: `🔊 Voice duplex 启动 — session ${sid}\n\n  text:  ${cleanText.slice(0, 80)}${cleanText.length > 80 ? "…" : ""}\n  voice: ${voice ?? "alloy"}\n  监听 \`voice:duplex:event\` 事件拿 chunk` });
+      return;
+    }
+
     if (trimmed === "/skills" || trimmed.startsWith("/skills ")) {
       try {
         const list = await invoke<Array<{ name: string; description: string }>>("list_skills");
@@ -1190,6 +1302,8 @@ M3 / Claude / GPT 会自动调用：
         const known = new Set([
           "help", "status", "approval", "plan", "route", "remember", "memories", "recall", "forget", "skills",
           "usage", "ide", "diff", "review",
+          // v1.8
+          "ps", "stop", "bg", "background", "fork", "side", "voice",
         ]);
         if (!known.has(name)) {
           try {
@@ -1713,7 +1827,7 @@ ${diff.diff.slice(0, 5000)}${diff.truncated ? "\n... [truncated, view full in gi
       <textarea
         ref={textareaRef}
         className="composer-input"
-        placeholder={sessionId ? t.placeholder : t.cancel}
+        placeholder={sessionId ? t.placeholder : t.noSessionPlaceholder}
         value={text}
         onChange={(e) => setText(e.target.value)}
         onKeyDown={onKeyDown}
@@ -1746,9 +1860,9 @@ ${diff.diff.slice(0, 5000)}${diff.truncated ? "\n... [truncated, view full in gi
           {busy ? "正在生成（可能含工具调用）..." : `${text.length} 字符`}
         </span>
         <span className={`composer-approval ${requireApproval ? "approval-on" : "approval-off"}`}
-              title="工具调用批准模式"
+              title="工具调用审批模式（点击切换）"
               onClick={() => setRequireApproval(!requireApproval)}>
-          {requireApproval ? "🔐 批准" : "⚡ 自动"}
+          {requireApproval ? t.approvalOn : t.approvalOff}
         </span>
         {/* v0.6：plan mode 切换 */}
         <span className={`composer-plan ${planMode ? "plan-on" : "plan-off"}`}

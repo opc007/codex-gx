@@ -118,7 +118,6 @@ export default function App() {
   const [themeMode, setThemeMode] = useThemeMode();
   const currentId = useSessionsStore((s) => s.currentId);
   const openTabs = useOpenTabs();
-  const [showLicense, setShowLicense] = useState(false);
   const [approvalReq, setApprovalReq] = useState<ApprovalRequest | null>(null);
   // v0.6：plan mode
   const [planReq, setPlanReq] = useState<PlanRequest | null>(null);
@@ -261,7 +260,6 @@ export default function App() {
         <TopBar
           themeMode={themeMode}
           setThemeMode={setThemeMode}
-          onLicenseClick={() => setShowLicense(true)}
         />
         <div className="app-body">
           <Sidebar />
@@ -271,10 +269,6 @@ export default function App() {
           </main>
         </div>
         <StatusBar sessionId={currentId} />
-        {showLicense && (
-          // v1.6：LicensePanel 已迁到 TopBar 内部（自动弹窗联动）
-          null
-        )}
         <ApprovalDialog
           request={approvalReq}
           onApprove={onApprove}

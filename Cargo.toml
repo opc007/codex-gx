@@ -22,6 +22,7 @@ members = [
     "crates/skills_md",
     "crates/goal",
     "crates/headless",
+    "crates/background",
     "apps/desktop/src-tauri",
 ]
 
@@ -104,6 +105,7 @@ personality = { path = "crates/personality" }
 skills_md = { path = "crates/skills_md" }
 goal = { path = "crates/goal" }
 headless = { path = "crates/headless" }
+background = { path = "crates/background" }
 
 # regex
 regex-lite = "0.1"

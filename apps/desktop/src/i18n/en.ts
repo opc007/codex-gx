@@ -27,6 +27,7 @@ export const en: Dict = {
   planOff: "Plan: off",
 
   placeholder: "Type a message, Enter to send, Shift+Enter for newline",
+  noSessionPlaceholder: "Click + in the sidebar to start a new session",
   inputHint: "💡 / starts a slash command",
 
   emptyHint: "👋 Hi, I'm Codex gx",

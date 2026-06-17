@@ -14,6 +14,7 @@ mod license_tauri;
 mod personality_tauri;
 mod skills_md_tauri;
 mod goal_tauri;
+mod background_tauri;
 mod lint_tauri;
 mod local_tauri;
 mod marketplace_tauri;
@@ -124,6 +125,7 @@ pub fn run() {
         .manage::<personality_tauri::PersonalityState>(personality_tauri::build_state())
         .manage::<skills_md_tauri::SkillIndexState>(skills_md_tauri::build_state())
         .manage::<goal_tauri::GoalState>(goal_tauri::build_state())
+        .manage::<background_tauri::BackgroundState>(background_tauri::build_state())
         .setup(|app| {
             // v1.3：安装 panic hook
             if let Some(state) = app.try_state::<BugReportState>() {
@@ -217,6 +219,15 @@ pub fn run() {
             goal_tauri::goal_abandon,               // v1.7 Goal
             goal_tauri::goal_delete,                // v1.7 Goal
             goal_tauri::goal_to_prompt,             // v1.7 Goal
+            background_tauri::bg_list,                  // v1.8 Background
+            background_tauri::bg_list_running,          // v1.8 Background
+            background_tauri::bg_get,                   // v1.8 Background
+            background_tauri::bg_spawn,                 // v1.8 Background
+            background_tauri::bg_stop,                  // v1.8 Background
+            background_tauri::bg_stop_all,              // v1.8 Background
+            background_tauri::bg_tail,                  // v1.8 Background
+            voice_tauri::voice_duplex_start,             // v1.8 5.26 Voice
+            voice_tauri::voice_duplex_status,            // v1.8 5.26 Voice
             get_ide_context,
             get_git_diff,
             list_git_branches,

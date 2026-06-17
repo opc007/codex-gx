@@ -60,10 +60,9 @@ type LicenseSummary = {
 type Props = {
   themeMode: ThemeMode;
   setThemeMode: (m: ThemeMode) => void;
-  onLicenseClick: () => void;
 };
 
-export function TopBar({ themeMode, setThemeMode, onLicenseClick }: Props) {
+export function TopBar({ themeMode, setThemeMode }: Props) {
   const [busy, setBusy] = useState(false);
   const [license, setLicense] = useState<LicenseSummary | null>(null);
   const [updateInfo, setUpdateInfo] = useState<UpdateInfo | null>(null);
@@ -91,8 +90,8 @@ export function TopBar({ themeMode, setThemeMode, onLicenseClick }: Props) {
     try {
       const s = await invoke<LicenseSummary>("license_status");
       setLicense(s);
-      // v1.6 联动：未激活 / 过期 / 离线宽限 → 自动打开 LicensePanel
-      if (s.status.kind === "unactivated" ||
+      // v1.6 联动：过期 / 离线宽限才自动弹 License（未激活只显示角标，不挡着用）
+      if (
           s.status.kind === "expired" ||
           s.status.kind === "offlinegrace") {
         setLicenseOpen(true);
@@ -140,10 +139,11 @@ export function TopBar({ themeMode, setThemeMode, onLicenseClick }: Props) {
   };
 
   return (
+    <>
     <header className="topbar">
       <div className="topbar-left">
         <strong>Codex gx</strong>
-        <span className="topbar-version">v1.7.0</span>
+        <span className="topbar-version">v1.8.0</span>
         <WorkspaceSelector />
       </div>
       <div className="topbar-right">
@@ -167,8 +167,8 @@ export function TopBar({ themeMode, setThemeMode, onLicenseClick }: Props) {
         </button>
         <button
           className="topbar-btn"
-          onClick={onLicenseClick}
-          title="License"
+          onClick={() => setLicenseOpen(true)}
+          title="License 授权"
         >
           🔑 {formatLicenseBadge(license)}
         </button>
@@ -277,13 +277,6 @@ export function TopBar({ themeMode, setThemeMode, onLicenseClick }: Props) {
         >
           🧩
         </button>
-        <button
-          className="topbar-btn"
-          onClick={() => setLicenseOpen(true)}
-          title="License 授权 (v1.6)"
-        >
-          🔐
-        </button>
         <UserMenu
           open={userMenuOpen}
           onToggle={() => setUserMenuOpen(!userMenuOpen)}
@@ -313,6 +306,8 @@ export function TopBar({ themeMode, setThemeMode, onLicenseClick }: Props) {
           ))}
         </select>
       </div>
+    </header>
+
       {updateInfo && (
         <div className="update-dialog-overlay" onClick={() => setUpdateInfo(null)}>
           <div className="update-dialog" onClick={(e) => e.stopPropagation()}>
@@ -417,7 +412,7 @@ export function TopBar({ themeMode, setThemeMode, onLicenseClick }: Props) {
       {pluginOpen && <PluginPanel onClose={() => setPluginOpen(false)} />}
       {/* v1.6: License Panel 弹窗 */}
       {licenseOpen && <LicensePanel onClose={() => setLicenseOpen(false)} />}
-    </header>
+    </>
   );
 }
 

@@ -27,6 +27,7 @@ export const zh: Dict = {
   planOff: "Plan：关",
 
   placeholder: "输入消息，Enter 发送，Shift+Enter 换行",
+  noSessionPlaceholder: "请先在左侧点击 ＋ 新建会话",
   inputHint: "💡 / 开头是 slash 命令",
 
   emptyHint: "👋 嗨，我是 Codex gx",

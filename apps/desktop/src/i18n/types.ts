@@ -35,6 +35,8 @@ export interface Dict {
 
   // 输入
   placeholder: string;
+  /** 无当前会话时输入框提示（勿用 cancel） */
+  noSessionPlaceholder: string;
   inputHint: string;
 
   // 空态

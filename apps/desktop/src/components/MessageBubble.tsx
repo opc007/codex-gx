@@ -29,7 +29,7 @@ export function MessageBubble({ msg }: Props) {
     <div className={`bubble bubble-${msg.role}`}>
       <div className="bubble-meta">
         <span className="bubble-role">
-          {msg.role === "user" ? "你" : msg.role === "assistant" ? "AgentShell" : msg.role}
+          {msg.role === "user" ? "你" : msg.role === "assistant" ? "Codex gx" : msg.role}
         </span>
         <span className="bubble-time">
           {new Date(msg.createdAt).toLocaleTimeString()}

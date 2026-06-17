@@ -13,6 +13,14 @@ export type SessionMeta = {
   workspaceId?: string;
   /// v1.3：所属 user id（默认当前用户）
   ownerId?: string;
+  /// v1.8：分支父 session id（fork 时填，side 旁问为空）
+  parentId?: string;
+  /// v1.8：分支点 message id（fork 时填，side 旁问为空）
+  forkPointMessageId?: string;
+  /// v1.8：旁问标记（side 旁问 24h 后自动清理）
+  side?: boolean;
+  /// v1.8：旁问过期时间
+  expiresAt?: number;
 };
 
 export type PersistedMessage = {
@@ -43,6 +51,14 @@ export type SessionsStore = {
   create: (title?: string) => SessionMeta;
   remove: (id: string) => void;
   rename: (id: string, title: string) => void;
+  /** v1.8: Fork 当前 session — 复制所有 messages 到新 session，标记 parentId/forkPointMessageId */
+  fork: (label?: string) => SessionMeta | null;
+  /** v1.8: Side 旁问 — 临时 session 24h 后过期 */
+  side: (question: string) => SessionMeta;
+  /** v1.8: 列所有 forks of a parent */
+  forksOf: (parentId: string) => SessionMeta[];
+  /** v1.8: 清理过期 side sessions */
+  gcExpiredSides: () => number;
   /** v0.2 新增：追加消息到 session */
   appendMessage: (sessionId: string, msg: PersistedMessage) => void;
   /** v0.2 新增：替换整 session 消息列表（用于加载历史） */
@@ -270,11 +286,102 @@ let state: SessionsStore = {
     schedulePersist(state.sessions, state.currentId, [sessionId]);
     listeners.forEach((l) => l());
   },
+  // v1.8: Fork — 复制所有 messages 到新 session
+  fork: (label) => {
+    if (!state.currentId) return null;
+    const parent = state.sessions.find((s) => s.id === state.currentId);
+    if (!parent) return null;
+    const now = Date.now();
+    const parentMessages = state.messages[parent.id] || [];
+    const lastMsg = parentMessages[parentMessages.length - 1];
+    const forkPoint = lastMsg?.id;
+    const newSession: SessionMeta = {
+      id: uid(),
+      title: label || `↳ ${parent.title} (fork)`,
+      createdAt: now,
+      updatedAt: now,
+      workspaceId: parent.workspaceId,
+      ownerId: parent.ownerId,
+      parentId: parent.id,
+      forkPointMessageId: forkPoint,
+    };
+    // 复制 messages (深 clone, 重新分配 id 防止冲突)
+    const clonedMessages: PersistedMessage[] = parentMessages.map((m) => ({
+      ...m,
+      id: uid(),
+      toolCalls: m.toolCalls?.map((tc) => ({ ...tc, id: uid() })),
+    }));
+    state = {
+      ...state,
+      sessions: [newSession, ...state.sessions],
+      currentId: newSession.id,
+      messages: { ...state.messages, [newSession.id]: clonedMessages },
+    };
+    pendingSessionsList = true;
+    pendingCurrentId = newSession.id;
+    pendingDirty.add(newSession.id);
+    schedulePersist(state.sessions, state.currentId, [newSession.id]);
+    listeners.forEach((l) => l());
+    return newSession;
+  },
+  // v1.8: Side 旁问 — 临时 session 24h 后过期
+  side: (question) => {
+    const now = Date.now();
+    const title = question.length > 30 ? question.slice(0, 30) + "…" : question;
+    const s: SessionMeta = {
+      id: uid(),
+      title: `💬 ${title}`,
+      createdAt: now,
+      updatedAt: now,
+      workspaceId: getCurrentWorkspaceId(),
+      ownerId: getCurrentUserId(),
+      side: true,
+      expiresAt: now + 24 * 60 * 60 * 1000, // 24h
+    };
+    state = {
+      ...state,
+      sessions: [s, ...state.sessions],
+      currentId: s.id,
+    };
+    pendingSessionsList = true;
+    pendingCurrentId = s.id;
+    schedulePersist(state.sessions, state.currentId, []);
+    listeners.forEach((l) => l());
+    return s;
+  },
+  // v1.8: 列所有 forks of a parent
+  forksOf: (parentId) => {
+    return state.sessions.filter((s) => s.parentId === parentId);
+  },
+  // v1.8: 清理过期 side sessions
+  gcExpiredSides: () => {
+    const now = Date.now();
+    const expired = state.sessions.filter((s) => s.side && s.expiresAt && s.expiresAt < now);
+    if (expired.length === 0) return 0;
+    const expiredIds = new Set(expired.map((s) => s.id));
+    const newMessages = { ...state.messages };
+    for (const id of expiredIds) delete newMessages[id];
+    state = {
+      ...state,
+      sessions: state.sessions.filter((s) => !expiredIds.has(s.id)),
+      messages: newMessages,
+    };
+    pendingSessionsList = true;
+    schedulePersist(state.sessions, state.currentId, "all");
+    listeners.forEach((l) => l());
+    return expired.length;
+  },
 };
 
 // 启动时异步加载
 void load().then((loaded) => {
   state = { ...state, ...loaded };
+  // 首启或数据为空：自动建一个会话，避免输入框禁用、占位符显示「取消」
+  if (state.sessions.length === 0) {
+    state.create("新会话");
+  } else if (!state.currentId) {
+    state.setCurrent(state.sessions[0].id);
+  }
   listeners.forEach((l) => l());
 });
 

@@ -199,3 +199,117 @@ pub async fn voice_delete_model(
     let mgr = state.inner().lock().await;
     mgr.delete_model(&args.model).map_err(|e| e.to_string())
 }
+
+// ===== v1.8 5.26 Voice 双向对讲 =====
+//
+// 完整流式 TTS + 持续 STT 的双工会话。
+// 演示版：模拟 TTS 输出（chunk 流），发送 `voice:duplex:event` 事件给前端。
+// 真实版会接 TTS provider（OpenAI TTS / ElevenLabs / 本地 piper）。
+
+use std::sync::atomic::{AtomicU64, Ordering};
+use tauri::async_runtime::spawn as tauri_spawn;
+
+#[derive(Debug, Deserialize)]
+pub struct DuplexStartArgs {
+    pub text: String,
+    #[serde(default)]
+    pub voice: Option<String>,
+    #[serde(default)]
+    pub chunk_size: Option<usize>,
+}
+
+static DUPLEX_SESSION_ID: AtomicU64 = AtomicU64::new(1);
+
+/// 启动一次 duplex 流式 TTS session
+/// 返回 session_id, 同时开始通过 `voice:duplex:event` 事件发音频 chunk
+#[tauri::command]
+pub async fn voice_duplex_start(
+    app: AppHandle,
+    args: DuplexStartArgs,
+) -> Result<u64, String> {
+    let session_id = DUPLEX_SESSION_ID.fetch_add(1, Ordering::SeqCst);
+    let chunk_size = args.chunk_size.unwrap_or(50); // 50 字符 / chunk
+    let voice = args.voice.unwrap_or_else(|| "alloy".to_string());
+
+    let app_clone = app.clone();
+    tauri_spawn(async move {
+        let text = args.text.clone();
+        let chunks: Vec<String> = text
+            .chars()
+            .collect::<Vec<_>>()
+            .chunks(chunk_size)
+            .map(|c| c.iter().collect::<String>())
+            .collect();
+
+        // 1. start event
+        let _ = app_clone.emit(
+            "voice:duplex:event",
+            DuplexEvent {
+                kind: "start".into(),
+                session_id,
+                seq: 0,
+                text: Some(text.clone()),
+                voice: Some(voice.clone()),
+                chunk: None,
+                done: false,
+            },
+        );
+
+        // 2. chunks
+        for (i, chunk) in chunks.iter().enumerate() {
+            tokio::time::sleep(std::time::Duration::from_millis(80)).await;
+            let _ = app_clone.emit(
+                "voice:duplex:event",
+                DuplexEvent {
+                    kind: "chunk".into(),
+                    session_id,
+                    seq: (i + 1) as u64,
+                    text: None,
+                    voice: None,
+                    chunk: Some(format!("[{} bytes audio for: {}]", chunk.len() * 8, chunk)),
+                    done: false,
+                },
+            );
+        }
+
+        // 3. done event
+        let _ = app_clone.emit(
+            "voice:duplex:event",
+            DuplexEvent {
+                kind: "done".into(),
+                session_id,
+                seq: (chunks.len() + 1) as u64,
+                text: None,
+                voice: None,
+                chunk: None,
+                done: true,
+            },
+        );
+    });
+
+    Ok(session_id)
+}
+
+#[derive(Debug, Serialize, Clone)]
+pub struct DuplexEvent {
+    pub kind: String, // start / chunk / done
+    pub session_id: u64,
+    pub seq: u64,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub text: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub voice: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub chunk: Option<String>,
+    pub done: bool,
+}
+
+/// duplex session 元数据（供前端查询）
+#[tauri::command]
+pub fn voice_duplex_status() -> serde_json::Value {
+    serde_json::json!({
+        "current_session": DUPLEX_SESSION_ID.load(Ordering::SeqCst) - 1,
+        "max_concurrent": 4,
+        "supported_voices": ["alloy", "echo", "fable", "onyx", "nova", "shimmer"],
+    })
+}
