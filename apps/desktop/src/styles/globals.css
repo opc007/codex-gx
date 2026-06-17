@@ -297,6 +297,36 @@ kbd {
 .theme-import { display: flex; flex-direction: column; gap: 10px; }
 .theme-mode-toggle { display: inline-flex; gap: 4px; }
 
+/* v1.3：路由策略编辑器 */
+.routing-test { padding: 12px; background: var(--bg-secondary); border-radius: 6px; margin-bottom: 16px; }
+.routing-test h4 { margin: 0 0 8px 0; font-size: 13px; }
+.routing-test-row { display: flex; gap: 8px; align-items: stretch; }
+.routing-test-result { margin-top: 10px; padding: 10px; background: var(--bg); border-radius: 4px; }
+.routing-test-result strong { font-size: 16px; color: var(--primary); }
+
+.routing-default { padding: 12px; background: var(--bg-secondary); border-radius: 6px; margin-bottom: 16px; }
+.routing-default h4 { margin: 0 0 8px 0; font-size: 13px; }
+.routing-target-row { display: flex; gap: 8px; }
+
+.routing-rules h4 { margin: 12px 0 8px 0; font-size: 13px; display: flex; align-items: center; }
+.routing-rule { border: 1px solid var(--border); border-radius: 6px; margin-bottom: 6px; overflow: hidden; }
+.routing-rule.open { background: var(--bg-secondary); }
+.routing-rule-head { padding: 8px 12px; display: flex; align-items: center; gap: 12px; cursor: pointer; user-select: none; }
+.routing-rule-head:hover { background: var(--bg-hover); }
+.routing-rule-priority { font-family: ui-monospace, monospace; font-size: 11px; padding: 2px 6px; background: var(--primary); color: var(--primary-text); border-radius: 3px; }
+.routing-rule-name { flex: 1; font-weight: 500; }
+.routing-rule-target { font-size: 12px; color: var(--text-muted); font-family: ui-monospace, monospace; }
+.routing-rule-toggle { font-size: 14px; }
+.routing-rule-body { padding: 12px 16px; border-top: 1px solid var(--border); }
+.routing-rule-row { display: flex; align-items: center; gap: 8px; margin-bottom: 8px; flex-wrap: wrap; }
+.routing-rule-row > label { min-width: 80px; font-size: 12px; color: var(--text-muted); }
+.routing-task-types { display: flex; gap: 8px; flex-wrap: wrap; }
+.routing-check { display: inline-flex; align-items: center; gap: 4px; font-size: 12px; }
+.routing-fallbacks { display: flex; flex-wrap: wrap; gap: 4px; align-items: center; }
+.routing-fallback-chip { display: inline-flex; align-items: center; gap: 4px; padding: 2px 6px; background: var(--bg); border: 1px solid var(--border); border-radius: 3px; font-size: 12px; font-family: ui-monospace, monospace; }
+.routing-chip-x { background: none; border: none; color: var(--text-muted); cursor: pointer; padding: 0 2px; }
+.routing-chip-x:hover { color: var(--danger); }
+
 /* v1.1：标签栏 */
 .tab-bar {
   display: flex;

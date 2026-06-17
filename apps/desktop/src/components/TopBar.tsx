@@ -7,6 +7,7 @@ import type { Locale } from "../i18n";
 import { open as openUrl } from "@tauri-apps/plugin-shell";
 import { MarketplaceDialog } from "./MarketplaceDialog";
 import { ThemeStudioDialog } from "./ThemeStudioDialog";
+import { RoutingEditorDialog } from "./RoutingEditorDialog";
 import {
   useCurrentWorkspaceId,
   useWorkspaceList,
@@ -44,6 +45,7 @@ export function TopBar({ themeMode, setThemeMode, onLicenseClick }: Props) {
   const [updateBusy, setUpdateBusy] = useState(false);
   const [marketplaceOpen, setMarketplaceOpen] = useState(false);
   const [themeStudioOpen, setThemeStudioOpen] = useState(false);
+  const [routingOpen, setRoutingOpen] = useState(false);
   const { locale, setLocale } = useLocaleSwitcher();
 
   const refreshLicense = async () => {
@@ -129,6 +131,13 @@ export function TopBar({ themeMode, setThemeMode, onLicenseClick }: Props) {
         >
           🎨
         </button>
+        <button
+          className="topbar-btn"
+          onClick={() => setRoutingOpen(true)}
+          title="路由策略 (v1.3)"
+        >
+          🧭
+        </button>
         <button className="topbar-btn" onClick={pingBackend} disabled={busy}>
           {busy ? "..." : "Ping"}
         </button>
@@ -199,6 +208,11 @@ export function TopBar({ themeMode, setThemeMode, onLicenseClick }: Props) {
       {/* v1.3: Theme Studio 弹窗 */}
       {themeStudioOpen && (
         <ThemeStudioDialog onClose={() => setThemeStudioOpen(false)} />
+      )}
+
+      {/* v1.3: Routing 弹窗 */}
+      {routingOpen && (
+        <RoutingEditorDialog onClose={() => setRoutingOpen(false)} />
       )}
     </header>
   );

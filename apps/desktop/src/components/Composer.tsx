@@ -197,6 +197,56 @@ export function Composer({ sessionId }: Props) {
       setText("");
       return;
     }
+    // v1.3：路由测试
+    if (trimmed.startsWith("/route ") || trimmed === "/route") {
+      const args = trimmed.slice(6).trim();
+      if (!args) {
+        appendMessage(sessionId, {
+          id: crypto.randomUUID(),
+          role: "assistant",
+          text: "🧭 用法:\n  /route <消息文本>  - 看会被路由到哪个 model\n\n或在 Top bar 点击 🧭 打开策略编辑器",
+          createdAt: Date.now(),
+        });
+        setText("");
+        return;
+      }
+      try {
+        const r = await invoke<{
+          primary_provider: string;
+          primary_model: string;
+          fallbacks: Array<{ provider: string; model: string }>;
+          reason: string;
+          rule_id: string | null;
+        }>("routing_decide", {
+          args: { message: args, task_type: null },
+        });
+        appendMessage(sessionId, {
+          id: crypto.randomUUID(),
+          role: "assistant",
+          text: `🧭 **路由决策**\n\n主目标: **${r.primary_provider}/${r.primary_model}**\n\n${r.reason}${
+            r.rule_id ? `\n命中规则: \`${r.rule_id}\`` : ""
+          }${
+            r.fallbacks.length > 0
+              ? `\n\n兜底链: ${r.fallbacks
+                  .map((f) => `${f.provider}/${f.model}`)
+                  .join(" → ")}`
+              : ""
+          }`,
+          createdAt: Date.now(),
+        });
+        setText("");
+        return;
+      } catch (e) {
+        appendMessage(sessionId, {
+          id: crypto.randomUUID(),
+          role: "assistant",
+          text: `❌ 路由失败: ${e}`,
+          createdAt: Date.now(),
+        });
+        setText("");
+        return;
+      }
+    }
     // v1.1：脱敏测试
     if (trimmed.startsWith("/redact ") || trimmed === "/redact") {
       const input = trimmed.slice(8).trim();

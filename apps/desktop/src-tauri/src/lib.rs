@@ -15,6 +15,8 @@ mod voice_tauri;
 mod marketplace_tauri;
 mod vault_tauri;
 mod workspace_tauri;
+mod routing;
+mod routing_tauri;
 
 use agent_core::tool::ToolRegistry;
 use serde::{Deserialize, Serialize};
@@ -45,6 +47,9 @@ pub type MarketplaceState = Arc<Mutex<marketplace::MarketplaceManager>>;
 
 /// v1.2：vault 模块共享状态
 pub type VaultState = Arc<Mutex<vault::Vault>>;
+
+/// v1.3：routing engine 共享状态
+pub type RoutingState = Arc<Mutex<crate::routing::RoutingEngine>>;
 
 /// v0.4：每个 session 一个 cancel handle + approval sender
 #[derive(Default)]
@@ -84,6 +89,9 @@ pub fn run() {
                     .unwrap_or_else(|_| std::env::temp_dir().join("agentshell_vault")),
             )
             .expect("vault init"),
+        )))
+        .manage::<RoutingState>(Arc::new(Mutex::new(
+            crate::routing::RoutingEngine::load_or_default(),
         )))
         .setup(|app| {
             // v0.8：异步初始化 memory manager
@@ -146,6 +154,10 @@ pub fn run() {
             vault_tauri::vault_decrypt_session, // v1.2
             vault_tauri::vault_remove_session, // v1.2
             workspace_tauri::workspace_changed_broadcast, // v1.3
+            routing_tauri::routing_decide, // v1.3
+            routing_tauri::routing_get_strategy, // v1.3
+            routing_tauri::routing_set_strategy, // v1.3
+            routing_tauri::routing_reset_to_default, // v1.3
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
