@@ -1491,6 +1491,68 @@ M3 / Claude / GPT 会自动调用：
       return;
     }
 
+    // v1.9.10: /market (Plugin Marketplace)
+    if (trimmed === "/market" || trimmed.startsWith("/market ")) {
+      const arg = trimmed.slice(7).trim();
+      try {
+        if (arg === "" || arg === "installed" || arg === "list installed") {
+          const list = await invoke<Array<{ name: string; version: string; type: string; installedAt: string; localPath: string }>>("marketplace_list_installed");
+          if (list.length === 0) { appendMessage(sessionId, { id: crypto.randomUUID(), role: "assistant", createdAt: Date.now(), text: "🛒 还没安装任何插件（试 `/market list` 查看可安装的）" }); return; }
+          const txt = list.map((p) => `  📦 **${p.name}** v${p.version}\n    类型:    ${p.type}\n    安装时间: ${p.installedAt}\n    路径:    \`${p.localPath}\``).join("\n\n");
+          appendMessage(sessionId, { id: crypto.randomUUID(), role: "assistant", createdAt: Date.now(), text: `🛒 已安装插件 (${list.length})：\n\n${txt}\n\n命令：/market uninstall <name>` });
+        } else if (arg === "list" || arg === "search") {
+          const idxUrl = await invoke<string>("marketplace_get_index_url");
+          try {
+            const plugins = await invoke<Array<{ name: string; version: string; type: string; description: string; author?: string; tags: string[]; homepage?: string; requiredPermissions: string[] }>>("marketplace_fetch_index");
+            const txt = plugins.map((p) => {
+              const tags = p.tags.length > 0 ? ` \`${p.tags.join("` `")}\`` : "";
+              const perms = p.requiredPermissions.length > 0 ? `\n    权限:    ${p.requiredPermissions.join(", ")}` : "";
+              return `  📦 **${p.name}** v${p.version} _(${p.type})_${tags}\n    ${p.description}${perms}`;
+            }).join("\n\n");
+            appendMessage(sessionId, { id: crypto.randomUUID(), role: "assistant", createdAt: Date.now(), text: `🛒 Plugin Marketplace (${plugins.length})：\n\n  index: ${idxUrl}\n\n${txt}\n\n命令：/market install <name>` });
+          } catch (e) {
+            appendMessage(sessionId, { id: crypto.randomUUID(), role: "assistant", createdAt: Date.now(), text: `❌ 无法获取注册表 (${idxUrl})：${e}\n\n提示：可设置自建注册表 /market index <url>` });
+          }
+        } else if (arg.startsWith("install ")) {
+          const name = arg.slice(8).trim();
+          if (!name) { appendMessage(sessionId, { id: crypto.randomUUID(), role: "assistant", createdAt: Date.now(), text: "❌ 用法: /market install <name>" }); return; }
+          appendMessage(sessionId, { id: crypto.randomUUID(), role: "assistant", createdAt: Date.now(), text: `⏳ 正在安装插件 **${name}**…（下载 + 校验 + 落盘）` });
+          try {
+            const r = await invoke<{ name: string; version: string; localPath: string }>("marketplace_install", { args: { name } });
+            appendMessage(sessionId, { id: crypto.randomUUID(), role: "assistant", createdAt: Date.now(), text: `✅ 安装成功：\n\n  name: ${r.name}\n  version: ${r.version}\n  path: \`${r.localPath}\`` });
+          } catch (e) {
+            appendMessage(sessionId, { id: crypto.randomUUID(), role: "assistant", createdAt: Date.now(), text: `❌ 安装失败：${e}` });
+          }
+        } else if (arg.startsWith("uninstall ") || arg.startsWith("remove ")) {
+          const name = arg.split(/\s+/)[1] || "";
+          if (!name) { appendMessage(sessionId, { id: crypto.randomUUID(), role: "assistant", createdAt: Date.now(), text: "❌ 用法: /market uninstall <name>" }); return; }
+          try {
+            await invoke<void>("marketplace_uninstall", { args: { name } });
+            appendMessage(sessionId, { id: crypto.randomUUID(), role: "assistant", createdAt: Date.now(), text: `🗑️ 已卸载：${name}` });
+          } catch (e) {
+            appendMessage(sessionId, { id: crypto.randomUUID(), role: "assistant", createdAt: Date.now(), text: `❌ 卸载失败：${e}` });
+          }
+        } else if (arg.startsWith("index ")) {
+          const url = arg.slice(6).trim();
+          if (!url) { appendMessage(sessionId, { id: crypto.randomUUID(), role: "assistant", createdAt: Date.now(), text: "❌ 用法: /market index <url>" }); return; }
+          try {
+            await invoke<void>("marketplace_set_index_url", { args: { url } });
+            appendMessage(sessionId, { id: crypto.randomUUID(), role: "assistant", createdAt: Date.now(), text: `✅ 注册表 URL 已更新：${url}` });
+          } catch (e) {
+            appendMessage(sessionId, { id: crypto.randomUUID(), role: "assistant", createdAt: Date.now(), text: `❌ 失败：${e}` });
+          }
+        } else if (arg === "index") {
+          const url = await invoke<string>("marketplace_get_index_url");
+          appendMessage(sessionId, { id: crypto.randomUUID(), role: "assistant", createdAt: Date.now(), text: `🛒 当前注册表 URL：\n\n  ${url}\n\n切换：/market index <new_url>` });
+        } else {
+          appendMessage(sessionId, { id: crypto.randomUUID(), role: "assistant", createdAt: Date.now(), text: "❌ 用法: /market list | installed | install <name> | uninstall <name> | index [url]" });
+        }
+      } catch (e) {
+        appendMessage(sessionId, { id: crypto.randomUUID(), role: "assistant", createdAt: Date.now(), text: `❌ /market 失败: ${e}` });
+      }
+      return;
+    }
+
     // v1.9.9: /compact (上下文压缩 / 摘要)
     if (trimmed === "/compact" || trimmed.startsWith("/compact ")) {
       const arg = trimmed.slice(8).trim();

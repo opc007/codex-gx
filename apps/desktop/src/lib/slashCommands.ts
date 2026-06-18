@@ -88,6 +88,8 @@ export const BUILTIN_SLASH_COMMANDS: SlashCommand[] = [
   { name: "mcp", description: "Model Context Protocol — 外部 MCP server", group: "插件", template: "mcp" },
   // v1.9.9
   { name: "compact", description: "上下文压缩 / 摘要（长会话 token 优化）", group: "会话", template: "compact" },
+  // v1.9.10
+  { name: "market", description: "插件市场（list / install / uninstall）", group: "插件", template: "market" },
 ];
 
 /** 索引：name + aliases → command */

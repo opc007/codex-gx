@@ -12,8 +12,8 @@ import PlanDialog, {
 } from "./components/PlanDialog";
 import { useThemeMode, type ThemeMode, reapplyTheme } from "./stores/theme";
 import { useSessionsStore, getSessionsState } from "./stores/sessions";
-import { getCurrentWorkspaceId, useCurrentWorkspaceId, switchWorkspace } from "./stores/workspace";
-import { useOpenTabs, closeTab, openTab, syncTabsForWorkspace } from "./stores/tabs";
+import { getCurrentWorkspaceId, switchWorkspace } from "./stores/workspace";
+import { openTab } from "./stores/tabs";
 import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
 
@@ -209,14 +209,28 @@ export default function App() {
           if (!inInput) {
             e.preventDefault();
             const s = getSessionsState();
-            const fresh = s.create();
+            const wsId = getCurrentWorkspaceId();
+            const inWs = s.sessions.filter(
+              (sess) => (sess.workspaceId ?? "default") === wsId,
+            );
+            const fresh =
+              inWs.length > 0
+                ? s.create()
+                : s.create();
             s.setCurrent(fresh.id);
+            openTab(fresh.id, wsId);
+          }
+          break;
+        case "g":
+          if (e.shiftKey || e.metaKey) {
+            // Cmd+G / Cmd+Shift+G: 聚焦 thread 搜索
+            e.preventDefault();
+            window.dispatchEvent(new CustomEvent("codex_gx:focus-thread-search"));
           }
           break;
         case "m":
           if (e.metaKey || e.ctrlKey) {
             e.preventDefault();
-            // v1.9.6：Codex 风格 Cmd+M 触发语音输入（开始 / 停止）
             window.dispatchEvent(new CustomEvent("agentshell:toggle-voice"));
           }
           break;
@@ -226,9 +240,9 @@ export default function App() {
             window.dispatchEvent(new CustomEvent("agentshell:toggle-terminal"));
           }
           break;
-        case "[":
-        case "]":
-          if (!inInput) {
+        case "{":
+        case "}":
+          if (e.shiftKey && (e.metaKey || e.ctrlKey)) {
             e.preventDefault();
             const st = getSessionsState();
             const wsId = getCurrentWorkspaceId();
@@ -238,7 +252,7 @@ export default function App() {
             const idx = order.findIndex((sess) => sess.id === st.currentId);
             if (order.length === 0) return;
             const next =
-              e.key === "]"
+              e.key === "}"
                 ? order[(idx + 1) % order.length]
                 : order[(idx - 1 + order.length) % order.length];
             if (next) st.setCurrent(next.id);
@@ -394,95 +408,37 @@ export default function App() {
       />
       <div className={`app-shell ${isBlocking ? "app-shell-locked" : ""} ${sidebarCollapsed ? "app-shell-sidebar-collapsed" : ""}`}>
         <TopBar />
-        <div className="app-main">
-          <ThreadTabs />
-          <div className="app-body">
-            <Sidebar />
-            <main className="main-pane">
-              <Thread sessionId={currentId} />
-              <Composer
-                sessionId={currentId}
-                requireApproval={requireApproval}
-                setRequireApproval={setRequireApproval}
-                onRequestNewProject={() =>
-                  window.dispatchEvent(new CustomEvent("codex_gx:open-ws-dialog", { detail: "create" }))
-                }
-                onPickNoProject={() => {
-                  // 「不使用项目」= 切到 default，并清掉 folderPath 占位（default 本身无 folderPath）
-                  switchWorkspace("default");
-                }}
-              />
-            </main>
-          </div>
+        <div className="app-body">
+          <Sidebar />
+          <main className="main-pane">
+            <Thread sessionId={currentId} />
+            <Composer
+              sessionId={currentId}
+              requireApproval={requireApproval}
+              setRequireApproval={setRequireApproval}
+              onRequestNewProject={() =>
+                window.dispatchEvent(new CustomEvent("codex_gx:open-ws-dialog", { detail: "create" }))
+              }
+              onPickNoProject={() => {
+                switchWorkspace("default");
+              }}
+            />
+          </main>
         </div>
-        <ApprovalDialog
-          request={approvalReq}
-          onApprove={onApprove}
-          onDeny={onDeny}
-        />
-        <PlanDialog
-          request={planReq}
-          onApprove={onPlanApprove}
-          onDeny={onPlanDeny}
-          onEdit={onPlanEdit}
-        />
       </div>
+      <ApprovalDialog
+        request={approvalReq}
+        onApprove={onApprove}
+        onDeny={onDeny}
+      />
+      <PlanDialog
+        request={planReq}
+        onApprove={onPlanApprove}
+        onDeny={onPlanDeny}
+        onEdit={onPlanEdit}
+      />
     </AppErrorBoundary>
   );
 }
 
 export type { ThemeMode } from "./stores/theme";
-
-// ============================================================
-// v1.9.6：Thread tabs 栏（Codex App 风格：顶部多 thread）
-// ============================================================
-function ThreadTabs() {
-  const tabs = useOpenTabs();
-  const sessions = useSessionsStore((s) => s.sessions);
-  const currentId = useSessionsStore((s) => s.currentId);
-  const setCurrent = useSessionsStore((s) => s.setCurrent);
-
-  const workspaceId = useCurrentWorkspaceId();
-  const sessionCount = useSessionsStore((s) => s.sessions.length);
-
-  // 启动 / 切换项目组 / sessions 加载后：同步 tabs 与 current session
-  useEffect(() => {
-    syncTabsForWorkspace(workspaceId);
-  }, [workspaceId, sessionCount]);
-
-  useEffect(() => {
-    if (currentId) openTab(currentId, workspaceId);
-  }, [currentId, workspaceId]);
-
-  if (tabs.length === 0) return null;
-  return (
-    <div className="thread-tabs">
-      {tabs.map((id) => {
-        const sess = sessions.find(
-          (s) => s.id === id && (s.workspaceId ?? "default") === workspaceId,
-        );
-        if (!sess) return null;
-        return (
-          <div
-            key={id}
-            className={`thread-tab ${id === currentId ? "active" : ""}`}
-            onClick={() => setCurrent(id)}
-            title={sess.title}
-          >
-            <span className="thread-tab-title">{sess.title}</span>
-            <button
-              className="thread-tab-close"
-              title="关闭 tab"
-              onClick={(e) => {
-                e.stopPropagation();
-                closeTab(id);
-              }}
-            >
-              ×
-            </button>
-          </div>
-        );
-      })}
-    </div>
-  );
-}
