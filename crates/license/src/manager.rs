@@ -104,7 +104,7 @@ impl LicenseManager {
         }
     }
 
-    /// 启动时校验（在线优先 → 离线降级）
+    /// 启动时校验（在线优先 → 离线降级 → 自动 3 天试用）
     pub async fn check(&self) -> LicenseSummary {
         // 尝试在线（演示版默认失败 → 走离线）
         // 真实版本用 reqwest 调 `https://api.agentshell.io/v1/license/validate`
@@ -125,6 +125,12 @@ impl LicenseManager {
                 // 离线模式
                 self.check_offline().await
             }
+        };
+
+        // 若离线模式仍未取得任何 License（首启 / 清除后）→ 自动开 3 天试用
+        let status = match status {
+            LicenseStatus::Unactivated => self.ensure_trial().await,
+            other => other,
         };
 
         let cache = self.cache.read().await;
@@ -200,6 +206,36 @@ impl LicenseManager {
         Ok(())
     }
 
+    /// 试用：3 天免费
+    const TRIAL_DAYS: i64 = 3;
+
+    /// 自动开始 3 天免费试用（首次启动 / 清除后）
+    async fn ensure_trial(&self) -> LicenseStatus {
+        let now = chrono::Utc::now().timestamp();
+        let mut cache = self.cache.write().await;
+        let started_at = if cache.last_validated_at == 0 {
+            // 首次开试用：记录到 cache
+            cache.last_validated_at = now;
+            now
+        } else {
+            cache.last_validated_at
+        };
+        let elapsed_days = (now - started_at) / 86_400;
+        let remaining_days = if elapsed_days >= Self::TRIAL_DAYS {
+            None
+        } else {
+            Some((Self::TRIAL_DAYS - elapsed_days).max(0) as u32)
+        };
+        let status = LicenseStatus::Trial {
+            remaining_days,
+            started_at,
+        };
+        cache.last_status = Some(status.clone());
+        drop(cache);
+        self.persist_cache().await;
+        status
+    }
+
     /// 获取当前 summary（不触发校验，纯 cache 读）
     pub async fn summary(&self) -> LicenseSummary {
         let cache = self.cache.read().await;
@@ -242,8 +278,8 @@ mod tests {
     async fn test_manager_default() {
         let m = LicenseManager::new_default();
         let s = m.check().await;
-        // 默认无 license → Unactivated
-        assert!(matches!(s.status, LicenseStatus::Unactivated));
+        // 默认无 license → 自动进入 3 天免费试用
+        assert!(matches!(s.status, LicenseStatus::Trial { remaining_days: Some(_), .. }));
     }
 
     #[tokio::test]
@@ -260,9 +296,9 @@ mod tests {
         let s = m.activate(&user_code).await.unwrap();
         assert!(matches!(s.status, LicenseStatus::Valid { .. }));
 
-        // 移除
+        // 移除 → 又回到试用
         m.deactivate().await.unwrap();
         let s2 = m.check().await;
-        assert!(matches!(s2.status, LicenseStatus::Unactivated));
+        assert!(matches!(s2.status, LicenseStatus::Trial { .. }));
     }
 }

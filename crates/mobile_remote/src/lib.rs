@@ -261,3 +261,11 @@ mod tests {
         assert!(tok.last_used_at.is_some());
     }
 }
+
+pub mod tunnel;
+
+pub use tunnel::{
+    start as tunnel_start, stop as tunnel_stop, short_id, simulate_request as tunnel_simulate,
+    read_log as tunnel_read_log, MobileSession, TunnelHandle, TunnelInfo, TunnelLogEntry,
+    TunnelState, TunnelStatus,
+};

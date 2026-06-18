@@ -20,6 +20,13 @@ use crate::verify::{generate_license, verify_code, VerifyError, VerifyResult};
 pub enum LicenseStatus {
     /// 未激活（首次启动 / 清除后）
     Unactivated,
+    /// v1.9.x：3 天免费试用（首次启动后自动开始）
+    Trial {
+        /// 试用剩余天数（None = 已超过 3 天）
+        remaining_days: Option<u32>,
+        /// 试用开始时间
+        started_at: i64,
+    },
     /// 有效
     Valid {
         tier: LicenseTier,
@@ -43,18 +50,19 @@ pub enum LicenseStatus {
 impl LicenseStatus {
     /// 是否能写文件 / 调生成（受限模式判定）
     pub fn can_write(&self) -> bool {
-        matches!(self, Self::Valid { .. } | Self::Expiring { .. })
+        matches!(self, Self::Valid { .. } | Self::Expiring { .. } | Self::Trial { .. })
     }
 
     /// 是否完全正常
     pub fn is_fully_active(&self) -> bool {
-        matches!(self, Self::Valid { .. })
+        matches!(self, Self::Valid { .. } | Self::Trial { .. })
     }
 
     /// 降级标题（UI 显示用）
     pub fn banner(&self) -> Option<&'static str> {
         match self {
             Self::Unactivated => Some("未激活 — 部分功能受限"),
+            Self::Trial { .. } => Some("免费试用中"),
             Self::Expired { .. } => Some("已过期 — 处于只读模式"),
             Self::OfflineGrace { .. } => Some("离线时间过长 — 处于只读模式"),
             Self::Expiring { .. } => Some("即将到期 — 建议续费"),

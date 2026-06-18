@@ -3,6 +3,7 @@ import { Sidebar } from "./components/Sidebar";
 import { Thread } from "./components/Thread";
 import { Composer } from "./components/Composer";
 import { TopBar } from "./components/TopBar";
+import { ActivationGate } from "./components/ActivationGate";
 import { ApprovalDialog, type ApprovalRequest } from "./components/ApprovalDialog";
 import PlanDialog, {
   type PlanRequest,
@@ -12,6 +13,21 @@ import { useThemeMode, type ThemeMode } from "./stores/theme";
 import { useSessionsStore } from "./stores/sessions";
 import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
+
+type LicenseStatusKind =
+  | { kind: "unactivated" }
+  | { kind: "trial"; remaining_days: number | null; started_at: number }
+  | { kind: "valid"; tier: string; remaining_days: number | null; activated_at: number; expires_at: number | null }
+  | { kind: "expiring"; tier: string; days_left: number }
+  | { kind: "expired"; tier: string; expired_at: number }
+  | { kind: "offlinegrace"; days_offline: number }
+  | { kind: "invalid"; reason: string };
+
+type LicenseSummary = {
+  status: LicenseStatusKind;
+  last_validated_at: number;
+  offline: boolean;
+};
 
 // v1.3：全局错误上报
 function reportError(source: string, severity: string, message: string, stack?: string) {
@@ -118,6 +134,29 @@ export default function App() {
   const [approvalReq, setApprovalReq] = useState<ApprovalRequest | null>(null);
   // v0.6：plan mode
   const [planReq, setPlanReq] = useState<PlanRequest | null>(null);
+  // v1.9.x：未激活 / 试用已结束 → 显示激活门
+  const [licenseStatus, setLicenseStatus] = useState<LicenseStatusKind | null>(null);
+
+  useEffect(() => {
+    const refreshLicense = async () => {
+      try {
+        const s = await invoke<LicenseSummary>("license_status");
+        setLicenseStatus(s.status);
+      } catch {
+        setLicenseStatus(null);
+      }
+    };
+    void refreshLicense();
+    const unlistenP = listen("license:changed", () => void refreshLicense());
+    return () => {
+      void unlistenP.then((u) => u());
+    };
+  }, []);
+
+  const isBlocking =
+    licenseStatus !== null &&
+    (licenseStatus.kind === "unactivated" ||
+      (licenseStatus.kind === "trial" && licenseStatus.remaining_days === null));
 
   // 跟随系统
   useEffect(() => {
@@ -246,7 +285,33 @@ export default function App() {
 
   return (
     <AppErrorBoundary>
-      <div className="app-shell">
+      <ActivationGate
+        onActivated={async () => {
+          try {
+            const s = await invoke<LicenseSummary>("license_status");
+            setLicenseStatus(s.status);
+          } catch {
+            /* ignore */
+          }
+        }}
+        onTrial={() => {
+          /* 试用期内不阻塞；trial 状态已在 useEffect 中读取 */
+        }}
+      />
+      {licenseStatus?.kind === "trial" && licenseStatus.remaining_days !== null && (
+        <div className="trial-banner-global">
+          🎁 免费试用还剩 {licenseStatus.remaining_days} 天
+          <button
+            className="trial-banner-btn"
+            onClick={() => {
+              void invoke("license_status");
+            }}
+          >
+            立即激活
+          </button>
+        </div>
+      )}
+      <div className={`app-shell ${isBlocking ? "app-shell-locked" : ""}`}>
         <TopBar />
         <div className="app-body">
           <Sidebar />

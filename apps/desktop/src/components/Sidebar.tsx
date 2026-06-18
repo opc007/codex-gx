@@ -38,6 +38,7 @@ type UpdateInfo = {
 
 type LicenseStatusKind =
   | { kind: "unactivated" }
+  | { kind: "trial"; remaining_days: number | null; started_at: number }
   | { kind: "valid"; tier: string; remaining_days: number | null; activated_at: number; expires_at: number | null }
   | { kind: "expiring"; tier: string; days_left: number }
   | { kind: "expired"; tier: string; expired_at: number }
@@ -324,7 +325,7 @@ export function Sidebar() {
         <button
           className="sidebar-user"
           onClick={() => setUserMenuOpen((v) => !v)}
-          title={`${currentUser.displayName} · 点击打开菜单`}
+          title={`${currentUser.displayName} · 点击打开设置菜单`}
         >
           <div
             className="team-avatar small"
@@ -334,8 +335,25 @@ export function Sidebar() {
           </div>
           <div style={{ flex: 1, minWidth: 0, textAlign: "left" }}>
             <div className="sidebar-user-name">{currentUser.displayName}</div>
-            <div className="sidebar-user-role">
+            <div
+              className={`sidebar-user-role ${
+                license &&
+                (license.status.kind === "unactivated" ||
+                  (license.status.kind === "trial" &&
+                    license.status.remaining_days === null))
+                  ? "role-warn"
+                  : license && license.status.kind === "trial"
+                    ? "role-trial"
+                    : ""
+              }`}
+            >
               {licenseBadgeText(license)}
+              {license &&
+                (license.status.kind === "unactivated" ||
+                  (license.status.kind === "trial" &&
+                    license.status.remaining_days === null)) && (
+                  <span className="role-tag">激活</span>
+                )}
             </div>
           </div>
           <span className="sidebar-user-chevron" aria-hidden="true">
@@ -752,7 +770,10 @@ function licenseBadgeText(license: LicenseSummary | null): string {
   const s = license.status;
   switch (s.kind) {
     case "unactivated":
-      return "未激活 · 点击设置";
+      return "未激活 · 点击激活";
+    case "trial":
+      if (s.remaining_days == null) return "试用已结束 · 请激活";
+      return `免费试用 · 还剩 ${s.remaining_days} 天`;
     case "valid":
       if (s.remaining_days == null) return "已授权 · 终身";
       return `已授权 · 还剩 ${s.remaining_days} 天`;

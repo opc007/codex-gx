@@ -8,6 +8,7 @@ import { redactSimple, detectTypes } from "../lib/redact";
 import { sendChatStream } from "../lib/chat";
 import { buildChatHistory } from "../lib/chatHistory";
 import { loadProviders, type ProviderInfo } from "../lib/providers";
+import { useCurrentWorkspace } from "../stores/workspace";
 import { StageTimeline, type Stage } from "./StageTimeline";
 
 type Props = {
@@ -40,6 +41,13 @@ function providerConfigured(id: string, status: ApiKeysStatus): boolean {
 
 export function Composer({ sessionId }: Props) {
   const t = useTranslation();
+  const currentWs = useCurrentWorkspace();
+  const projectContext = {
+    workspaceId: currentWs.id,
+    name: currentWs.name,
+    folderPath: currentWs.folderPath,
+    description: currentWs.description,
+  };
   const appendMessage = useSessionsStore((s) => s.appendMessage);
   const setMessages = useSessionsStore((s) => s.setMessages);
 
@@ -1856,6 +1864,7 @@ ${diff.diff.slice(0, 5000)}${diff.truncated ? "\n... [truncated, view full in gi
         requireApproval,
         planMode,
         images: imagesToSend,
+        projectContext,
         history: buildChatHistory(sessionId, [userMsg.id, assistantId]),
       });
 

@@ -86,6 +86,13 @@ export type SendChatParams = {
   planMode?: boolean;
   /** v0.9：附件图片 */
   images?: Array<{ path: string; mime?: string }>;
+  /** v1.9.x：项目组上下文（注入 system prompt） */
+  projectContext?: {
+    workspaceId: string;
+    name: string;
+    folderPath?: string;
+    description?: string;
+  };
 };
 
 /**
@@ -138,6 +145,7 @@ export async function sendChatStream(
       requireApproval: params.requireApproval ?? true,
       planMode: params.planMode ?? false, // v0.6
       images: params.images || [], // v0.9
+      projectContext: params.projectContext, // v1.9.x：项目组
     },
   });
 

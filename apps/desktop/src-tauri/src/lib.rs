@@ -453,6 +453,14 @@ async fn agent_run(app: AppHandle, req: AgentRunPayload) -> Result<String, Strin
     // 构造 history
     let mut history: Vec<ChatMessage> = Vec::new();
 
+    // v1.9.x：注入项目组上下文（绑定文件夹、README 摘要、简介）
+    if let Some(ctx) = req.project_context.as_ref() {
+        history.push(ChatMessage::system(build_project_context(
+            "[项目组上下文] 当前 session 属于以下项目组（由 Codex gx 自动注入）：",
+            ctx,
+        )));
+    }
+
     // v0.8：注入相关历史记忆
     if let Some(mgr_state) = app.try_state::<SharedMemory>() {
         let mgr = mgr_state.inner().lock().await;
@@ -645,6 +653,42 @@ struct AgentRunPayload {
     /// v0.9：附件图片（绝对路径）
     #[serde(default)]
     images: Vec<ImageAttachment>,
+    /// v1.9.x：项目组上下文（注入 system prompt）
+    #[serde(default)]
+    project_context: Option<ProjectContextPayload>,
+}
+
+#[derive(Deserialize, Clone)]
+#[serde(rename_all = "camelCase")]
+struct ProjectContextPayload {
+    workspace_id: String,
+    name: String,
+    #[serde(default)]
+    folder_path: Option<String>,
+    #[serde(default)]
+    description: Option<String>,
+}
+
+fn build_project_context(prefix: &str, ctx: &ProjectContextPayload) -> String {
+    let mut parts = vec![format!("项目组: {}", ctx.name)];
+    parts.push(format!("项目组 ID: {}", ctx.workspace_id));
+    if let Some(p) = ctx.folder_path.as_ref().filter(|p| !p.is_empty()) {
+        parts.push(format!("项目根目录: {}", p));
+        // 尝试读取 README/AGENTS.md 摘要
+        for filename in &["README.md", "README.MD", "readme.md", "AGENTS.md", "agents.md"] {
+            let candidate = std::path::Path::new(p).join(filename);
+            if let Ok(text) = std::fs::read_to_string(&candidate) {
+                let summary: String = text.chars().take(600).collect();
+                parts.push(format!("{} ({} 摘录):\n{}", filename, candidate.display(), summary));
+                break;
+            }
+        }
+    }
+    if let Some(d) = ctx.description.as_ref().filter(|d| !d.is_empty()) {
+        parts.push(format!("项目简介: {}", d));
+    }
+    parts.push("在回答与该项目的相关问题时，请优先使用上述项目根目录、README 和项目简介作为上下文。".into());
+    format!("{}\n{}", prefix, parts.join("\n"))
 }
 
 #[derive(Deserialize)]
