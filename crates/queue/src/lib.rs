@@ -17,6 +17,9 @@ use std::time::{SystemTime, UNIX_EPOCH};
 use tokio::sync::{broadcast, mpsc, Mutex, RwLock};
 use uuid::Uuid;
 
+pub mod persist;
+pub use persist::{default_persist_path, PersistError, PersistedQueue, QueuePersister};
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "lowercase")]
 pub enum TaskStatus {

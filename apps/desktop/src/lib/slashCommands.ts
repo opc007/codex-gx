@@ -90,6 +90,8 @@ export const BUILTIN_SLASH_COMMANDS: SlashCommand[] = [
   { name: "compact", description: "上下文压缩 / 摘要（长会话 token 优化）", group: "会话", template: "compact" },
   // v1.9.10
   { name: "market", description: "插件市场（list / install / uninstall）", group: "插件", template: "market" },
+  // v1.9.11
+  { name: "queue", description: "任务队列（list / cancel / persist）", group: "背景", template: "queue" },
 ];
 
 /** 索引：name + aliases → command */

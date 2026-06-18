@@ -1491,6 +1491,53 @@ M3 / Claude / GPT 会自动调用：
       return;
     }
 
+    // v1.9.11: /queue (Task Queue + 持久化)
+    if (trimmed === "/queue" || trimmed.startsWith("/queue ")) {
+      const arg = trimmed.slice(7).trim();
+      try {
+        if (arg === "" || arg === "list") {
+          const tasks = await invoke<Array<{ id: string; kind: string; title: string; status: string; progress: number; sessionId?: string }>>("queue_list");
+          if (tasks.length === 0) { appendMessage(sessionId, { id: crypto.randomUUID(), role: "assistant", createdAt: Date.now(), text: "📋 任务队列为空（用 `/queue enqueue` 添加）" }); return; }
+          const txt = tasks.map((t) => {
+            const bar = "▓".repeat(Math.round(t.progress * 10)) + "░".repeat(10 - Math.round(t.progress * 10));
+            const icon = { pending: "⏳", running: "🔄", completed: "✅", failed: "❌", cancelled: "🚫" }[t.status as string] || "❓";
+            return `  ${icon} **${t.title}** _(${t.kind})_ ${bar} ${(t.progress * 100).toFixed(0)}%\n    id: \`${t.id}\`\n    status: ${t.status}${t.sessionId ? `\n    session: \`${t.sessionId}\`` : ""}`;
+          }).join("\n\n");
+          appendMessage(sessionId, { id: crypto.randomUUID(), role: "assistant", createdAt: Date.now(), text: `📋 任务队列 (${tasks.length})：\n\n${txt}\n\n命令：/queue cancel <id>` });
+        } else if (arg.startsWith("cancel ")) {
+          const id = arg.slice(7).trim();
+          if (!id) { appendMessage(sessionId, { id: crypto.randomUUID(), role: "assistant", createdAt: Date.now(), text: "❌ 用法: /queue cancel <id>" }); return; }
+          const ok = await invoke<boolean>("queue_cancel", { id });
+          appendMessage(sessionId, { id: crypto.randomUUID(), role: "assistant", createdAt: Date.now(), text: ok ? `🚫 已发送取消信号：${id}` : `⚠️ 任务不存在或已结束：${id}` });
+        } else if (arg === "clear") {
+          const n = await invoke<number>("queue_clear_finished");
+          appendMessage(sessionId, { id: crypto.randomUUID(), role: "assistant", createdAt: Date.now(), text: `🗑️ 已清理 ${n} 个已完成任务` });
+        } else if (arg === "persist" || arg === "save") {
+          const n = await invoke<number>("queue_persist_save");
+          appendMessage(sessionId, { id: crypto.randomUUID(), role: "assistant", createdAt: Date.now(), text: `💾 已保存 ${n} 个任务到持久化文件` });
+        } else if (arg === "status") {
+          const info = await invoke<{ path: string; exists: boolean; taskCount: number; updatedAt: string }>("queue_persist_status");
+          appendMessage(sessionId, { id: crypto.randomUUID(), role: "assistant", createdAt: Date.now(), text: `💾 持久化状态：\n\n  path: \`${info.path}\`\n  exists: ${info.exists}\n  tasks: ${info.taskCount}\n  updated: ${info.updatedAt || "(从未)"}` });
+        } else if (arg === "recover" || arg === "restore") {
+          const n = await invoke<number>("queue_persist_recover");
+          appendMessage(sessionId, { id: crypto.randomUUID(), role: "assistant", createdAt: Date.now(), text: `♻️ 已恢复 ${n} 个 Pending 任务（重启中断的 Running 任务重置为 Pending 并重新入队）` });
+        } else if (arg === "wipe") {
+          await invoke<void>("queue_persist_clear");
+          appendMessage(sessionId, { id: crypto.randomUUID(), role: "assistant", createdAt: Date.now(), text: "🗑️ 持久化文件已删除" });
+        } else if (arg.startsWith("enqueue ")) {
+          const title = arg.slice(8).trim();
+          if (!title) { appendMessage(sessionId, { id: crypto.randomUUID(), role: "assistant", createdAt: Date.now(), text: "❌ 用法: /queue enqueue <title> [kind=command|lint]" }); return; }
+          const id = await invoke<string>("queue_enqueue", { args: { kind: "command", title, input: { cmd: "echo " + title } } });
+          appendMessage(sessionId, { id: crypto.randomUUID(), role: "assistant", createdAt: Date.now(), text: `➕ 已入队：\n\n  title: ${title}\n  id: \`${id}\`` });
+        } else {
+          appendMessage(sessionId, { id: crypto.randomUUID(), role: "assistant", createdAt: Date.now(), text: "❌ 用法: /queue list | enqueue <title> | cancel <id> | clear | persist | status | recover | wipe" });
+        }
+      } catch (e) {
+        appendMessage(sessionId, { id: crypto.randomUUID(), role: "assistant", createdAt: Date.now(), text: `❌ /queue 失败: ${e}` });
+      }
+      return;
+    }
+
     // v1.9.10: /market (Plugin Marketplace)
     if (trimmed === "/market" || trimmed.startsWith("/market ")) {
       const arg = trimmed.slice(7).trim();

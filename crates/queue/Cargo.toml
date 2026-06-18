@@ -13,4 +13,6 @@ async-trait.workspace = true
 tokio.workspace = true
 uuid.workspace = true
 futures.workspace = true
+thiserror.workspace = true
+chrono.workspace = true
 lint = { path = "../lint" }

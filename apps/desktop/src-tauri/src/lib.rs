@@ -216,6 +216,23 @@ pub fn run() {
             if let Some(state) = app.try_state::<queue_tauri::QueueState>() {
                 queue_tauri::start_scheduler(state.inner().clone());
                 queue_tauri::spawn_event_forwarder(app.handle().clone(), state.inner().clone());
+                // v1.9.11：自动恢复未完成的任务
+                let q = state.inner().clone();
+                tauri::async_runtime::spawn(async move {
+                    let persister = queue::QueuePersister::from_default();
+                    if let Ok(tasks) = persister.load_recoverable() {
+                        let mut n = 0;
+                        for t in tasks.into_iter() {
+                            if matches!(t.status, queue::TaskStatus::Pending) {
+                                let _ = q.enqueue(t).await;
+                                n += 1;
+                            }
+                        }
+                        if n > 0 {
+                            eprintln!("[queue] 恢复了 {} 个未完成的任务", n);
+                        }
+                    }
+                });
             }
             // v1.6：启动时 best-effort 校验 License（不阻塞 UI）
             if let Some(state) = app.try_state::<license_tauri::LicenseManagerState>() {
@@ -448,6 +465,11 @@ pub fn run() {
             queue_tauri::queue_enqueue,                    // v1.4
             queue_tauri::queue_cancel,                     // v1.4
             queue_tauri::queue_clear_finished,             // v1.4
+            queue_tauri::queue_persist_path,               // v1.9.11
+            queue_tauri::queue_persist_save,               // v1.9.11
+            queue_tauri::queue_persist_status,             // v1.9.11
+            queue_tauri::queue_persist_recover,            // v1.9.11
+            queue_tauri::queue_persist_clear,              // v1.9.11
             p2p_tauri::p2p_start_host,                     // v1.4
             p2p_tauri::p2p_stop_host,                      // v1.4
             p2p_tauri::p2p_generate_pairing,               // v1.4
