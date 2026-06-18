@@ -111,7 +111,17 @@ export function MessageBubble({ msg }: Props) {
             </div>
           </details>
         )}
-        <div className="bubble-text">{msg.text}</div>
+        <div className="bubble-text"><RichText text={msg.text} /></div>
+        {msg.imageUrl && (
+          <a href={msg.imageUrl} target="_blank" rel="noreferrer" title="点击查看原图">
+            <img
+              src={msg.imageUrl}
+              alt="screenshot"
+              className="bubble-inline-image"
+              loading="lazy"
+            />
+          </a>
+        )}
         {/* v1.9.6: 多模态生图 */}
         {msg.mediaGallery && msg.mediaGallery.length > 0 && (
           <div className="media-gallery">
@@ -136,5 +146,73 @@ export function MessageBubble({ msg }: Props) {
       </div>
       <ReplayDialog record={replayTarget} onClose={() => setReplayTarget(null)} />
     </div>
+  );
+}
+
+// v1.9.6：Rich text renderer（Codex App 风格：图片 / 视频 URL inline 渲染）
+// - 支持 ![alt](url) 标准 markdown
+// - 裸 URL（https://...png|jpg|jpeg|gif|webp|mp4|webm）自动转 <img> / <video>
+const IMAGE_RE = /(https?:\/\/[^\s)]+\.(?:png|jpg|jpeg|gif|webp|svg))(\?[^\s)]*)?/gi;
+const VIDEO_RE = /(https?:\/\/[^\s)]+\.(?:mp4|webm|mov))(\?[^\s)]*)?/gi;
+const MD_IMAGE_RE = /!\[([^\]]*)\]\((https?:\/\/[^\s)]+)\)/g;
+
+function RichText({ text }: { text: string }) {
+  if (!text) return null;
+  // 先抽出 markdown 图片 ![alt](url) —— 替换为占位
+  const placeholders: Array<{ kind: "img" | "video"; url: string; alt?: string }> = [];
+  let src = text.replace(MD_IMAGE_RE, (_m, alt: string, url: string) => {
+    placeholders.push({ kind: "img", url, alt });
+    return `\u0000IMG${placeholders.length - 1}\u0000`;
+  });
+  src = src.replace(VIDEO_RE, (m) => {
+    placeholders.push({ kind: "video", url: m });
+    return `\u0000VID${placeholders.length - 1}\u0000`;
+  });
+  src = src.replace(IMAGE_RE, (m) => {
+    placeholders.push({ kind: "img", url: m });
+    return `\u0000IMG${placeholders.length - 1}\u0000`;
+  });
+
+  // 简易：保留换行；不替换其他 markdown（避免破坏现有体验）
+  const parts = src.split(/(\u0000(?:IMG|VID)\d+\u0000)/g);
+  return (
+    <>
+      {parts.map((part, i) => {
+        const m = part.match(/^\u0000(?:IMG|VID)(\d+)\u0000$/);
+        if (!m) {
+          return <span key={i} style={{ whiteSpace: "pre-wrap" }}>{part}</span>;
+        }
+        const idx = Number(m[1]);
+        const item = placeholders[idx];
+        if (!item) return null;
+        if (item.kind === "video") {
+          return (
+            <div key={i} className="media-video inline">
+              <video src={item.url} controls preload="metadata" />
+              <a href={item.url} target="_blank" rel="noreferrer" download>
+                ⬇️ 下载
+              </a>
+            </div>
+          );
+        }
+        return (
+          <a
+            key={i}
+            href={item.url}
+            target="_blank"
+            rel="noreferrer"
+            title="点击查看原图 / 右键保存"
+            style={{ display: "block", margin: "6px 0" }}
+          >
+            <img
+              src={item.url}
+              alt={item.alt ?? "image"}
+              loading="lazy"
+              style={{ maxWidth: "100%", borderRadius: 6, border: "1px solid var(--border)" }}
+            />
+          </a>
+        );
+      })}
+    </>
   );
 }

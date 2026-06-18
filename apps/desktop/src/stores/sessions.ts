@@ -44,6 +44,8 @@ export type PersistedMessage = {
   mediaGallery?: string[];
   /// v1.9.6：多模态生视频结果（视频 URL）
   mediaVideo?: string;
+  /// v1.9.6：Appshots 截图（base64 dataURL 或外链）
+  imageUrl?: string;
 };
 
 export type SessionsStore = {

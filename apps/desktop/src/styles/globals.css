@@ -3166,3 +3166,16 @@ kbd {
   line-height: 1;
 }
 .queue-chip-clear:hover { color: var(--fg); }
+
+/* v1.9.6: Appshots 内嵌图（user / assistant 消息都能用） */
+.bubble-inline-image {
+  max-width: 100%;
+  max-height: 320px;
+  margin-top: 6px;
+  border-radius: 6px;
+  border: 1px solid var(--border);
+  object-fit: contain;
+}
+.media-video.inline {
+  margin: 6px 0;
+}

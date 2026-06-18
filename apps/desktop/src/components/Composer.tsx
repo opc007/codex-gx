@@ -8,7 +8,7 @@ import { redactSimple, detectTypes } from "../lib/redact";
 import { sendChatStream } from "../lib/chat";
 import { buildChatHistory } from "../lib/chatHistory";
 import { loadProviders, type ProviderInfo } from "../lib/providers";
-import { useCurrentWorkspace } from "../stores/workspace";
+import { useCurrentWorkspace, getCurrentWorkspace } from "../stores/workspace";
 import { StageTimeline, type Stage } from "./StageTimeline";
 import { BUILTIN_NAME_SET, searchSlashCommands, type SlashCommand } from "../lib/slashCommands";
 
@@ -201,6 +201,16 @@ export function Composer({ sessionId }: Props) {
       }
     }
   };
+
+  // v1.9.6：Cmd+M 全局快捷键触发 voice input（Codex App 风格）
+  useEffect(() => {
+    const onToggle = () => {
+      if (recording) stopRecording();
+      else void startRecording();
+    };
+    window.addEventListener("agentshell:toggle-voice", onToggle);
+    return () => window.removeEventListener("agentshell:toggle-voice", onToggle);
+  }, [recording]);
 
   // v1.2：voice input 处理
   const startRecording = async () => {
@@ -572,6 +582,41 @@ export function Composer({ sessionId }: Props) {
         setText("");
         return;
       }
+    }
+    // v1.9.6：/init 生成 AGENTS.md（Codex App 风格）
+    if (trimmed === "/init" || trimmed.startsWith("/init ")) {
+      const force = /\s--force$/.test(trimmed);
+      const wsFolder = getCurrentWorkspace()?.folderPath;
+      if (!wsFolder) {
+        appendMessage(sessionId, {
+          id: crypto.randomUUID(),
+          role: "assistant",
+          text: "❌ /init 需要先在左下角项目组选择器里绑定一个文件夹（没绑定文件夹的会话不知道把 AGENTS.md 写到哪里）。",
+          createdAt: Date.now(),
+        });
+        setText("");
+        return;
+      }
+      try {
+        const r = await invoke<string>("init_agents_md", {
+          args: { folder: wsFolder, project_name: null, force },
+        });
+        appendMessage(sessionId, {
+          id: crypto.randomUUID(),
+          role: "assistant",
+          text: r,
+          createdAt: Date.now(),
+        });
+      } catch (e) {
+        appendMessage(sessionId, {
+          id: crypto.randomUUID(),
+          role: "assistant",
+          text: `❌ /init 失败：${e}`,
+          createdAt: Date.now(),
+        });
+      }
+      setText("");
+      return;
     }
     // v1.4：代码 review
     if (trimmed.startsWith("/lint ") || trimmed === "/lint") {
@@ -2605,6 +2650,49 @@ ${diff.diff.slice(0, 5000)}${diff.truncated ? "\n... [truncated, view full in gi
               }}
             >
               📎
+            </button>
+            {/* v1.9.6: Appshots 按钮（Codex App 风格：截屏 + 一键发到 chat） */}
+            <button
+              className="composer-icon-btn"
+              title="Appshots：截取主屏幕并附到当前会话"
+              onClick={async () => {
+                if (busy) return;
+                try {
+                  const result = await invoke<string | { data?: string; path?: string }>(
+                    "screen_screenshot",
+                    { args: { display: "primary", return_base64: true } },
+                  );
+                  let dataUrl: string | null = null;
+                  let note = "Appshot of primary display";
+                  if (typeof result === "string") {
+                    dataUrl = result.startsWith("data:")
+                      ? result
+                      : `data:image/png;base64,${result}`;
+                  } else if (result?.data) {
+                    dataUrl = result.data.startsWith("data:")
+                      ? result.data
+                      : `data:image/png;base64,${result.data}`;
+                    if (result.path) note += ` (${result.path})`;
+                  }
+                  if (dataUrl && sessionId) {
+                    appendMessage(sessionId, {
+                      id: crypto.randomUUID(),
+                      role: "user",
+                      text: `📸 ${note}\n\n(data URL: ${dataUrl.slice(0, 60)}...)`,
+                      createdAt: Date.now(),
+                    });
+                  }
+                } catch (e) {
+                  appendMessage(sessionId!, {
+                    id: crypto.randomUUID(),
+                    role: "assistant",
+                    text: `❌ Appshots 失败：${e}`,
+                    createdAt: Date.now(),
+                  });
+                }
+              }}
+            >
+              📸
             </button>
             <button
               className={`composer-icon-btn ${recording ? "recording" : ""} ${voiceBusy ? "busy" : ""}`}

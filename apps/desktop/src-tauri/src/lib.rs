@@ -24,6 +24,64 @@ mod vision_tauri;
 mod lint_tauri;
 mod local_tauri;
 mod marketplace_tauri;
+
+// v1.9.6：/init 为项目生成 AGENTS.md
+#[derive(serde::Deserialize)]
+struct InitAgentsArgs {
+    folder: String,
+    #[serde(default)]
+    project_name: Option<String>,
+    #[serde(default)]
+    force: bool,
+}
+
+#[tauri::command]
+fn init_agents_md(args: InitAgentsArgs) -> Result<String, String> {
+    let path = std::path::Path::new(&args.folder);
+    if !path.is_dir() {
+        return Err(format!("不是有效目录: {}", args.folder));
+    }
+    let target = path.join("AGENTS.md");
+    if target.exists() && !args.force {
+        return Err(format!(
+            "AGENTS.md 已存在（{}）。要覆盖请传 force=true。",
+            target.display()
+        ));
+    }
+    let name = args.project_name.unwrap_or_else(|| {
+        path.file_name()
+            .and_then(|n| n.to_str())
+            .unwrap_or("项目")
+            .to_string()
+    });
+    let body = format!(
+        "# {name} — AGENTS.md\n\n\
+## 项目简介\n\n\
+（请用 1-3 句话描述这个项目做什么。Codex gx 启动 session 时会读这段。）\n\n\
+## 项目根目录\n\n\
+`{folder}`\n\n\
+## 工作规范\n\n\
+- 每次跑命令前先看 `git status`；不要随便 `git push --force`。\n\
+- 写完代码跑一遍 typecheck / lint 再交付。\n\
+- 一次只改一个文件，commit 粒度要细。\n\
+- 重要决策（API 选择、库引入、删除代码）要在 commit message 写明原因。\n\n\
+## 常用命令\n\n\
+- 启动开发：`pnpm dev`（按实际填）\n\
+- 类型检查：`pnpm typecheck`\n\
+- 测试：`pnpm test`\n\n\
+## 项目结构\n\n\
+- `apps/`：桌面 / 移动端\n\
+- `crates/`：Rust 后端 crate\n\
+- `crates/provider/`：模型 provider（OpenAI 兼容协议）\n\
+- `crates/mobile_remote/`：Mobile Remote HTTP 服务\n\n\
+## 上下文注入约定\n\n\
+Codex gx 在每次发起 LLM 请求前，会把这份文件前 ~600 字符读入 system context。\n要加新约定直接编辑本文档即可，下次 session 自动生效。\n",
+        name = name,
+        folder = args.folder
+    );
+    std::fs::write(&target, &body).map_err(|e| format!("写入失败: {e}"))?;
+    Ok(format!("✅ AGENTS.md 已生成：{}", target.display()))
+}
 mod mcp_tool;
 mod media_tauri;
 mod p2p_tauri;
@@ -387,6 +445,7 @@ pub fn run() {
             learning_tauri::learning_record_feedback,      // v1.4
             learning_tauri::learning_reset,                // v1.4
             learning_tauri::learning_inject,               // v1.4
+            init_agents_md,                                // v1.9.6 /init
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

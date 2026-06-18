@@ -196,6 +196,13 @@ export default function App() {
             s.setCurrent(fresh.id);
           }
           break;
+        case "m":
+          if (e.metaKey || e.ctrlKey) {
+            e.preventDefault();
+            // v1.9.6：Codex 风格 Cmd+M 触发语音输入（开始 / 停止）
+            window.dispatchEvent(new CustomEvent("agentshell:toggle-voice"));
+          }
+          break;
         case "j":
           if (!inInput) {
             e.preventDefault();
