@@ -19,6 +19,8 @@
 
 use std::path::PathBuf;
 
+pub mod http;
+
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 

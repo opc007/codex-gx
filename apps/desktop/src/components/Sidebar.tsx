@@ -2,9 +2,19 @@ import { useSessionsStore, type SessionMeta, type PersistedMessage } from "../st
 import { exportSession, type ExportFormat } from "../lib/export";
 import { useState, useEffect, useRef } from "react";
 import { closeTab } from "../stores/tabs";
-import { useCurrentWorkspaceId } from "../stores/workspace";
+import {
+  useCurrentWorkspaceId,
+  useWorkspaceList,
+  useCurrentWorkspace,
+  switchWorkspace,
+  createWorkspace,
+  deleteWorkspace,
+  renameWorkspace,
+  type WorkspaceMeta,
+} from "../stores/workspace";
 import { useCurrentUser, useUserList, switchUser } from "../stores/users";
 import { invoke } from "@tauri-apps/api/core";
+import { open as openDialog } from "@tauri-apps/plugin-dialog";
 import { listen } from "@tauri-apps/api/event";
 import { open as openUrl } from "@tauri-apps/plugin-shell";
 import { MarketplaceDialog } from "./MarketplaceDialog";
@@ -60,6 +70,11 @@ export function Sidebar() {
   const messages = useSessionsStore((s) => s.messages);
   const setMessages = useSessionsStore((s) => s.setMessages);
   const currentWorkspace = useCurrentWorkspaceId();
+  const workspaces = useWorkspaceList();
+  const currentWs = useCurrentWorkspace();
+  const [wsMenuOpen, setWsMenuOpen] = useState(false);
+  const [wsDialogMode, setWsDialogMode] = useState<null | "create" | "edit">(null);
+  const wsMenuRef = useRef<HTMLDivElement>(null);
   const currentUser = useCurrentUser();
   const userList = useUserList();
   const [themeMode, setThemeMode] = useThemeMode();
@@ -175,6 +190,24 @@ export function Sidebar() {
     };
   }, [userMenuOpen]);
 
+  // workspace selector outside click + esc
+  useEffect(() => {
+    if (!wsMenuOpen) return;
+    const onDoc = (e: MouseEvent) => {
+      if (!wsMenuRef.current) return;
+      if (!wsMenuRef.current.contains(e.target as Node)) setWsMenuOpen(false);
+    };
+    const onEsc = (e: KeyboardEvent) => {
+      if (e.key === "Escape") setWsMenuOpen(false);
+    };
+    document.addEventListener("mousedown", onDoc);
+    document.addEventListener("keydown", onEsc);
+    return () => {
+      document.removeEventListener("mousedown", onDoc);
+      document.removeEventListener("keydown", onEsc);
+    };
+  }, [wsMenuOpen]);
+
   const doExport = async (s: SessionMeta, fmt: ExportFormat) => {
     const msgs: PersistedMessage[] = messages[s.id] ?? [];
     try {
@@ -223,6 +256,58 @@ export function Sidebar() {
   return (
     <aside className="sidebar">
       <div className="sidebar-top">
+        <div className="sidebar-ws-selector" ref={wsMenuRef}>
+          <button
+            className="sidebar-ws-current"
+            onClick={() => setWsMenuOpen((v) => !v)}
+            title={currentWs.folderPath ? `项目组: ${currentWs.folderPath}` : "未绑定项目组"}
+          >
+            <span className="ws-color-dot" style={{ background: currentWs.color || "#8e8ea0" }} />
+            <span className="ws-name">{currentWs.name}</span>
+            <span className="ws-caret">▾</span>
+          </button>
+          {wsMenuOpen && (
+            <div className="ws-menu">
+              <div className="ws-menu-section-label">选择项目组</div>
+              {workspaces.map((w) => (
+                <button
+                  key={w.id}
+                  className={`ws-menu-item ${w.id === currentWorkspace ? "active" : ""}`}
+                  onClick={() => {
+                    switchWorkspace(w.id);
+                    setWsMenuOpen(false);
+                  }}
+                  title={w.folderPath || "未绑定文件夹"}
+                >
+                  <span className="ws-color-dot" style={{ background: w.color || "#8e8ea0" }} />
+                  <span className="ws-menu-name">{w.name}</span>
+                  {w.folderPath && <span className="ws-menu-folder">📁</span>}
+                </button>
+              ))}
+              <div className="ws-menu-divider" />
+              <button
+                className="ws-menu-action"
+                onClick={() => {
+                  setWsMenuOpen(false);
+                  setWsDialogMode("create");
+                }}
+              >
+                ＋ 新建项目组
+              </button>
+              {currentWorkspace !== "default" && (
+                <button
+                  className="ws-menu-action"
+                  onClick={() => {
+                    setWsMenuOpen(false);
+                    setWsDialogMode("edit");
+                  }}
+                >
+                  ✎ 编辑当前项目组
+                </button>
+              )}
+            </div>
+          )}
+        </div>
         <button
           className="sidebar-new-chat"
           onClick={handleNewChat}
@@ -744,6 +829,13 @@ export function Sidebar() {
           </div>
         </div>
       )}
+      {wsDialogMode && (
+        <WorkspaceDialog
+          mode={wsDialogMode}
+          initial={wsDialogMode === "edit" ? currentWs : undefined}
+          onClose={() => setWsDialogMode(null)}
+        />
+      )}
     </aside>
   );
 }
@@ -786,4 +878,157 @@ function licenseBadgeText(license: LicenseSummary | null): string {
     case "invalid":
       return "授权异常 · 点击修复";
   }
+}
+
+// ============================================================
+// v1.9.x：项目组（Workspace）创建 / 编辑对话框
+// ============================================================
+
+const WS_COLORS = ["#10a37f", "#3b82f6", "#8b5cf6", "#ec4899", "#f59e0b", "#ef4444", "#14b8a6", "#8e8ea0"];
+
+function WorkspaceDialog({
+  mode,
+  initial,
+  onClose,
+}: {
+  mode: "create" | "edit";
+  initial?: WorkspaceMeta;
+  onClose: () => void;
+}) {
+  const [name, setName] = useState(initial?.name ?? "");
+  const [folderPath, setFolderPath] = useState(initial?.folderPath ?? "");
+  const [description, setDescription] = useState(initial?.description ?? "");
+  const [color, setColor] = useState(initial?.color ?? WS_COLORS[0]);
+  const [busy, setBusy] = useState(false);
+
+  const pickFolder = async () => {
+    try {
+      const sel = await openDialog({ directory: true, multiple: false });
+      if (typeof sel === "string" && sel) setFolderPath(sel);
+    } catch (e) {
+      console.warn("pick folder failed:", e);
+    }
+  };
+
+  const onSubmit = () => {
+    const trimmed = name.trim();
+    if (!trimmed) {
+      alert("请填写项目组名称");
+      return;
+    }
+    setBusy(true);
+    try {
+      if (mode === "create") {
+        createWorkspace(trimmed, {
+          folderPath: folderPath.trim() || undefined,
+          description: description.trim() || undefined,
+          color,
+        });
+      } else if (initial) {
+        renameWorkspace(initial.id, trimmed, {
+          folderPath: folderPath.trim() || undefined,
+          description: description.trim() || undefined,
+          color,
+        });
+      }
+      onClose();
+    } catch (e) {
+      alert(`${mode === "create" ? "新建" : "保存"}失败：${e}`);
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const onDelete = () => {
+    if (!initial) return;
+    if (initial.id === "default") {
+      alert("默认项目组不能删除");
+      return;
+    }
+    if (!confirm(`删除项目组 "${initial.name}"？组内会话会保留在「Default」中。`)) return;
+    try {
+      deleteWorkspace(initial.id);
+      onClose();
+    } catch (e) {
+      alert(`删除失败：${e}`);
+    }
+  };
+
+  return (
+    <div className="modal-mask" onClick={(e) => e.target === e.currentTarget && onClose()}>
+      <div className="modal update-dialog workspace-dialog">
+        <div className="update-dialog-header">
+          <h2>{mode === "create" ? "新建项目组" : "编辑项目组"}</h2>
+          <button className="update-close" onClick={onClose}>×</button>
+        </div>
+        <div className="update-dialog-body">
+          <p style={{ fontSize: 12, color: "var(--text-muted)", margin: "0 0 12px" }}>
+            项目组 = 绑定一个本地文件夹。在该项目组里的会话会自动注入 README/AGENTS.md 摘要到 prompt，
+            帮 AI 理解你的项目上下文。
+          </p>
+
+          <label className="ws-field-label">项目组名称</label>
+          <input
+            className="vault-password-input"
+            value={name}
+            onChange={(e) => setName(e.target.value)}
+            placeholder="例如：My App、博客、Rust 学习"
+            autoFocus
+          />
+
+          <label className="ws-field-label" style={{ marginTop: 12 }}>绑定的本地文件夹</label>
+          <div className="ws-folder-row">
+            <input
+              className="vault-password-input"
+              value={folderPath}
+              onChange={(e) => setFolderPath(e.target.value)}
+              placeholder="例如：/Users/me/projects/my-app"
+            />
+            <button className="btn-secondary" onClick={() => void pickFolder()} type="button">
+              📁 选择…
+            </button>
+          </div>
+
+          <label className="ws-field-label" style={{ marginTop: 12 }}>项目简介（可选）</label>
+          <textarea
+            className="vault-password-input"
+            value={description}
+            onChange={(e) => setDescription(e.target.value)}
+            placeholder="一段话描述这个项目做什么的，会注入到 AI prompt"
+            rows={3}
+            style={{ resize: "vertical", fontFamily: "inherit" }}
+          />
+
+          <label className="ws-field-label" style={{ marginTop: 12 }}>颜色标签</label>
+          <div className="ws-color-row">
+            {WS_COLORS.map((c) => (
+              <button
+                key={c}
+                type="button"
+                className={`ws-color-chip ${color === c ? "active" : ""}`}
+                style={{ background: c }}
+                onClick={() => setColor(c)}
+                title={c}
+              />
+            ))}
+          </div>
+        </div>
+        <div className="update-dialog-footer" style={{ display: "flex", justifyContent: "space-between", gap: 8, padding: "12px 16px", borderTop: "1px solid var(--border)" }}>
+          <div>
+            {mode === "edit" && initial && initial.id !== "default" && (
+              <button className="btn-danger" onClick={onDelete} disabled={busy}>
+                删除项目组
+              </button>
+            )}
+          </div>
+          <div style={{ display: "flex", gap: 8 }}>
+            <button className="btn-secondary" onClick={onClose} disabled={busy}>取消</button>
+            <button className="btn-primary" onClick={onSubmit} disabled={busy || !name.trim()}>
+              {mode === "create" ? "创建" : "保存"}
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
 }

@@ -10,7 +10,9 @@ import PlanDialog, {
   respondPlan,
 } from "./components/PlanDialog";
 import { useThemeMode, type ThemeMode } from "./stores/theme";
-import { useSessionsStore } from "./stores/sessions";
+import { useSessionsStore, getSessionsState } from "./stores/sessions";
+import { getCurrentWorkspaceId } from "./stores/workspace";
+import { useOpenTabs, openTab, closeTab, closeOtherTabs } from "./stores/tabs";
 import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
 
@@ -158,6 +160,72 @@ export default function App() {
     (licenseStatus.kind === "unactivated" ||
       (licenseStatus.kind === "trial" && licenseStatus.remaining_days === null));
 
+  // v1.9.6：侧栏折叠状态（Codex 风格 Cmd+B）
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
+  // v1.9.6：键盘快捷键（Codex App 风格）
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      const mod = e.metaKey || e.ctrlKey;
+      if (!mod) return;
+      // 输入框内不响应（除了 Cmd+K 强制聚焦）
+      const target = e.target as HTMLElement | null;
+      const inInput =
+        target &&
+        (target.tagName === "INPUT" ||
+          target.tagName === "TEXTAREA" ||
+          target.isContentEditable);
+      switch (e.key.toLowerCase()) {
+        case "b":
+          if (!inInput) {
+            e.preventDefault();
+            setSidebarCollapsed((v) => !v);
+          }
+          break;
+        case "k":
+          // Cmd+K 总是聚焦 composer
+          e.preventDefault();
+          document
+            .querySelector<HTMLTextAreaElement>(".composer-input")
+            ?.focus();
+          break;
+        case "n":
+          if (!inInput) {
+            e.preventDefault();
+            const s = getSessionsState();
+            const fresh = s.create();
+            s.setCurrent(fresh.id);
+          }
+          break;
+        case "j":
+          if (!inInput) {
+            e.preventDefault();
+            window.dispatchEvent(new CustomEvent("agentshell:toggle-terminal"));
+          }
+          break;
+        case "[":
+        case "]":
+          if (!inInput) {
+            e.preventDefault();
+            const st = getSessionsState();
+            const wsId = getCurrentWorkspaceId();
+            const order = st.sessions
+              .filter((sess) => (sess.workspaceId ?? "default") === wsId)
+              .sort((a, b) => b.updatedAt - a.updatedAt);
+            const idx = order.findIndex((sess) => sess.id === st.currentId);
+            if (order.length === 0) return;
+            const next =
+              e.key === "]"
+                ? order[(idx + 1) % order.length]
+                : order[(idx - 1 + order.length) % order.length];
+            if (next) st.setCurrent(next.id);
+          }
+          break;
+      }
+    };
+    document.addEventListener("keydown", onKey);
+    return () => document.removeEventListener("keydown", onKey);
+  }, []);
+
   // 跟随系统
   useEffect(() => {
     if (themeMode !== "system") return;
@@ -298,21 +366,9 @@ export default function App() {
           /* 试用期内不阻塞；trial 状态已在 useEffect 中读取 */
         }}
       />
-      {licenseStatus?.kind === "trial" && licenseStatus.remaining_days !== null && (
-        <div className="trial-banner-global">
-          🎁 免费试用还剩 {licenseStatus.remaining_days} 天
-          <button
-            className="trial-banner-btn"
-            onClick={() => {
-              void invoke("license_status");
-            }}
-          >
-            立即激活
-          </button>
-        </div>
-      )}
-      <div className={`app-shell ${isBlocking ? "app-shell-locked" : ""}`}>
+      <div className={`app-shell ${isBlocking ? "app-shell-locked" : ""} ${sidebarCollapsed ? "app-shell-sidebar-collapsed" : ""}`}>
         <TopBar />
+        <ThreadTabs />
         <div className="app-body">
           <Sidebar />
           <main className="main-pane">
@@ -337,3 +393,42 @@ export default function App() {
 }
 
 export type { ThemeMode } from "./stores/theme";
+
+// ============================================================
+// v1.9.6：Thread tabs 栏（Codex App 风格：顶部多 thread）
+// ============================================================
+function ThreadTabs() {
+  const tabs = useOpenTabs();
+  const sessions = useSessionsStore((s) => s.sessions);
+  const currentId = useSessionsStore((s) => s.currentId);
+  const setCurrent = useSessionsStore((s) => s.setCurrent);
+  if (tabs.length === 0) return null;
+  return (
+    <div className="thread-tabs">
+      {tabs.map((id) => {
+        const sess = sessions.find((s) => s.id === id);
+        if (!sess) return null;
+        return (
+          <div
+            key={id}
+            className={`thread-tab ${id === currentId ? "active" : ""}`}
+            onClick={() => setCurrent(id)}
+            title={sess.title}
+          >
+            <span className="thread-tab-title">{sess.title}</span>
+            <button
+              className="thread-tab-close"
+              title="关闭 tab"
+              onClick={(e) => {
+                e.stopPropagation();
+                closeTab(id);
+              }}
+            >
+              ×
+            </button>
+          </div>
+        );
+      })}
+    </div>
+  );
+}

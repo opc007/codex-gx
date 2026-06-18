@@ -135,6 +135,7 @@ pub fn run() {
         .manage::<background_tauri::BackgroundState>(background_tauri::build_state())
         .manage::<desktop_perm_tauri::PermListState>(desktop_perm_tauri::build_state())
         .manage::<mobile_tauri::MobileState>(mobile_tauri::build_state())
+        .manage::<mobile_tauri::MobileHttpServerState>(mobile_tauri::build_http_state())
         .manage::<pocket_tauri::PocketState>(pocket_tauri::build_state())
         .manage::<pocket_tauri::PocketServerState>(pocket_tauri::build_server_state())
         .setup(|app| {
@@ -264,6 +265,14 @@ pub fn run() {
             mobile_tauri::mobile_list_devices,               // v1.9.1 5.30 Mobile
             mobile_tauri::mobile_verify,                     // v1.9.1 5.30 Mobile
             mobile_tauri::mobile_call,                       // v1.9.1 5.30 Mobile
+            mobile_tauri::mobile_server_start,                 // v1.9.5 5.30 Mobile HTTP
+            mobile_tauri::mobile_server_stop,                  // v1.9.5 5.30 Mobile HTTP
+            mobile_tauri::mobile_server_status,                // v1.9.5 5.30 Mobile HTTP
+            mobile_tauri::mobile_server_devices,               // v1.9.5 5.30 Mobile HTTP
+            mobile_tauri::mobile_server_notifications,         // v1.9.5 5.30 Mobile HTTP
+            mobile_tauri::mobile_server_commands,              // v1.9.5 5.30 Mobile HTTP
+            mobile_tauri::mobile_full_status,                  // v1.9.5 5.30 Mobile HTTP
+            mobile_tauri::mobile_qr_payload,                   // v1.9.5 5.30 Mobile QR
             pocket_tauri::pocket_list_sources,                // v1.9.2 5.29 Pocket
             pocket_tauri::pocket_list_pairings,               // v1.9.2 5.29 Pocket
             pocket_tauri::pocket_add_pairing,                 // v1.9.2 5.29 Pocket

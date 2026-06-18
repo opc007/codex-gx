@@ -10,6 +10,7 @@ import { buildChatHistory } from "../lib/chatHistory";
 import { loadProviders, type ProviderInfo } from "../lib/providers";
 import { useCurrentWorkspace } from "../stores/workspace";
 import { StageTimeline, type Stage } from "./StageTimeline";
+import { BUILTIN_NAME_SET, searchSlashCommands, type SlashCommand } from "../lib/slashCommands";
 
 type Props = {
   sessionId: string | null;
@@ -187,11 +188,14 @@ export function Composer({ sessionId }: Props) {
       e.preventDefault();
       void onSend();
     }
-    if (e.key === "Tab" && text.startsWith("/")) {
+    if (e.key === "Tab" && (text.startsWith("/") || text.startsWith("$") || text.startsWith("@"))) {
       e.preventDefault();
-      const candidates = ["/help", "/status", "/clear", "/theme", "/model", "/usage", "/approval"];
-      const match = candidates.find((c) => c.startsWith(text));
-      if (match) setText(match);
+      const trigger = text[0];
+      const list = searchSlashCommands(text, dynamicSkills, []);
+      const target = list.find((c) => c.name.toLowerCase().startsWith(text.slice(1).toLowerCase()));
+      if (target) {
+        setText(trigger === "$" ? "$" + target.name + " " : trigger === "@" ? "@" + target.name + " " : "/" + target.template);
+      }
     }
   };
 
@@ -269,6 +273,62 @@ export function Composer({ sessionId }: Props) {
 
     // 1. 处理 slash 命令
     const trimmed = text.trim();
+
+    // 1.0 v1.9.6：$ 显式调用 skill（Codex App 风格）
+    if (trimmed.startsWith("$") && !trimmed.startsWith("$$")) {
+      const m = trimmed.match(/^\$(\S+)\s*([\s\S]*)$/);
+      if (m) {
+        const name = m[1];
+        const arg = m[2];
+        try {
+          const r = await invoke<string>("run_skill", { name, arg });
+          appendMessage(sessionId, {
+            id: crypto.randomUUID(),
+            role: "assistant",
+            text: `💲 $${name}\n\n${r}`,
+            createdAt: Date.now(),
+          });
+        } catch (e) {
+          appendMessage(sessionId, {
+            id: crypto.randomUUID(),
+            role: "assistant",
+            text: `❌ $${name} 失败：${e}`,
+            createdAt: Date.now(),
+          });
+        }
+        setText("");
+        return;
+      }
+    }
+
+    // 1.0b v1.9.6：@ 引用（实验性 — 当前仅把 @xxx 视作 skill 引用）
+    if (trimmed.startsWith("@") && !trimmed.startsWith("@@")) {
+      const m = trimmed.match(/^@(\S+)\s*([\s\S]*)$/);
+      if (m) {
+        const name = m[1];
+        const arg = m[2];
+        appendMessage(sessionId, {
+          id: crypto.randomUUID(),
+          role: "assistant",
+          text: `📎 @${name}（实验性：v1.9.7 计划支持文件/插件/技能补全）\n\n当前按 skill 调用。`,
+          createdAt: Date.now(),
+        });
+        try {
+          const r = await invoke<string>("run_skill", { name, arg });
+          appendMessage(sessionId, {
+            id: crypto.randomUUID(),
+            role: "assistant",
+            text: r,
+            createdAt: Date.now(),
+          });
+        } catch {
+          /* keep the explainer */
+        }
+        setText("");
+        return;
+      }
+    }
+
     if (trimmed === "/clear") {
       setMessages(sessionId, []);
       setText("");
@@ -1349,6 +1409,49 @@ M3 / Claude / GPT 会自动调用：
       return;
     }
 
+    // v1.9.5: /mobile server (HTTP server + tunnel + devices)
+    if (trimmed === "/mobile server" || trimmed.startsWith("/mobile server ")) {
+      const arg = trimmed.slice(13).trim();
+      try {
+        if (arg === "" || arg === "start") {
+          const enable_tunnel = true;
+          const info = await invoke<{ status: string; bind: string; port: number; tunnelStatus: string; publicUrl: string | null; requestsHandled: number }>("mobile_server_start", { args: { port: 8788, enableTunnel: enable_tunnel, bind: "0.0.0.0" } });
+          const qr = await invoke<string>("mobile_qr_payload", { token: "see-mobile-status", publicUrl: info.publicUrl });
+          appendMessage(sessionId, { id: crypto.randomUUID(), role: "assistant", createdAt: Date.now(), text: `🟢 Mobile HTTP server 已启动：\n\n  bind:        ${info.bind}:${info.port}\n  tunnel:      ${info.tunnelStatus}\n  public URL:  ${info.publicUrl ?? "—"}\n  handled:     ${info.requestsHandled}\n\nQR 内容 (base64): \n  ${qr.slice(0, 80)}${qr.length > 80 ? "..." : ""}\n\n测试：\n  curl http://${info.bind}:${info.port}/health\n  curl -X POST http://${info.bind}:${info.port}/send \\\n    -H 'Authorization: Bearer <token>' \\\n    -H 'Content-Type: application/json' \\\n    -d '{"device_id":"dev1","command":"ping","payload":{}}'\n\n查看 token：/mobile status` });
+        } else if (arg === "stop") {
+          const info = await invoke<{ status: string; bind: string; port: number }>("mobile_server_stop");
+          appendMessage(sessionId, { id: crypto.randomUUID(), role: "assistant", createdAt: Date.now(), text: `🔴 Mobile HTTP server 已停止 (was on ${info.bind}:${info.port})` });
+        } else if (arg === "status") {
+          const info = await invoke<{ status: string; bind: string; port: number; tunnelStatus: string; publicUrl: string | null; requestsHandled: number; lastRequestAt: number | null; lastError: string | null; devices: Array<{ deviceId: string; lastSeen: number; pendingCommands: number; status: string }>; pendingCommands: number }>("mobile_server_status");
+          const devs = await invoke<Array<{ deviceId: string; lastSeen: number; pendingCommands: number; status: string }>>("mobile_server_devices");
+          const notifs = await invoke<Array<{ timestamp: number; level: string; message: string; deviceId: string | null }>>("mobile_server_notifications");
+          const cmds = await invoke<Array<{ id: string; deviceId: string; command: string; timestamp: number; status: string }>>("mobile_server_commands");
+          const devTxt = devs.length === 0 ? "  (无)" : devs.map((d) => `  ${d.status === "online" ? "🟢" : "⚫"} ${d.deviceId}  pending=${d.pendingCommands}  last=${new Date(d.lastSeen * 1000).toLocaleTimeString()}`).join("\n");
+          const notifTxt = notifs.length === 0 ? "  (无)" : notifs.slice(-5).map((n) => `  [${n.level}] ${n.message}`).join("\n");
+          const cmdTxt = cmds.length === 0 ? "  (无)" : cmds.slice(-5).map((c) => `  ${c.status === "queued" ? "🟡" : "✅"} ${c.id} → ${c.deviceId} ${c.command}`).join("\n");
+          appendMessage(sessionId, { id: crypto.randomUUID(), role: "assistant", createdAt: Date.now(), text: `📱 Mobile HTTP Server 状态：\n\n  status:        ${info.status}\n  bind:          ${info.bind}:${info.port}\n  tunnel:        ${info.tunnelStatus}\n  public URL:    ${info.publicUrl ?? "—"}\n  handled:       ${info.requestsHandled}\n  pending cmds:  ${info.pendingCommands}\n  last req:      ${info.lastRequestAt ? new Date(info.lastRequestAt * 1000).toLocaleString() : "—"}\n  last err:      ${info.lastError ?? "—"}\n\n设备 (${devs.length})：\n${devTxt}\n\n命令队列 (${cmds.length})：\n${cmdTxt}\n\n最近通知 (${notifs.length})：\n${notifTxt}` });
+        } else if (arg.startsWith("start ")) {
+          const port = parseInt(arg.slice(6).trim(), 10) || 8788;
+          const info = await invoke<{ status: string; bind: string; port: number; tunnelStatus: string; publicUrl: string | null }>("mobile_server_start", { args: { port, enableTunnel: true, bind: "0.0.0.0" } });
+          appendMessage(sessionId, { id: crypto.randomUUID(), role: "assistant", createdAt: Date.now(), text: `🟢 Server 启动：${info.bind ?? "0.0.0.0"}:${info.port}\n  tunnel=${info.tunnelStatus} url=${info.publicUrl ?? "—"}` });
+        } else if (arg === "devices") {
+          const devs = await invoke<Array<{ deviceId: string; lastSeen: number; pendingCommands: number; status: string }>>("mobile_server_devices");
+          const txt = devs.length === 0 ? "(无设备)" : devs.map((d) => `  ${d.status === "online" ? "🟢" : "⚫"} **${d.deviceId}**\n    status: ${d.status}\n    pending: ${d.pendingCommands}\n    last seen: ${new Date(d.lastSeen * 1000).toLocaleString()}`).join("\n\n");
+          appendMessage(sessionId, { id: crypto.randomUUID(), role: "assistant", createdAt: Date.now(), text: `📱 配对设备 (${devs.length})：\n\n${txt}` });
+        } else if (arg === "qr") {
+          const tok = await invoke<{ token: string }>("mobile_get_token");
+          const info = await invoke<{ publicUrl: string | null }>("mobile_server_status");
+          const qr = await invoke<string>("mobile_qr_payload", { token: tok.token, publicUrl: info.publicUrl });
+          appendMessage(sessionId, { id: crypto.randomUUID(), role: "assistant", createdAt: Date.now(), text: `📱 QR Payload (base64)：\n\n  \`${qr}\`\n\n解码：agentshell://mobile?token=...&url=${info.publicUrl ?? ""}\n（用任何 QR 生成器渲染）` });
+        } else {
+          appendMessage(sessionId, { id: crypto.randomUUID(), role: "assistant", createdAt: Date.now(), text: "❌ 用法: /mobile server start [port] | stop | status | devices | qr" });
+        }
+      } catch (e) {
+        appendMessage(sessionId, { id: crypto.randomUUID(), role: "assistant", createdAt: Date.now(), text: `❌ /mobile server 失败: ${e}` });
+      }
+      return;
+    }
+
     // v1.9.4: /vision (多模态：图像/OCR/标注)
     if (trimmed === "/vision" || trimmed.startsWith("/vision ")) {
       const arg = trimmed.slice(7).trim();
@@ -1857,24 +1960,8 @@ M3 / Claude / GPT 会自动调用：
       if (m) {
         const name = m[1];
         const arg = m[2];
-        // 检查是否已知命令（避免误调用）
-        const known = new Set([
-          "help", "status", "approval", "plan", "route", "remember", "memories", "recall", "forget", "skills",
-          "usage", "ide", "diff", "review",
-          // v1.8
-          "ps", "stop", "bg", "background", "fork", "side", "voice",
-          // v1.9
-          "screenshot", "ss", "coord", "perm",
-          // v1.9.1
-          "mobile",
-          // v1.9.2
-          "pocket",
-          // v1.9.4
-          "vision",
-          // v1.9.6
-          "image", "video",
-        ]);
-        if (!known.has(name)) {
+        // 检查是否已知命令（避免误调用）— 从集中注册表读
+        if (!BUILTIN_NAME_SET.has(name)) {
           try {
             const r = await invoke<string>("run_skill", { name, arg });
             appendMessage(sessionId, {
@@ -2277,33 +2364,63 @@ ${diff.diff.slice(0, 5000)}${diff.truncated ? "\n... [truncated, view full in gi
     });
   }
 
-  const slashMenu = text.startsWith("/") && (
+  // v1.9.6：动态 slash menu（Codex App 风格：built-in + skills + plugins 分组）
+  const [dynamicSkills, setDynamicSkills] = useState<Array<{ name: string; description: string }>>([]);
+
+  // 拉取用户自定义 skills（best-effort，失败忽略）
+  useEffect(() => {
+    let alive = true;
+    invoke<Array<{ name: string; description: string }>>("list_skills")
+      .then((list) => {
+        if (alive) setDynamicSkills(list);
+      })
+      .catch(() => {
+        /* ignore */
+      });
+    return () => {
+      alive = false;
+    };
+  }, []);
+
+  const allMatches = searchSlashCommands(text, dynamicSkills, []);
+  const grouped: Record<string, SlashCommand[]> = {};
+  for (const c of allMatches) {
+    (grouped[c.group] ??= []).push(c);
+  }
+
+  const slashMenu = (text.startsWith("/") || text.startsWith("$") || text.startsWith("@")) && (
     <div className="slash-menu">
-      {[
-        { cmd: "/help", desc: "命令帮助" },
-        { cmd: "/status", desc: "会话状态" },
-        { cmd: "/clear", desc: "清空当前会话" },
-        { cmd: "/theme dark", desc: "切到夜晚主题" },
-        { cmd: "/theme light", desc: "切到白天主题" },
-        { cmd: "/theme system", desc: "跟随系统主题" },
-        { cmd: "/usage", desc: "Token 用量 + 费用估算" },
-        { cmd: "/ide", desc: "IDE context（Cursor/VSCode）" },
-        { cmd: "/diff", desc: "Git diff vs HEAD" },
-        { cmd: "/review", desc: "AI 评审当前 diff" },
-      ]
-        .filter((c) => c.cmd.startsWith(text) || text === "/")
-        .slice(0, 6)
-        .map((c) => (
-          <div
-            key={c.cmd}
-            className="slash-item"
-            onClick={() => {
-              setText(c.cmd);
-              textareaRef.current?.focus();
-            }}
-          >
-            <code>{c.cmd}</code>
-            <span>{c.desc}</span>
+      {text.startsWith("$") && (
+        <div className="slash-menu-hint">
+          $ 显式调用 skill
+        </div>
+      )}
+      {text.startsWith("@") && (
+        <div className="slash-menu-hint">
+          @ 引用文件 / 插件 / skill（v1.9.6 实验性：暂列当前项目组内置项）
+        </div>
+      )}
+      {Object.keys(grouped).length === 0 && (
+        <div className="slash-menu-empty">没有匹配的命令</div>
+      )}
+      {Object.entries(grouped)
+        .slice(0, 6) // 最多 6 个分组
+        .map(([group, items]) => (
+          <div key={group} className="slash-menu-group">
+            <div className="slash-menu-group-label">{group}</div>
+            {items.slice(0, 5).map((c) => (
+              <div
+                key={c.name}
+                className="slash-item"
+                onClick={() => {
+                  setText("/" + c.template);
+                  textareaRef.current?.focus();
+                }}
+              >
+                <code>/{c.name}</code>
+                <span>{c.description}</span>
+              </div>
+            ))}
           </div>
         ))}
     </div>
@@ -2415,6 +2532,8 @@ ${diff.diff.slice(0, 5000)}${diff.truncated ? "\n... [truncated, view full in gi
                 ))}
               </select>
             </label>
+            {/* v1.9.6: Codex 风格 context 指示器 */}
+            <ContextIndicator model={model} />
             <button
               className="composer-icon-btn"
               title="添加图片"
@@ -2494,5 +2613,49 @@ ${diff.diff.slice(0, 5000)}${diff.truncated ? "\n... [truncated, view full in gi
         </div>
       </div>
     </div>
+  );
+}
+
+// v1.9.6：Context 指示器（Codex App 风格：当前会话已用 token / 模型上下文窗口）
+const MODEL_CONTEXT_WINDOW: Record<string, number> = {
+  "MiniMax-M3": 1_000_000,
+  "minimax-m3": 1_000_000,
+  "claude-opus-4-8": 200_000,
+  "claude-sonnet-4-5": 200_000,
+  "deepseek-v4-pro": 128_000,
+  "deepseek-chat": 64_000,
+  "deepseek-reasoner": 64_000,
+  "gpt-5.5": 128_000,
+  "gpt-5": 128_000,
+  "gpt-5-mini": 128_000,
+};
+
+function ContextIndicator({ model }: { model: string }) {
+  const sessionId = useSessionsStore((s) => s.currentId);
+  const messages = useSessionsStore((s) => (sessionId ? s.messages[sessionId] : undefined)) ?? [];
+  const totalTokens = messages.reduce(
+    (sum, m) => sum + (m.inputTokens || 0) + (m.outputTokens || 0),
+    0,
+  );
+  const window = MODEL_CONTEXT_WINDOW[model] ?? 128_000;
+  const pct = Math.min(100, (totalTokens / window) * 100);
+  const color =
+    pct < 50 ? "var(--success, #1a7f37)" : pct < 80 ? "var(--warn, #d4a72c)" : "var(--error, #cf222e)";
+  return (
+    <span
+      className="composer-context-indicator"
+      title={`本会话已用 ${totalTokens.toLocaleString()} / ${window.toLocaleString()} tokens (${pct.toFixed(1)}%)`}
+    >
+      <span
+        className="context-bar"
+        style={{ ["--pct" as any]: `${pct}%`, ["--bar-color" as any]: color }}
+      />
+      <span className="context-text">
+        {totalTokens >= 1000 ? `${(totalTokens / 1000).toFixed(1)}k` : totalTokens}
+        <span className="context-pct" style={{ color }}>
+          {" "}{pct.toFixed(0)}%
+        </span>
+      </span>
+    </span>
   );
 }
