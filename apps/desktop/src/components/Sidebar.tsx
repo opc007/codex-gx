@@ -1,7 +1,7 @@
 import { useSessionsStore, type SessionMeta, type PersistedMessage } from "../stores/sessions";
 import { exportSession, type ExportFormat } from "../lib/export";
 import { useState, useEffect, useRef } from "react";
-import { closeTab } from "../stores/tabs";
+import { closeTab, openTab } from "../stores/tabs";
 import {
   useCurrentWorkspaceId,
   useWorkspaceList,
@@ -227,6 +227,7 @@ export function Sidebar() {
   const handleNewChat = () => {
     const s = create();
     setCurrent(s.id);
+    openTab(s.id);
   };
 
   const handleDelete = (id: string, title: string) => {
@@ -331,7 +332,10 @@ export function Sidebar() {
           <div
             key={s.id}
             className={`session-item ${s.id === currentId ? "active" : ""}`}
-            onClick={() => setCurrent(s.id)}
+            onClick={() => {
+              setCurrent(s.id);
+              openTab(s.id);
+            }}
             title={s.title}
           >
             <span className="session-item-icon">

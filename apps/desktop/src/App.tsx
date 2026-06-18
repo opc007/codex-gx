@@ -12,7 +12,7 @@ import PlanDialog, {
 import { useThemeMode, type ThemeMode } from "./stores/theme";
 import { useSessionsStore, getSessionsState } from "./stores/sessions";
 import { getCurrentWorkspaceId } from "./stores/workspace";
-import { useOpenTabs, openTab, closeTab, closeOtherTabs } from "./stores/tabs";
+import { useOpenTabs, closeTab } from "./stores/tabs";
 import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
 

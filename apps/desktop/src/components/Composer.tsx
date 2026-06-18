@@ -54,6 +54,9 @@ export function Composer({ sessionId }: Props) {
 
   const [text, setText] = useState("");
   const [busy, setBusy] = useState(false);
+  // v1.9.6：排队提示（busy 时 Enter 入队）
+  const [queuedPrompts, setQueuedPrompts] = useState<string[]>([]);
+  const queuedPromptsRef = useRef<string[]>([]);
   const [model, setModel] = useState(() => {
     try {
       return localStorage.getItem(MODEL_STORAGE_KEY) || "MiniMax-M3";
@@ -269,10 +272,23 @@ export function Composer({ sessionId }: Props) {
   };
 
   const onSend = async () => {
-    if (!sessionId || !text.trim() || busy) return;
+    if (!sessionId || !text.trim()) return;
 
     // 1. 处理 slash 命令
     const trimmed = text.trim();
+
+    // v1.9.6：busy 时按 Enter → 排队下轮（Codex App 风格）
+    if (busy) {
+      setQueuedPrompts((p) => {
+        queuedPromptsRef.current = [...p, trimmed];
+        return queuedPromptsRef.current;
+      });
+      setText("");
+      return;
+    }
+    // 如果是从队列自动触发的，text 已经被 setText(next) 填好了
+    // 正常路径：清空
+    // setText("") 将在底部成功处
 
     // 1.0 v1.9.6：$ 显式调用 skill（Codex App 风格）
     if (trimmed.startsWith("$") && !trimmed.startsWith("$$")) {
@@ -2344,6 +2360,17 @@ ${diff.diff.slice(0, 5000)}${diff.truncated ? "\n... [truncated, view full in gi
       }
     } finally {
       setBusy(false);
+      // v1.9.6：turn 完成后，自动从队列取下一条发出去（Codex App 风格 Tab/Enter 排队）
+      const next = queuedPromptsRef.current[0];
+      if (next) {
+        queuedPromptsRef.current = queuedPromptsRef.current.slice(1);
+        setQueuedPrompts(queuedPromptsRef.current);
+        setText(next);
+        // 异步触发下一轮（避免在 setState 阶段直接调 onSend）
+        setTimeout(() => {
+          void onSend();
+        }, 50);
+      }
     }
   };
 
@@ -2534,6 +2561,24 @@ ${diff.diff.slice(0, 5000)}${diff.truncated ? "\n... [truncated, view full in gi
             </label>
             {/* v1.9.6: Codex 风格 context 指示器 */}
             <ContextIndicator model={model} />
+            {queuedPrompts.length > 0 && (
+              <span
+                className="composer-queue-chip"
+                title={`${queuedPrompts.length} 条排队中，模型空闲后自动发送`}
+              >
+                📋 {queuedPrompts.length} 排队
+                <button
+                  className="queue-chip-clear"
+                  onClick={() => {
+                    setQueuedPrompts([]);
+                    queuedPromptsRef.current = [];
+                  }}
+                  title="清空队列"
+                >
+                  ×
+                </button>
+              </span>
+            )}
             <button
               className="composer-icon-btn"
               title="添加图片"
