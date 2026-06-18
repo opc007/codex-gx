@@ -34,9 +34,9 @@ tauri-plugin-dialog = "2"
 tauri-plugin-store = "2"
 tauri-plugin-os = "2"
 agent-core = { path = "../../../crates/agent-core" }
+context = { path = "../../../crates/context" }
 provider = { path = "../../../crates/provider" }
 patch = { path = "../../../crates/patch" }
-context = { path = "../../../crates/context" }
 mcp = { path = "../../../crates/mcp" }
 anyhow.workspace = true
 sandbox = { path = "../../../crates/sandbox" }

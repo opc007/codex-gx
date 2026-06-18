@@ -5,13 +5,14 @@ import { Composer } from "./components/Composer";
 import { TopBar } from "./components/TopBar";
 import { ActivationGate } from "./components/ActivationGate";
 import { ApprovalDialog, type ApprovalRequest } from "./components/ApprovalDialog";
+// v1.9.7：审批模式改在 Composer 内联（与 Codex 一致），逐次弹窗保留作为 fallback（后台在收到 approval_request 时如已开启「完全访问权限」则自动 respond_approval true）。
 import PlanDialog, {
   type PlanRequest,
   respondPlan,
 } from "./components/PlanDialog";
 import { useThemeMode, type ThemeMode, reapplyTheme } from "./stores/theme";
 import { useSessionsStore, getSessionsState } from "./stores/sessions";
-import { getCurrentWorkspaceId, useCurrentWorkspaceId } from "./stores/workspace";
+import { getCurrentWorkspaceId, useCurrentWorkspaceId, switchWorkspace } from "./stores/workspace";
 import { useOpenTabs, closeTab, openTab, syncTabsForWorkspace } from "./stores/tabs";
 import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
@@ -138,6 +139,22 @@ export default function App() {
   const [planReq, setPlanReq] = useState<PlanRequest | null>(null);
   // v1.9.x：未激活 / 试用已结束 → 显示激活门
   const [licenseStatus, setLicenseStatus] = useState<LicenseStatusKind | null>(null);
+
+  // v1.9.7：审批模式（Codex 风格：Composer 内联切换）
+  const [requireApproval, setRequireApproval] = useState<boolean>(() => {
+    try {
+      return localStorage.getItem("codex_gx_require_approval") !== "false";
+    } catch {
+      return true;
+    }
+  });
+  useEffect(() => {
+    try {
+      localStorage.setItem("codex_gx_require_approval", requireApproval ? "1" : "false");
+    } catch {
+      /* ignore */
+    }
+  }, [requireApproval]);
 
   useEffect(() => {
     const refreshLicense = async () => {
@@ -272,6 +289,15 @@ export default function App() {
     }>("agent:event", (event) => {
       const p = event.payload;
       if (p.kind === "approval_request" && p.toolCall) {
+        // v1.9.7：若用户已切到「完全访问权限」（requireApproval=false），
+        // 自动 respond_approval(true)，不再弹任何对话框（Codex 风格）
+        if (!requireApproval) {
+          void invoke("respond_approval", {
+            sessionId: p.toolCall.sessionId,
+            approve: true,
+          });
+          return;
+        }
         setApprovalReq({
           sessionId: p.toolCall.sessionId,
           toolCallId: p.toolCall.id,
@@ -374,7 +400,18 @@ export default function App() {
             <Sidebar />
             <main className="main-pane">
               <Thread sessionId={currentId} />
-              <Composer sessionId={currentId} />
+              <Composer
+                sessionId={currentId}
+                requireApproval={requireApproval}
+                setRequireApproval={setRequireApproval}
+                onRequestNewProject={() =>
+                  window.dispatchEvent(new CustomEvent("codex_gx:open-ws-dialog", { detail: "create" }))
+                }
+                onPickNoProject={() => {
+                  // 「不使用项目」= 切到 default，并清掉 folderPath 占位（default 本身无 folderPath）
+                  switchWorkspace("default");
+                }}
+              />
             </main>
           </div>
         </div>

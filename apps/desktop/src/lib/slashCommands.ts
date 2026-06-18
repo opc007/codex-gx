@@ -86,6 +86,8 @@ export const BUILTIN_SLASH_COMMANDS: SlashCommand[] = [
   { name: "perm", description: "Desktop 权限列表 / 协议", group: "背景", template: "perm" },
   // v1.9.8
   { name: "mcp", description: "Model Context Protocol — 外部 MCP server", group: "插件", template: "mcp" },
+  // v1.9.9
+  { name: "compact", description: "上下文压缩 / 摘要（长会话 token 优化）", group: "会话", template: "compact" },
 ];
 
 /** 索引：name + aliases → command */

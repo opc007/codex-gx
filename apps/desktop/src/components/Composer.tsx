@@ -8,12 +8,16 @@ import { redactSimple, detectTypes } from "../lib/redact";
 import { sendChatStream } from "../lib/chat";
 import { buildChatHistory } from "../lib/chatHistory";
 import { loadProviders, type ProviderInfo } from "../lib/providers";
-import { useCurrentWorkspace, getCurrentWorkspace } from "../stores/workspace";
+import { useCurrentWorkspace, getCurrentWorkspace, useWorkspaceList, switchWorkspace } from "../stores/workspace";
 import { StageTimeline, type Stage } from "./StageTimeline";
 import { BUILTIN_NAME_SET, searchSlashCommands, type SlashCommand } from "../lib/slashCommands";
 
 type Props = {
   sessionId: string | null;
+  requireApproval: boolean;
+  setRequireApproval: (v: boolean) => void;
+  onRequestNewProject?: () => void;
+  onPickNoProject?: () => void;
 };
 
 type ApiKeysStatus = {
@@ -40,7 +44,7 @@ function providerConfigured(id: string, status: ApiKeysStatus): boolean {
   }
 }
 
-export function Composer({ sessionId }: Props) {
+export function Composer({ sessionId, requireApproval, setRequireApproval, onRequestNewProject, onPickNoProject }: Props) {
   const t = useTranslation();
   const currentWs = useCurrentWorkspace();
   const projectContext = {
@@ -64,7 +68,8 @@ export function Composer({ sessionId }: Props) {
       return "MiniMax-M3";
     }
   });
-  const [requireApproval, setRequireApproval] = useState(true);
+  const [approvalMenuOpen, setApprovalMenuOpen] = useState(false);
+  const approvalMenuRef = useRef<HTMLDivElement | null>(null);
   // v0.9：附件图片
   const [attachedImages, setAttachedImages] = useState<Array<{ path: string; mime: string; name: string }>>([]);
   // v0.6：plan mode
@@ -1486,6 +1491,44 @@ M3 / Claude / GPT 会自动调用：
       return;
     }
 
+    // v1.9.9: /compact (上下文压缩 / 摘要)
+    if (trimmed === "/compact" || trimmed.startsWith("/compact ")) {
+      const arg = trimmed.slice(8).trim();
+      try {
+        const msgs = (getSessionsState().messages[sessionId] ?? []).map((m: any) => ({
+          role: m.role === "assistant" ? "assistant" : m.role === "system" ? "system" : "user",
+          text: m.text ?? "",
+        }));
+        if (msgs.length === 0) {
+          appendMessage(sessionId, { id: crypto.randomUUID(), role: "assistant", createdAt: Date.now(), text: "ℹ️ 当前会话为空，没有可压缩的消息" });
+          return;
+        }
+
+        if (arg === "" || arg === "status") {
+          const tokens = await invoke<number>("compress_estimate", { args: { messages: msgs } });
+          const should = await invoke<boolean>("compress_should_trigger", { args: { messages: msgs } });
+          const status = await invoke<{ version: string; defaultConfig: { maxTokens: number; triggerThreshold: number; keepTail: number; keepHead: number; useSummary: boolean } }>("compress_status");
+          appendMessage(sessionId, { id: crypto.randomUUID(), role: "assistant", createdAt: Date.now(), text: `🗜️ **Compression Status** (${status.version})\n\n  messages:      ${msgs.length}\n  est. tokens:   ${tokens}\n  threshold:     ${status.defaultConfig.triggerThreshold}\n  trigger:       ${should ? "✅ 建议压缩" : "⏸️  未达阈值"}\n  config:        max=${status.defaultConfig.maxTokens}, head=${status.defaultConfig.keepHead}, tail=${status.defaultConfig.keepTail}, summary=${status.defaultConfig.useSummary}\n\n命令：/compact summary | facts | run [--no-summary]` });
+        } else if (arg === "summary") {
+          const summary = await invoke<{ text: string; originalTokens: number; summaryTokens: number; strategy: string }>("compress_summarize", { args: { messages: msgs } });
+          appendMessage(sessionId, { id: crypto.randomUUID(), role: "assistant", createdAt: Date.now(), text: `📝 **Context Summary** (strategy: ${summary.strategy})\n\n  original:  ${summary.originalTokens} tokens\n  summary:   ${summary.summaryTokens} tokens\n  ratio:     ${(summary.summaryTokens as number * 100 / Math.max(1, summary.originalTokens)).toFixed(0)}%\n\n${summary.text}` });
+        } else if (arg === "facts") {
+          const facts = await invoke<{ filesMentioned: string[]; commandsRun: string[]; errorsSeen: string[]; toolCalls: string[]; decisionsMade: string[]; totalMessages: number; totalUserMsgs: number; totalAssistantMsgs: number }>("compress_facts", { args: { messages: msgs } });
+          appendMessage(sessionId, { id: crypto.randomUUID(), role: "assistant", createdAt: Date.now(), text: `🔍 **Key Facts** (${facts.totalMessages} msgs)\n\n**Files** (${facts.filesMentioned.length}):\n${facts.filesMentioned.length === 0 ? "  (无)" : facts.filesMentioned.slice(0, 10).map((f: string) => `  - \`${f}\``).join("\n")}\n\n**Commands** (${facts.commandsRun.length}):\n${facts.commandsRun.length === 0 ? "  (无)" : facts.commandsRun.slice(0, 10).map((c: string) => `  - \`${c}\``).join("\n")}\n\n**Tool calls** (${facts.toolCalls.length}):\n${facts.toolCalls.slice(0, 15).join(", ") || "(无)"}\n\n**Errors** (${facts.errorsSeen.length}):\n${facts.errorsSeen.length === 0 ? "  (无)" : facts.errorsSeen.slice(0, 5).map((e: string) => `  - ${e}`).join("\n")}\n\n**Decisions** (${facts.decisionsMade.length}):\n${facts.decisionsMade.length === 0 ? "  (无)" : facts.decisionsMade.slice(0, 5).map((d: string) => `  - ${d}`).join("\n")}` });
+        } else if (arg === "run" || arg.startsWith("run")) {
+          const noSummary = arg.includes("--no-summary");
+          const config = noSummary ? { useSummary: false } : null;
+          const result = await invoke<{ summary: { text: string; originalTokens: number; summaryTokens: number; strategy: string }; compressedCount: number; originalCount: number }>("compress_run", { args: { messages: msgs, config } });
+          appendMessage(sessionId, { id: crypto.randomUUID(), role: "assistant", createdAt: Date.now(), text: `✅ **Compressed**\n\n  original:  ${result.originalCount} msgs / ${result.summary.originalTokens} tokens\n  compressed: ${result.compressedCount} msgs\n  summary:   ${result.summary.summaryTokens} tokens\n  strategy:  ${result.summary.strategy}\n\n${result.summary.text}\n\n⚠️ 注：v1.9.9 仅生成摘要（演示）；实际压缩应用需后端支持。` });
+        } else {
+          appendMessage(sessionId, { id: crypto.randomUUID(), role: "assistant", createdAt: Date.now(), text: "❌ 用法: /compact status | summary | facts | run [--no-summary]" });
+        }
+      } catch (e) {
+        appendMessage(sessionId, { id: crypto.randomUUID(), role: "assistant", createdAt: Date.now(), text: `❌ /compact 失败: ${e}` });
+      }
+      return;
+    }
+
     // v1.9.8: /mcp (Model Context Protocol)
     if (trimmed === "/mcp" || trimmed.startsWith("/mcp ")) {
       const arg = trimmed.slice(4).trim();
@@ -2595,6 +2638,29 @@ ${diff.diff.slice(0, 5000)}${diff.truncated ? "\n... [truncated, view full in gi
     </div>
   );
 
+  useEffect(() => {
+    if (!approvalMenuOpen) return;
+    const onDoc = (e: MouseEvent) => {
+      if (!approvalMenuRef.current) return;
+      if (!approvalMenuRef.current.contains(e.target as Node)) setApprovalMenuOpen(false);
+    };
+    const onEsc = (e: KeyboardEvent) => {
+      if (e.key === "Escape") setApprovalMenuOpen(false);
+    };
+    document.addEventListener("mousedown", onDoc);
+    document.addEventListener("keydown", onEsc);
+    return () => {
+      document.removeEventListener("mousedown", onDoc);
+      document.removeEventListener("keydown", onEsc);
+    };
+  }, [approvalMenuOpen]);
+
+  useEffect(() => {
+    const close = () => setApprovalMenuOpen(false);
+    window.addEventListener("open-api-keys", close);
+    return () => window.removeEventListener("open-api-keys", close);
+  }, []);
+
   return (
     <div className="composer">
       <div className="composer-inner">
@@ -2701,6 +2767,75 @@ ${diff.diff.slice(0, 5000)}${diff.truncated ? "\n... [truncated, view full in gi
                 ))}
               </select>
             </label>
+            <div className="composer-approval-wrap" ref={approvalMenuRef}>
+              <button
+                type="button"
+                className={`composer-approval-chip ${requireApproval ? "mode-request" : "mode-auto"}`}
+                onClick={() => setApprovalMenuOpen((v) => !v)}
+                title="点击切换 Codex 操作批准模式"
+              >
+                <span className="composer-approval-icon">
+                  {requireApproval ? "🔐" : "⏱"}
+                </span>
+                <span className="composer-approval-label">
+                  {requireApproval ? "请求批准" : "完全访问权限"}
+                </span>
+                <span className="composer-approval-caret">▾</span>
+              </button>
+              {approvalMenuOpen && (
+                <div className="composer-approval-menu" role="menu">
+                  <div className="composer-approval-menu-header">
+                    <span>应如何批准 Codex 操作？</span>
+                    <a className="composer-approval-help" href="#" onClick={(e) => e.preventDefault()}>了解更多</a>
+                  </div>
+                  <button
+                    type="button"
+                    className={`composer-approval-option ${requireApproval ? "active" : ""}`}
+                    onClick={() => {
+                      setRequireApproval(true);
+                      setApprovalMenuOpen(false);
+                    }}
+                  >
+                    <span className="composer-approval-option-icon">⏱</span>
+                    <span className="composer-approval-option-body">
+                      <span className="composer-approval-option-title">请求批准</span>
+                      <span className="composer-approval-option-desc">编辑外部文件和使用互联网始终询问</span>
+                    </span>
+                    {requireApproval && <span className="composer-approval-check">✓</span>}
+                  </button>
+                  <button
+                    type="button"
+                    className="composer-approval-option"
+                    onClick={() => {
+                      // 留作"风险操作请求批准"——当前实现等同 request 模式
+                      setRequireApproval(true);
+                      setApprovalMenuOpen(false);
+                    }}
+                  >
+                    <span className="composer-approval-option-icon">⏱</span>
+                    <span className="composer-approval-option-body">
+                      <span className="composer-approval-option-title">替我批准</span>
+                      <span className="composer-approval-option-desc">仅对检测到的风险操作请求批准</span>
+                    </span>
+                  </button>
+                  <button
+                    type="button"
+                    className={`composer-approval-option ${!requireApproval ? "active" : ""}`}
+                    onClick={() => {
+                      setRequireApproval(false);
+                      setApprovalMenuOpen(false);
+                    }}
+                  >
+                    <span className="composer-approval-option-icon">⏱</span>
+                    <span className="composer-approval-option-body">
+                      <span className="composer-approval-option-title">完全访问权限</span>
+                      <span className="composer-approval-option-desc">可不受限制地访问互联网和您电脑上的任何文件</span>
+                    </span>
+                    {!requireApproval && <span className="composer-approval-check">✓</span>}
+                  </button>
+                </div>
+              )}
+            </div>
             {/* v1.9.6: Codex 风格 context 指示器 */}
             <ContextIndicator model={model} />
             {queuedPrompts.length > 0 && (
@@ -2826,10 +2961,13 @@ ${diff.diff.slice(0, 5000)}${diff.truncated ? "\n... [truncated, view full in gi
           </div>
         </div>
         <div className="composer-context-pills">
-          <span className="context-pill" title={currentWs.folderPath || currentWs.name}>
-            <span className="context-pill-icon">📁</span>
-            {currentWs.name === "Default" ? "默认项目" : currentWs.name}
-          </span>
+          <ProjectPicker
+            currentWsId={currentWs.id}
+            currentName={currentWs.name === "Default" ? "默认项目" : currentWs.name}
+            currentFolderPath={currentWs.folderPath}
+            onCreateNew={() => onRequestNewProject?.()}
+            onPickNone={() => onPickNoProject?.()}
+          />
           <span className="context-pill" title="本地桌面模式">
             <span className="context-pill-icon">💻</span>
             本地模式
@@ -2894,5 +3032,143 @@ function ContextIndicator({ model }: { model: string }) {
         </span>
       </span>
     </span>
+  );
+}
+
+// v1.9.7: ProjectPicker（Codex 风格：Composer 输入框下方的项目下拉）
+function ProjectPicker({
+  currentWsId,
+  currentName,
+  currentFolderPath,
+  onCreateNew,
+  onPickNone,
+}: {
+  currentWsId: string;
+  currentName: string;
+  currentFolderPath?: string;
+  onCreateNew?: () => void;
+  onPickNone?: () => void;
+}) {
+  const workspaces = useWorkspaceList();
+  const [open, setOpen] = useState(false);
+  const [query, setQuery] = useState("");
+  const wrapRef = useRef<HTMLDivElement | null>(null);
+  const inputRef = useRef<HTMLInputElement | null>(null);
+
+  useEffect(() => {
+    if (!open) return;
+    setQuery("");
+    setTimeout(() => inputRef.current?.focus(), 0);
+    const onDoc = (e: MouseEvent) => {
+      if (!wrapRef.current) return;
+      if (!wrapRef.current.contains(e.target as Node)) setOpen(false);
+    };
+    const onEsc = (e: KeyboardEvent) => {
+      if (e.key === "Escape") setOpen(false);
+    };
+    document.addEventListener("mousedown", onDoc);
+    document.addEventListener("keydown", onEsc);
+    return () => {
+      document.removeEventListener("mousedown", onDoc);
+      document.removeEventListener("keydown", onEsc);
+    };
+  }, [open]);
+
+  const filtered = useMemo(() => {
+    const q = query.trim().toLowerCase();
+    if (!q) return workspaces;
+    return workspaces.filter(
+      (w) =>
+        w.name.toLowerCase().includes(q) ||
+        (w.folderPath ?? "").toLowerCase().includes(q),
+    );
+  }, [workspaces, query]);
+
+  const isNoProject = currentWsId === "default" && currentName === "默认项目";
+
+  return (
+    <div className="project-picker" ref={wrapRef}>
+      <button
+        type="button"
+        className="project-picker-chip"
+        onClick={() => setOpen((v) => !v)}
+        title={currentFolderPath || currentName}
+      >
+        <span className="project-picker-chip-icon">📁</span>
+        <span className="project-picker-chip-label">
+          {isNoProject ? "进入项目工作" : currentName}
+        </span>
+        <span className="project-picker-chip-caret">▾</span>
+      </button>
+      {open && (
+        <div className="project-picker-menu" role="menu">
+          <div className="project-picker-search">
+            <span className="project-picker-search-icon">🔍</span>
+            <input
+              ref={inputRef}
+              type="text"
+              placeholder="搜索项目"
+              value={query}
+              onChange={(e) => setQuery(e.target.value)}
+            />
+          </div>
+          <div className="project-picker-list">
+            {filtered.length === 0 && (
+              <div className="project-picker-empty">没有匹配的项目</div>
+            )}
+            {filtered.map((w) => {
+              const active = w.id === currentWsId;
+              return (
+                <button
+                  key={w.id}
+                  type="button"
+                  className={`project-picker-item ${active ? "active" : ""}`}
+                  onClick={() => {
+                    switchWorkspace(w.id);
+                    setOpen(false);
+                  }}
+                >
+                  <span
+                    className="project-picker-folder"
+                    style={{ background: w.color || "#8b5cf6" }}
+                    aria-hidden="true"
+                  />
+                  <span className="project-picker-name">{w.name}</span>
+                  {active && <span className="project-picker-check">✓</span>}
+                </button>
+              );
+            })}
+            <div className="project-picker-divider" />
+            <button
+              type="button"
+              className="project-picker-item action"
+              onClick={() => {
+                setOpen(false);
+                onCreateNew?.();
+              }}
+            >
+              <span className="project-picker-folder muted" aria-hidden="true">
+                <span style={{ fontSize: 12, lineHeight: 1 }}>＋</span>
+              </span>
+              <span className="project-picker-name">添加新项目</span>
+              <span className="project-picker-arrow">›</span>
+            </button>
+            <button
+              type="button"
+              className="project-picker-item action"
+              onClick={() => {
+                setOpen(false);
+                onPickNone?.();
+              }}
+            >
+              <span className="project-picker-folder muted" aria-hidden="true">
+                <span style={{ fontSize: 11, lineHeight: 1 }}>📁</span>
+              </span>
+              <span className="project-picker-name">不使用项目</span>
+            </button>
+          </div>
+        </div>
+      )}
+    </div>
   );
 }

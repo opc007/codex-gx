@@ -99,6 +99,17 @@ export function Sidebar() {
   const [pluginOpen, setPluginOpen] = useState(false);
   const [updateInfo, setUpdateInfo] = useState<UpdateInfo | null>(null);
 
+  useEffect(() => {
+    const handler = (e: Event) => {
+      const mode = (e as CustomEvent<string>).detail;
+      if (mode === "create" || mode === "edit") {
+        setWsDialogMode(mode);
+      }
+    };
+    window.addEventListener("codex_gx:open-ws-dialog", handler);
+    return () => window.removeEventListener("codex_gx:open-ws-dialog", handler);
+  }, []);
+
   const refreshEncrypted = async () => {
     try {
       const list = await invoke<{ session_id: string }[]>("vault_list_encrypted");

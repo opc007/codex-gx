@@ -84,6 +84,7 @@ Codex gx 在每次发起 LLM 请求前，会把这份文件前 ~600 字符读入
 }
 mod mcp_tool;
 mod mcp_tauri;
+mod context_compress_tauri;
 mod media_tauri;
 mod p2p_tauri;
 mod queue_tauri;
@@ -367,6 +368,12 @@ pub fn run() {
             mcp_tauri::mcp_remove_backend,                    // v1.9.8 5.34 MCP
             mcp_tauri::mcp_http_call,                         // v1.9.8 5.34 MCP
             mcp_tauri::mcp_builtin_tools,                     // v1.9.8 5.34 MCP
+            context_compress_tauri::compress_status,           // v1.9.9 5.33 Context Compression
+            context_compress_tauri::compress_estimate,        // v1.9.9 5.33 Context Compression
+            context_compress_tauri::compress_summarize,       // v1.9.9 5.33 Context Compression
+            context_compress_tauri::compress_run,             // v1.9.9 5.33 Context Compression
+            context_compress_tauri::compress_facts,           // v1.9.9 5.33 Context Compression
+            context_compress_tauri::compress_should_trigger,  // v1.9.9 5.33 Context Compression
             reload_mcp,
             route_model_cmd,                               // v0.7
             remember_memory,                               // v0.8

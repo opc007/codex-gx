@@ -15,6 +15,8 @@ pub mod agents_md;
 pub mod compact;
 pub mod file_search;
 pub mod ide;
+pub mod summary;
 
 pub use agents_md::{load_agents_md, AgentsMd};
 pub use compact::{compact_messages, estimate_tokens, CompactionStrategy};
+pub use summary::{compress, summarize, CompressionConfig, KeyFacts, Summary};
