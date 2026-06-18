@@ -84,6 +84,8 @@ export const BUILTIN_SLASH_COMMANDS: SlashCommand[] = [
   { name: "mobile", description: "Mobile Remote 管理", group: "背景", template: "mobile" },
   { name: "plugin", description: "打开插件热加载面板", group: "背景", template: "plugin" },
   { name: "perm", description: "Desktop 权限列表 / 协议", group: "背景", template: "perm" },
+  // v1.9.8
+  { name: "mcp", description: "Model Context Protocol — 外部 MCP server", group: "插件", template: "mcp" },
 ];
 
 /** 索引：name + aliases → command */
@@ -96,44 +98,55 @@ for (const c of BUILTIN_SLASH_COMMANDS) {
 /** 已知命令名集合（用于"是否走动态 skill"判断） */
 export const BUILTIN_NAME_SET: Set<string> = new Set(BUILTIN_INDEX.keys());
 
-/** 模糊匹配 — 支持名称和模板前缀 */
+/** 模糊匹配 — 支持 / $ @ 三种触发器 */
 export function searchSlashCommands(
   query: string,
   dynamicSkills: Array<{ name: string; description: string }> = [],
   dynamicPlugins: Array<{ name: string; description: string }> = [],
+  opts?: { skillsOnly?: boolean },
 ): SlashCommand[] {
-  const q = query.replace(/^\//, "").toLowerCase().trim();
+  const trigger = query[0];
+  const q = query.replace(/^[/\$@]/, "").toLowerCase().trim();
   const list: SlashCommand[] = [];
-  for (const c of BUILTIN_SLASH_COMMANDS) {
-    if (c.hidden && q !== c.name) continue;
-    if (!q) {
-      list.push(c);
-    } else if (
-      c.name.toLowerCase().startsWith(q) ||
-      c.template.toLowerCase().startsWith(q) ||
-      (c.aliases ?? []).some((a) => a.toLowerCase().startsWith(q))
-    ) {
-      list.push(c);
+
+  if (!opts?.skillsOnly) {
+    for (const c of BUILTIN_SLASH_COMMANDS) {
+      if (c.hidden && q !== c.name) continue;
+      if (!q) {
+        list.push(c);
+      } else if (
+        c.name.toLowerCase().startsWith(q) ||
+        c.template.toLowerCase().startsWith(q) ||
+        (c.aliases ?? []).some((a) => a.toLowerCase().startsWith(q))
+      ) {
+        list.push(c);
+      }
     }
   }
-  for (const s of dynamicSkills) {
-    if (!q || s.name.toLowerCase().includes(q)) {
-      list.push({
-        name: s.name,
-        description: s.description || "(user skill)",
-        group: "插件",
-        template: s.name + " ",
-      });
+
+  if (trigger === "/" || trigger === "$" || trigger === "@") {
+    for (const s of dynamicSkills) {
+      if (!q || s.name.toLowerCase().includes(q)) {
+        list.push({
+          name: s.name,
+          description: s.description || "(user skill)",
+          group: "插件",
+          template: s.name + " ",
+        });
+      }
     }
   }
-  for (const p of dynamicPlugins) {
-    if (!q || p.name.toLowerCase().includes(q)) {
-      list.push({
-        name: p.name,
-        description: p.description || "(plugin)",
-        group: "插件",
-        template: p.name + " ",
-      });
+
+  if (!opts?.skillsOnly) {
+    for (const p of dynamicPlugins) {
+      if (!q || p.name.toLowerCase().includes(q)) {
+        list.push({
+          name: p.name,
+          description: p.description || "(plugin)",
+          group: "插件",
+          template: p.name + " ",
+        });
+      }
     }
   }
   return list;

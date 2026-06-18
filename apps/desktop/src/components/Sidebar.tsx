@@ -1,17 +1,13 @@
-import { useSessionsStore, type SessionMeta, type PersistedMessage } from "../stores/sessions";
-import { exportSession, type ExportFormat } from "../lib/export";
+import { useSessionsStore, type PersistedMessage } from "../stores/sessions";
 import { useState, useEffect, useRef } from "react";
-import { closeTab, openTab } from "../stores/tabs";
 import {
-  useCurrentWorkspaceId,
-  useWorkspaceList,
   useCurrentWorkspace,
-  switchWorkspace,
   createWorkspace,
-  deleteWorkspace,
   renameWorkspace,
+  deleteWorkspace,
   type WorkspaceMeta,
 } from "../stores/workspace";
+import { ProjectTree } from "./ProjectTree";
 import { useCurrentUser, useUserList, switchUser } from "../stores/users";
 import { invoke } from "@tauri-apps/api/core";
 import { open as openDialog } from "@tauri-apps/plugin-dialog";
@@ -62,26 +58,14 @@ type LicenseSummary = {
 };
 
 export function Sidebar() {
-  const allSessions = useSessionsStore((s) => s.sessions);
-  const currentId = useSessionsStore((s) => s.currentId);
-  const setCurrent = useSessionsStore((s) => s.setCurrent);
-  const create = useSessionsStore((s) => s.create);
-  const remove = useSessionsStore((s) => s.remove);
   const messages = useSessionsStore((s) => s.messages);
   const setMessages = useSessionsStore((s) => s.setMessages);
-  const currentWorkspace = useCurrentWorkspaceId();
-  const workspaces = useWorkspaceList();
   const currentWs = useCurrentWorkspace();
-  const [wsMenuOpen, setWsMenuOpen] = useState(false);
   const [wsDialogMode, setWsDialogMode] = useState<null | "create" | "edit">(null);
-  const wsMenuRef = useRef<HTMLDivElement>(null);
   const currentUser = useCurrentUser();
   const userList = useUserList();
   const [themeMode, setThemeMode] = useThemeMode();
   const { locale, setLocale } = useLocaleSwitcher();
-
-  const [exportOpen, setExportOpen] = useState<string | null>(null);
-  const [redactOnExport, setRedactOnExport] = useState(true);
 
   const [encryptedSet, setEncryptedSet] = useState<Set<string>>(new Set());
   const [vaultPrompt, setVaultPrompt] = useState<null | {
@@ -114,11 +98,6 @@ export function Sidebar() {
   const [syncOpen, setSyncOpen] = useState(false);
   const [pluginOpen, setPluginOpen] = useState(false);
   const [updateInfo, setUpdateInfo] = useState<UpdateInfo | null>(null);
-
-  const sessions = allSessions
-    .filter((sess) => (sess.workspaceId ?? "default") === currentWorkspace)
-    .slice()
-    .sort((a, b) => b.updatedAt - a.updatedAt);
 
   const refreshEncrypted = async () => {
     try {
@@ -190,52 +169,6 @@ export function Sidebar() {
     };
   }, [userMenuOpen]);
 
-  // workspace selector outside click + esc
-  useEffect(() => {
-    if (!wsMenuOpen) return;
-    const onDoc = (e: MouseEvent) => {
-      if (!wsMenuRef.current) return;
-      if (!wsMenuRef.current.contains(e.target as Node)) setWsMenuOpen(false);
-    };
-    const onEsc = (e: KeyboardEvent) => {
-      if (e.key === "Escape") setWsMenuOpen(false);
-    };
-    document.addEventListener("mousedown", onDoc);
-    document.addEventListener("keydown", onEsc);
-    return () => {
-      document.removeEventListener("mousedown", onDoc);
-      document.removeEventListener("keydown", onEsc);
-    };
-  }, [wsMenuOpen]);
-
-  const doExport = async (s: SessionMeta, fmt: ExportFormat) => {
-    const msgs: PersistedMessage[] = messages[s.id] ?? [];
-    try {
-      const path = await exportSession(s, msgs, fmt, undefined, redactOnExport);
-      setExportOpen(null);
-      alert(
-        `已导出到：${path}\n${redactOnExport ? "（已脱敏敏感数据）" : "（未脱敏）"}`,
-      );
-    } catch (e: any) {
-      if (!String(e).includes("已取消")) {
-        alert(`导出失败：${e}`);
-      }
-      setExportOpen(null);
-    }
-  };
-
-  const handleNewChat = () => {
-    const s = create();
-    setCurrent(s.id);
-    openTab(s.id);
-  };
-
-  const handleDelete = (id: string, title: string) => {
-    if (!confirm(`删除会话 "${title}"？`)) return;
-    remove(id);
-    closeTab(id);
-  };
-
   const cycleTheme = () => {
     const next: ThemeMode =
       themeMode === "light" ? "dark" : themeMode === "dark" ? "system" : "light";
@@ -256,158 +189,16 @@ export function Sidebar() {
 
   return (
     <aside className="sidebar">
-      <div className="sidebar-top">
-        <div className="sidebar-ws-selector" ref={wsMenuRef}>
-          <button
-            className="sidebar-ws-current"
-            onClick={() => setWsMenuOpen((v) => !v)}
-            title={currentWs.folderPath ? `项目组: ${currentWs.folderPath}` : "未绑定项目组"}
-          >
-            <span className="ws-color-dot" style={{ background: currentWs.color || "#8e8ea0" }} />
-            <span className="ws-name">{currentWs.name}</span>
-            <span className="ws-caret">▾</span>
-          </button>
-          {wsMenuOpen && (
-            <div className="ws-menu">
-              <div className="ws-menu-section-label">选择项目组</div>
-              {workspaces.map((w) => (
-                <button
-                  key={w.id}
-                  className={`ws-menu-item ${w.id === currentWorkspace ? "active" : ""}`}
-                  onClick={() => {
-                    switchWorkspace(w.id);
-                    setWsMenuOpen(false);
-                  }}
-                  title={w.folderPath || "未绑定文件夹"}
-                >
-                  <span className="ws-color-dot" style={{ background: w.color || "#8e8ea0" }} />
-                  <span className="ws-menu-name">{w.name}</span>
-                  {w.folderPath && <span className="ws-menu-folder">📁</span>}
-                </button>
-              ))}
-              <div className="ws-menu-divider" />
-              <button
-                className="ws-menu-action"
-                onClick={() => {
-                  setWsMenuOpen(false);
-                  setWsDialogMode("create");
-                }}
-              >
-                ＋ 新建项目组
-              </button>
-              {currentWorkspace !== "default" && (
-                <button
-                  className="ws-menu-action"
-                  onClick={() => {
-                    setWsMenuOpen(false);
-                    setWsDialogMode("edit");
-                  }}
-                >
-                  ✎ 编辑当前项目组
-                </button>
-              )}
-            </div>
-          )}
-        </div>
-        <button
-          className="sidebar-new-chat"
-          onClick={handleNewChat}
-          title="新建会话"
-        >
-          <span className="new-chat-icon">＋</span>
-          <span>New chat</span>
-        </button>
-      </div>
-
-      <div className="sidebar-section-label">
-        <span>Chats</span>
-        <span className="count">{sessions.length}</span>
-      </div>
-
-      <div className="sidebar-list">
-        {sessions.length === 0 && (
-          <div className="sidebar-empty">还没有会话</div>
-        )}
-        {sessions.map((s) => (
-          <div
-            key={s.id}
-            className={`session-item ${s.id === currentId ? "active" : ""}`}
-            onClick={() => {
-              setCurrent(s.id);
-              openTab(s.id);
-            }}
-            title={s.title}
-          >
-            <span className="session-item-icon">
-              {s.side ? "💬" : s.parentId ? "↳" : "💭"}
-            </span>
-            <span className="session-item-title">{s.title}</span>
-            <div className="session-item-actions">
-              {encryptedSet.has(s.id) ? (
-                <button
-                  className="session-vault-locked"
-                  title="已加密 — 点击解锁"
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    setVaultError(null);
-                    setVaultPassword("");
-                    setVaultPrompt({ sessionId: s.id, mode: "decrypt" });
-                  }}
-                >
-                  🔒
-                </button>
-              ) : (
-                <button
-                  className="session-vault"
-                  title="标记为敏感（加密）"
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    setVaultError(null);
-                    setVaultPassword("");
-                    setVaultPrompt({ sessionId: s.id, mode: "encrypt" });
-                  }}
-                >
-                  🔓
-                </button>
-              )}
-              <button
-                className="session-export"
-                onClick={(e) => {
-                  e.stopPropagation();
-                  setExportOpen(exportOpen === s.id ? null : s.id);
-                }}
-                title="导出"
-              >
-                ⬇
-              </button>
-              <button
-                className="session-del"
-                onClick={(e) => {
-                  e.stopPropagation();
-                  handleDelete(s.id, s.title);
-                }}
-                title="删除"
-              >
-                ×
-              </button>
-            </div>
-            {exportOpen === s.id && (
-              <div className="export-menu" onClick={(e) => e.stopPropagation()}>
-                <label className="export-redact">
-                  <input
-                    type="checkbox"
-                    checked={redactOnExport}
-                    onChange={(e) => setRedactOnExport(e.target.checked)}
-                  />
-                  脱敏敏感数据
-                </label>
-                <button onClick={() => doExport(s, "markdown")}>📝 Markdown</button>
-                <button onClick={() => doExport(s, "html")}>🌐 HTML</button>
-                <button onClick={() => doExport(s, "json")}>📦 JSON</button>
-              </div>
-            )}
-          </div>
-        ))}
+      <div className="sidebar-list sidebar-list-full">
+        <ProjectTree
+          encryptedSet={encryptedSet}
+          onVaultPrompt={(p) => {
+            setVaultError(null);
+            setVaultPassword("");
+            setVaultPrompt(p);
+          }}
+          onNewProject={() => setWsDialogMode("create")}
+        />
       </div>
 
       <div className="sidebar-bottom" ref={userMenuRef}>
@@ -898,8 +689,7 @@ function WorkspaceDialog({
   mode: "create" | "edit";
   initial?: WorkspaceMeta;
   onClose: () => void;
-}) {
-  const [name, setName] = useState(initial?.name ?? "");
+}) {  const [name, setName] = useState(initial?.name ?? "");
   const [folderPath, setFolderPath] = useState(initial?.folderPath ?? "");
   const [description, setDescription] = useState(initial?.description ?? "");
   const [color, setColor] = useState(initial?.color ?? WS_COLORS[0]);

@@ -120,6 +120,8 @@ pub struct AgentRunner {
     pub app: AppHandle,
     pub session_id: String,
     pub provider: Arc<dyn Model>,
+    /// v1.9.7：本轮实际调用的 model id（与 provider 一致，显式传入 API）
+    pub active_model: String,
     pub tool_registry: Arc<Mutex<ToolRegistry>>,
     pub history: Vec<ChatMessage>,
     pub max_steps: usize,
@@ -157,10 +159,12 @@ impl AgentRunner {
         provider: Arc<dyn Model>,
         tool_registry: Arc<Mutex<ToolRegistry>>,
     ) -> Self {
+        let active_model = provider.info().id.clone();
         Self {
             app,
             session_id,
             provider,
+            active_model,
             tool_registry,
             history: Vec::new(),
             max_steps: 10,
@@ -174,6 +178,11 @@ impl AgentRunner {
 
     pub fn with_history(mut self, history: Vec<ChatMessage>) -> Self {
         self.history = history;
+        self
+    }
+
+    pub fn with_active_model(mut self, model: impl Into<String>) -> Self {
+        self.active_model = model.into();
         self
     }
 
@@ -252,7 +261,7 @@ impl AgentRunner {
             // 构建请求（含 tools schema）
             let req = {
                 let reg = self.tool_registry.lock().await;
-                let mut req = ChatRequest::new(self.provider.info().id.as_str())
+                let mut req = ChatRequest::new(&self.active_model)
                     .with_messages(self.history.clone())
                     .with_max_tokens(4096)
                     .with_reasoning_effort("high")
@@ -658,7 +667,7 @@ impl AgentRunner {
 
         // 不带 tools，让模型只输出计划文本
         let req = ChatRequest {
-            model: String::new(),
+            model: self.active_model.clone(),
             messages: self.history.clone(),
             tools: Vec::new(), // 关键：不提供 tools
             temperature: Some(0.4),

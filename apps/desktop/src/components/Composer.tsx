@@ -194,10 +194,17 @@ export function Composer({ sessionId }: Props) {
     if (e.key === "Tab" && (text.startsWith("/") || text.startsWith("$") || text.startsWith("@"))) {
       e.preventDefault();
       const trigger = text[0];
-      const list = searchSlashCommands(text, dynamicSkills, []);
+      const skillsOnly = trigger === "$" || trigger === "@";
+      const list = searchSlashCommands(text, dynamicSkills, [], { skillsOnly });
       const target = list.find((c) => c.name.toLowerCase().startsWith(text.slice(1).toLowerCase()));
       if (target) {
-        setText(trigger === "$" ? "$" + target.name + " " : trigger === "@" ? "@" + target.name + " " : "/" + target.template);
+        setText(
+          trigger === "$"
+            ? "$" + target.name + " "
+            : trigger === "@"
+              ? "@" + target.name + " "
+              : "/" + target.template,
+        );
       }
     }
   };
@@ -961,10 +968,19 @@ export function Composer({ sessionId }: Props) {
       setText("");
       return;
     }
-    if (trimmed.startsWith("/theme ")) {
-      const mode = trimmed.slice(7).trim();
-      const event = new CustomEvent("agentshell:theme", { detail: mode });
-      window.dispatchEvent(event);
+    if (trimmed.startsWith("/theme ") || trimmed === "/theme") {
+      const mode = trimmed.slice(6).trim();
+      if (!mode || !["light", "dark", "system"].includes(mode)) {
+        appendMessage(sessionId, {
+          id: crypto.randomUUID(),
+          role: "assistant",
+          text: "用法：/theme light | dark | system",
+          createdAt: Date.now(),
+        });
+        setText("");
+        return;
+      }
+      window.dispatchEvent(new CustomEvent("agentshell:theme", { detail: mode }));
       setText("");
       return;
     }
@@ -1470,6 +1486,68 @@ M3 / Claude / GPT 会自动调用：
       return;
     }
 
+    // v1.9.8: /mcp (Model Context Protocol)
+    if (trimmed === "/mcp" || trimmed.startsWith("/mcp ")) {
+      const arg = trimmed.slice(4).trim();
+      try {
+        if (arg === "" || arg === "info") {
+          const info = await invoke<any>("mcp_protocol_info");
+          const cfg = await invoke<{ backends: Array<{ name: string; kind: string; endpoint: string; enabled: boolean }>; sessionId: string | null }>("mcp_get_config");
+          const cp = await invoke<string>("mcp_config_path");
+          const tools = await invoke<Array<{ name: string; description: string; inputSchema: any }>>("mcp_builtin_tools");
+          const toolTxt = tools.map((t) => `  - **${t.name}** — ${t.description}`).join("\n");
+          const backendTxt = cfg.backends.length === 0 ? "  (无)" : cfg.backends.map((b) => `  ${b.enabled ? "🟢" : "🔴"} **${b.name}** (${b.kind})\n    ${b.endpoint}`).join("\n");
+          appendMessage(sessionId, { id: crypto.randomUUID(), role: "assistant", createdAt: Date.now(), text: `🔌 MCP 状态：\n\n**Protocol**: ${info.protocolVersion}  ${info.name} ${info.version}\n**Transports**: ${info.transports.join(", ")}\n**Methods**: ${info.methods.join(", ")}\n\n**Backends** (${cfg.backends.length})：\n${backendTxt}\n\n**Builtin Tools** (${tools.length})：\n${toolTxt}\n\n配置：\`${cp}\`\n\n命令：/mcp add <name> <stdio|http> <endpoint> | list | remove <name> | call <url> <method> [params]` });
+        } else if (arg === "list") {
+          const cfg = await invoke<{ backends: Array<{ name: string; kind: string; endpoint: string; enabled: boolean }> }>("mcp_get_config");
+          if (cfg.backends.length === 0) { appendMessage(sessionId, { id: crypto.randomUUID(), role: "assistant", createdAt: Date.now(), text: "🔌 还没注册任何 MCP backend" }); return; }
+          const txt = cfg.backends.map((b) => `  ${b.enabled ? "🟢" : "🔴"} **${b.name}**\n    kind:     ${b.kind}\n    endpoint: ${b.endpoint}`).join("\n\n");
+          appendMessage(sessionId, { id: crypto.randomUUID(), role: "assistant", createdAt: Date.now(), text: `🔌 MCP Backends (${cfg.backends.length})：\n\n${txt}` });
+        } else if (arg.startsWith("add ")) {
+          // add <name> <stdio|http> <endpoint>
+          const m = arg.slice(4).match(/^(\S+)\s+(stdio|http)\s+(\S+)$/);
+          if (!m) { appendMessage(sessionId, { id: crypto.randomUUID(), role: "assistant", createdAt: Date.now(), text: "❌ 用法: /mcp add <name> <stdio|http> <endpoint>" }); return; }
+          const e = await invoke<{ name: string; kind: string; endpoint: string }>("mcp_add_backend", { args: { name: m[1], kind: m[2], endpoint: m[3] } });
+          appendMessage(sessionId, { id: crypto.randomUUID(), role: "assistant", createdAt: Date.now(), text: `✅ MCP backend 注册：\n\n  name:     ${e.name}\n  kind:     ${e.kind}\n  endpoint: ${e.endpoint}` });
+        } else if (arg.startsWith("remove ")) {
+          const name = arg.slice(7).trim();
+          const ok = await invoke<boolean>("mcp_remove_backend", { name });
+          appendMessage(sessionId, { id: crypto.randomUUID(), role: "assistant", createdAt: Date.now(), text: ok ? `🗑️ MCP backend 已删除：${name}` : `❌ 没找到：${name}` });
+        } else if (arg.startsWith("call ")) {
+          // call <url> <method> [json_params]
+          const parts = arg.slice(5).split(/\s+/);
+          if (parts.length < 2) { appendMessage(sessionId, { id: crypto.randomUUID(), role: "assistant", createdAt: Date.now(), text: "❌ 用法: /mcp call <url> <method> [json_params]" }); return; }
+          const url = parts[0];
+          const method = parts[1];
+          const paramsStr = parts.slice(2).join(" ");
+          let params = {};
+          if (paramsStr) {
+            try { params = JSON.parse(paramsStr); }
+            catch { appendMessage(sessionId, { id: crypto.randomUUID(), role: "assistant", createdAt: Date.now(), text: "❌ params 必须是合法 JSON" }); return; }
+          }
+          try {
+            const r = await invoke<{ jsonrpc: string; id: string; result: any; error: any }>("mcp_http_call", { args: { url, method, params } });
+            if (r.error) {
+              appendMessage(sessionId, { id: crypto.randomUUID(), role: "assistant", createdAt: Date.now(), text: `❌ MCP error:\n\n  code:    ${r.error.code}\n  message: ${r.error.message}` });
+            } else {
+              appendMessage(sessionId, { id: crypto.randomUUID(), role: "assistant", createdAt: Date.now(), text: `✅ MCP ${method} 响应：\n\n\`\`\`json\n${JSON.stringify(r.result, null, 2).slice(0, 800)}\n\`\`\`` });
+            }
+          } catch (e) {
+            appendMessage(sessionId, { id: crypto.randomUUID(), role: "assistant", createdAt: Date.now(), text: `❌ MCP 调用失败: ${e}` });
+          }
+        } else if (arg === "tools") {
+          const tools = await invoke<Array<{ name: string; description: string }>>("mcp_builtin_tools");
+          const txt = tools.map((t) => `  - **${t.name}** — ${t.description}`).join("\n");
+          appendMessage(sessionId, { id: crypto.randomUUID(), role: "assistant", createdAt: Date.now(), text: `🔌 Builtin Tools (${tools.length})：\n\n${txt}` });
+        } else {
+          appendMessage(sessionId, { id: crypto.randomUUID(), role: "assistant", createdAt: Date.now(), text: "❌ 用法: /mcp info | list | add <name> <stdio\|http> <endpoint> | remove <name> | call <url> <method> [json] | tools" });
+        }
+      } catch (e) {
+        appendMessage(sessionId, { id: crypto.randomUUID(), role: "assistant", createdAt: Date.now(), text: `❌ /mcp 失败: ${e}` });
+      }
+      return;
+    }
+
     // v1.9.5: /mobile server (HTTP server + tunnel + devices)
     if (trimmed === "/mobile server" || trimmed.startsWith("/mobile server ")) {
       const arg = trimmed.slice(13).trim();
@@ -1909,7 +1987,14 @@ M3 / Claude / GPT 会自动调用：
     if (trimmed === "/screenshot" || trimmed === "/ss" || trimmed.startsWith("/screenshot ")) {
       try {
         const meta = await invoke<{ width: number; height: number; scale: number; displayId: string; dataBase64: string; format: string }>("screen_screenshot");
-        appendMessage(sessionId, { id: crypto.randomUUID(), role: "assistant", createdAt: Date.now(), text: `📸 截图完成：\n\n  display: ${meta.displayId}\n  size:    ${meta.width}×${meta.height} (scale ${meta.scale})\n  format:  ${meta.format}\n  data:    ${meta.dataBase64.length} bytes (base64)\n\n（小提示：M3 用 0.0-1.0 相对坐标，不是 0-1000 整数。AgentShell 已自动换算）` });
+        const dataUrl = `data:image/${meta.format || "png"};base64,${meta.dataBase64}`;
+        appendMessage(sessionId, {
+          id: crypto.randomUUID(),
+          role: "assistant",
+          createdAt: Date.now(),
+          text: `📸 截图完成 · ${meta.displayId} · ${meta.width}×${meta.height} (scale ${meta.scale})`,
+          imageUrl: dataUrl,
+        });
       } catch (e) {
         appendMessage(sessionId, { id: crypto.randomUUID(), role: "assistant", createdAt: Date.now(), text: `❌ /screenshot 失败: ${e}` });
       }
@@ -2236,6 +2321,7 @@ ${diff.diff.slice(0, 5000)}${diff.truncated ? "\n... [truncated, view full in gi
     setText("");
     setBusy(true);
 
+    const modelForThisTurn = model;
     const assistantId = crypto.randomUUID();
     let acc = "";
     let accThinking = "";
@@ -2382,6 +2468,7 @@ ${diff.diff.slice(0, 5000)}${diff.truncated ? "\n... [truncated, view full in gi
           inputTokens,
           outputTokens,
           toolCalls: [...toolCalls],
+          modelUsed: modelForThisTurn,
         });
       }
     } catch (e) {
@@ -2454,42 +2541,52 @@ ${diff.diff.slice(0, 5000)}${diff.truncated ? "\n... [truncated, view full in gi
     };
   }, []);
 
-  const allMatches = searchSlashCommands(text, dynamicSkills, []);
+  const menuTrigger = text.startsWith("$") ? "$" : text.startsWith("@") ? "@" : text.startsWith("/") ? "/" : null;
+  const skillsOnly = menuTrigger === "$" || menuTrigger === "@";
+  const allMatches = searchSlashCommands(text, dynamicSkills, [], { skillsOnly });
   const grouped: Record<string, SlashCommand[]> = {};
   for (const c of allMatches) {
     (grouped[c.group] ??= []).push(c);
   }
 
-  const slashMenu = (text.startsWith("/") || text.startsWith("$") || text.startsWith("@")) && (
+  const slashMenu = menuTrigger && (
     <div className="slash-menu">
-      {text.startsWith("$") && (
+      {menuTrigger === "$" && (
         <div className="slash-menu-hint">
           $ 显式调用 skill
         </div>
       )}
-      {text.startsWith("@") && (
+      {menuTrigger === "@" && (
         <div className="slash-menu-hint">
-          @ 引用文件 / 插件 / skill（v1.9.6 实验性：暂列当前项目组内置项）
+          @ 引用文件 / 插件 / skill（实验性）
         </div>
       )}
       {Object.keys(grouped).length === 0 && (
         <div className="slash-menu-empty">没有匹配的命令</div>
       )}
       {Object.entries(grouped)
-        .slice(0, 6) // 最多 6 个分组
+        .slice(0, 6)
         .map(([group, items]) => (
           <div key={group} className="slash-menu-group">
             <div className="slash-menu-group-label">{group}</div>
-            {items.slice(0, 5).map((c) => (
+            {items.slice(0, 8).map((c) => (
               <div
                 key={c.name}
                 className="slash-item"
                 onClick={() => {
-                  setText("/" + c.template);
+                  const prefix = menuTrigger ?? "/";
+                  setText(
+                    prefix === "/"
+                      ? "/" + c.template
+                      : prefix + c.name + " ",
+                  );
                   textareaRef.current?.focus();
                 }}
               >
-                <code>/{c.name}</code>
+                <code>
+                  {menuTrigger}
+                  {c.name}
+                </code>
                 <span>{c.description}</span>
               </div>
             ))}
@@ -2656,34 +2753,25 @@ ${diff.diff.slice(0, 5000)}${diff.truncated ? "\n... [truncated, view full in gi
               className="composer-icon-btn"
               title="Appshots：截取主屏幕并附到当前会话"
               onClick={async () => {
-                if (busy) return;
+                if (busy || !sessionId) return;
                 try {
-                  const result = await invoke<string | { data?: string; path?: string }>(
-                    "screen_screenshot",
-                    { args: { display: "primary", return_base64: true } },
-                  );
-                  let dataUrl: string | null = null;
-                  let note = "Appshot of primary display";
-                  if (typeof result === "string") {
-                    dataUrl = result.startsWith("data:")
-                      ? result
-                      : `data:image/png;base64,${result}`;
-                  } else if (result?.data) {
-                    dataUrl = result.data.startsWith("data:")
-                      ? result.data
-                      : `data:image/png;base64,${result.data}`;
-                    if (result.path) note += ` (${result.path})`;
-                  }
-                  if (dataUrl && sessionId) {
-                    appendMessage(sessionId, {
-                      id: crypto.randomUUID(),
-                      role: "user",
-                      text: `📸 ${note}\n\n(data URL: ${dataUrl.slice(0, 60)}...)`,
-                      createdAt: Date.now(),
-                    });
-                  }
+                  const meta = await invoke<{
+                    width: number;
+                    height: number;
+                    displayId: string;
+                    dataBase64: string;
+                    format: string;
+                  }>("screen_screenshot");
+                  const dataUrl = `data:image/${meta.format || "png"};base64,${meta.dataBase64}`;
+                  appendMessage(sessionId, {
+                    id: crypto.randomUUID(),
+                    role: "user",
+                    text: `📸 Appshot · ${meta.displayId} · ${meta.width}×${meta.height}`,
+                    imageUrl: dataUrl,
+                    createdAt: Date.now(),
+                  });
                 } catch (e) {
-                  appendMessage(sessionId!, {
+                  appendMessage(sessionId, {
                     id: crypto.randomUUID(),
                     role: "assistant",
                     text: `❌ Appshots 失败：${e}`,
@@ -2736,6 +2824,22 @@ ${diff.diff.slice(0, 5000)}${diff.truncated ? "\n... [truncated, view full in gi
               </button>
             )}
           </div>
+        </div>
+        <div className="composer-context-pills">
+          <span className="context-pill" title={currentWs.folderPath || currentWs.name}>
+            <span className="context-pill-icon">📁</span>
+            {currentWs.name === "Default" ? "默认项目" : currentWs.name}
+          </span>
+          <span className="context-pill" title="本地桌面模式">
+            <span className="context-pill-icon">💻</span>
+            本地模式
+          </span>
+          {currentWs.folderPath && (
+            <span className="context-pill context-pill-path" title={currentWs.folderPath}>
+              <span className="context-pill-icon">📂</span>
+              {currentWs.folderPath.split("/").filter(Boolean).slice(-2).join("/")}
+            </span>
+          )}
         </div>
         <div className="composer-hint">
           {busy

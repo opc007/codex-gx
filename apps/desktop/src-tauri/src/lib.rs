@@ -83,6 +83,7 @@ Codex gx 在每次发起 LLM 请求前，会把这份文件前 ~600 字符读入
     Ok(format!("✅ AGENTS.md 已生成：{}", target.display()))
 }
 mod mcp_tool;
+mod mcp_tauri;
 mod media_tauri;
 mod p2p_tauri;
 mod queue_tauri;
@@ -196,6 +197,7 @@ pub fn run() {
         .manage::<mobile_tauri::MobileHttpServerState>(mobile_tauri::build_http_state())
         .manage::<pocket_tauri::PocketState>(pocket_tauri::build_state())
         .manage::<pocket_tauri::PocketServerState>(pocket_tauri::build_server_state())
+        .manage::<mcp_tauri::McpConfigState>(mcp_tauri::build_config())
         .setup(|app| {
             api_keys_tauri::apply_secrets_to_env();
             // v1.3：安装 panic hook
@@ -357,6 +359,14 @@ pub fn run() {
             get_git_diff,
             list_git_branches,
             list_mcp_servers,
+            mcp_tauri::mcp_protocol_info,                      // v1.9.8 5.34 MCP
+            mcp_tauri::mcp_get_config,                        // v1.9.8 5.34 MCP
+            mcp_tauri::mcp_config_path,                       // v1.9.8 5.34 MCP
+            mcp_tauri::mcp_list_backends,                     // v1.9.8 5.34 MCP
+            mcp_tauri::mcp_add_backend,                       // v1.9.8 5.34 MCP
+            mcp_tauri::mcp_remove_backend,                    // v1.9.8 5.34 MCP
+            mcp_tauri::mcp_http_call,                         // v1.9.8 5.34 MCP
+            mcp_tauri::mcp_builtin_tools,                     // v1.9.8 5.34 MCP
             reload_mcp,
             route_model_cmd,                               // v0.7
             remember_memory,                               // v0.8
@@ -557,6 +567,18 @@ async fn agent_run(app: AppHandle, req: AgentRunPayload) -> Result<String, Strin
         });
     }
 
+    // v1.9.7：注入本轮实际模型（切换模型后勿沿用历史中的旧自称）
+    let pinfo = provider_arc.info();
+    history.insert(
+        0,
+        ChatMessage::system(format!(
+            "[Codex gx 系统] 本轮 API 实际调用模型: **{}**（provider: {}）。\
+             用户问「你是什么模型 / 谁在回复」时，只回答该模型 ID，不要自称历史消息里的其他模型名。\
+             你是 Codex gx 桌面助手，由用户选定的第三方大模型驱动。",
+            model_name, pinfo.provider
+        )),
+    );
+
     let session_id = req.session_id.clone();
     let user_msg = req.message.clone();
     let require_approval = req.require_approval;
@@ -601,6 +623,7 @@ async fn agent_run(app: AppHandle, req: AgentRunPayload) -> Result<String, Strin
         let reg_arc: Arc<Mutex<ToolRegistry>> = Arc::clone(&reg_state);
         let mut runner =
             agent::AgentRunner::new(app_clone.clone(), session_id.clone(), provider_arc, reg_arc)
+                .with_active_model(model_name.clone())
                 .with_history(history)
                 .with_max_steps(10)
                 .with_require_approval(require_approval)

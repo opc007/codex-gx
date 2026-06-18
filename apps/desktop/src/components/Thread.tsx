@@ -2,6 +2,7 @@ import { useEffect, useRef } from "react";
 import { useSessionsStore, getSessionsState, type PersistedMessage } from "../stores/sessions";
 import { MessageBubble } from "./MessageBubble";
 import { useTranslation } from "../i18n";
+import { useCurrentWorkspace } from "../stores/workspace";
 
 const EMPTY_MESSAGES: PersistedMessage[] = [];
 
@@ -18,6 +19,7 @@ const SUGGESTIONS = [
 
 export function Thread({ sessionId }: Props) {
   const t = useTranslation();
+  const currentWs = useCurrentWorkspace();
   const create = useSessionsStore((s) => s.create);
   const scrollRef = useRef<HTMLDivElement>(null);
   const messages = useSessionsStore((s) =>
@@ -32,11 +34,13 @@ export function Thread({ sessionId }: Props) {
   }, [messages.length, sessionId]);
 
   if (!sessionId || !session) {
+    const projectName = currentWs.name === "Default" ? "此项目" : currentWs.name;
     return (
       <div className="thread" ref={scrollRef}>
         <div className="thread-empty">
-          <div className="thread-empty-logo">✦</div>
-          <h2>How can I help today?</h2>
+          <h2 className="thread-empty-heading">
+            我们应该在 {projectName} 中构建什么？
+          </h2>
           <p>我是 Codex gx — 你的 AI 编程 / 对话伙伴。</p>
           <div className="thread-empty-suggestions">
             {SUGGESTIONS.map((s, i) => (
@@ -47,12 +51,10 @@ export function Thread({ sessionId }: Props) {
                   const sess = create(t.newSession);
                   window.dispatchEvent(
                     new CustomEvent("agentshell:composer:fill", {
-                      detail: t.newSession,
+                      detail: s.text,
                     }),
                   );
-                  // bump currentId via setCurrent
-                  const s = getSessionsState();
-                  s.setCurrent(sess.id);
+                  getSessionsState().setCurrent(sess.id);
                 }}
               >
                 <span style={{ marginRight: 6 }}>{s.icon}</span>
@@ -69,8 +71,12 @@ export function Thread({ sessionId }: Props) {
     <div className="thread" ref={scrollRef}>
       <div className="thread-inner">
         {messages.length === 0 && (
-          <div className="thread-welcome">
-            <h3>{session.title}</h3>
+          <div className="thread-welcome thread-welcome-codex">
+            <h2>
+              我们应该在{" "}
+              {currentWs.name === "Default" ? "此项目" : currentWs.name}{" "}
+              中构建什么？
+            </h2>
             <p style={{ color: "var(--text-muted)" }}>{t.placeholder}</p>
           </div>
         )}

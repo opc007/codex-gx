@@ -213,6 +213,22 @@ let state: ThemeStore = {
   mode: loaded.mode,
   setMode: (m) => {
     state = { ...state, mode: m };
+    // 切换 light/dark 时同步默认主题 id，避免 activeThemeId 与 mode 脱节
+    if (m === "light" && state.activeThemeId === "default-dark") {
+      state = { ...state, activeThemeId: "default-light" };
+      try {
+        localStorage.setItem(STORAGE_THEME_ID, "default-light");
+      } catch {
+        /* ignore */
+      }
+    } else if (m === "dark" && state.activeThemeId === "default-light") {
+      state = { ...state, activeThemeId: "default-dark" };
+      try {
+        localStorage.setItem(STORAGE_THEME_ID, "default-dark");
+      } catch {
+        /* ignore */
+      }
+    }
     try {
       localStorage.setItem(STORAGE_MODE, m);
     } catch {
@@ -299,21 +315,40 @@ const CSS_VAR_MAP: Array<[keyof ThemeColors, string]> = [
 
 function applyToDom(s: ThemeStore) {
   if (typeof document === "undefined") return;
-  const theme = s.themes.find((t) => t.id === s.activeThemeId) ?? BUILTIN_THEMES[0];
   const root = document.documentElement;
-  // 系统模式：根据系统偏好选 light / dark 主题
   let effective: ThemeMode = s.mode;
   if (s.mode === "system") {
     effective = window.matchMedia?.("(prefers-color-scheme: dark)").matches
       ? "dark"
       : "light";
   }
-  // 切换 root 的 data-theme（给 css hook 用）
   root.setAttribute("data-theme", effective);
-  // 写入 CSS 变量（用户自定义主题的颜色优先）
+
+  let theme =
+    s.themes.find((t) => t.id === s.activeThemeId) ??
+    (effective === "light" ? BUILTIN_THEMES[1] : BUILTIN_THEMES[0]);
+  // 若当前主题 base 与有效模式不一致，回退到对应默认主题（避免白天模式仍套深色 inline 变量）
+  if (theme.base !== effective) {
+    theme =
+      effective === "light"
+        ? (s.themes.find((t) => t.id === "default-light") ?? BUILTIN_THEMES[1])
+        : (s.themes.find((t) => t.id === "default-dark") ?? BUILTIN_THEMES[0]);
+  }
+
+  const useCssOnly =
+    theme.id === "default-light" || theme.id === "default-dark";
+  if (useCssOnly) {
+    for (const [, varName] of CSS_VAR_MAP) {
+      root.style.removeProperty(varName);
+    }
+    root.style.removeProperty("--theme-name");
+    return;
+  }
+
   for (const [k, varName] of CSS_VAR_MAP) {
     const v = theme.colors[k];
     if (v) root.style.setProperty(varName, v);
+    else root.style.removeProperty(varName);
   }
   root.style.setProperty("--theme-name", theme.name);
 }

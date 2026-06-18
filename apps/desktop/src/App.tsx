@@ -9,10 +9,10 @@ import PlanDialog, {
   type PlanRequest,
   respondPlan,
 } from "./components/PlanDialog";
-import { useThemeMode, type ThemeMode } from "./stores/theme";
+import { useThemeMode, type ThemeMode, reapplyTheme } from "./stores/theme";
 import { useSessionsStore, getSessionsState } from "./stores/sessions";
-import { getCurrentWorkspaceId } from "./stores/workspace";
-import { useOpenTabs, closeTab } from "./stores/tabs";
+import { getCurrentWorkspaceId, useCurrentWorkspaceId } from "./stores/workspace";
+import { useOpenTabs, closeTab, openTab, syncTabsForWorkspace } from "./stores/tabs";
 import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
 
@@ -233,21 +233,14 @@ export default function App() {
     return () => document.removeEventListener("keydown", onKey);
   }, []);
 
-  // 跟随系统
+  // 跟随系统：统一走 theme store 的 applyToDom（避免与 inline CSS 变量冲突）
   useEffect(() => {
     if (themeMode !== "system") return;
     const mql = window.matchMedia("(prefers-color-scheme: dark)");
-    const apply = () => {
-      document.documentElement.dataset.theme = mql.matches ? "dark" : "light";
-    };
+    const apply = () => reapplyTheme();
     apply();
     mql.addEventListener("change", apply);
     return () => mql.removeEventListener("change", apply);
-  }, [themeMode]);
-
-  useEffect(() => {
-    if (themeMode === "system") return;
-    document.documentElement.dataset.theme = themeMode;
   }, [themeMode]);
 
   useEffect(() => {
@@ -375,13 +368,15 @@ export default function App() {
       />
       <div className={`app-shell ${isBlocking ? "app-shell-locked" : ""} ${sidebarCollapsed ? "app-shell-sidebar-collapsed" : ""}`}>
         <TopBar />
-        <ThreadTabs />
-        <div className="app-body">
-          <Sidebar />
-          <main className="main-pane">
-            <Thread sessionId={currentId} />
-            <Composer sessionId={currentId} />
-          </main>
+        <div className="app-main">
+          <ThreadTabs />
+          <div className="app-body">
+            <Sidebar />
+            <main className="main-pane">
+              <Thread sessionId={currentId} />
+              <Composer sessionId={currentId} />
+            </main>
+          </div>
         </div>
         <ApprovalDialog
           request={approvalReq}
@@ -409,11 +404,26 @@ function ThreadTabs() {
   const sessions = useSessionsStore((s) => s.sessions);
   const currentId = useSessionsStore((s) => s.currentId);
   const setCurrent = useSessionsStore((s) => s.setCurrent);
+
+  const workspaceId = useCurrentWorkspaceId();
+  const sessionCount = useSessionsStore((s) => s.sessions.length);
+
+  // 启动 / 切换项目组 / sessions 加载后：同步 tabs 与 current session
+  useEffect(() => {
+    syncTabsForWorkspace(workspaceId);
+  }, [workspaceId, sessionCount]);
+
+  useEffect(() => {
+    if (currentId) openTab(currentId, workspaceId);
+  }, [currentId, workspaceId]);
+
   if (tabs.length === 0) return null;
   return (
     <div className="thread-tabs">
       {tabs.map((id) => {
-        const sess = sessions.find((s) => s.id === id);
+        const sess = sessions.find(
+          (s) => s.id === id && (s.workspaceId ?? "default") === workspaceId,
+        );
         if (!sess) return null;
         return (
           <div

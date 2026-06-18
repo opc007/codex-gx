@@ -34,6 +34,11 @@ export function MessageBubble({ msg }: Props) {
         <span className="bubble-time">
           {new Date(msg.createdAt).toLocaleTimeString()}
         </span>
+        {msg.role === "assistant" && msg.modelUsed && !msg.streaming && (
+          <span className="bubble-model" title="本条回复实际调用的模型">
+            {msg.modelUsed}
+          </span>
+        )}
         {msg.role === "assistant" && msg.text && !msg.streaming && (
           <button
             className="msg-speak"

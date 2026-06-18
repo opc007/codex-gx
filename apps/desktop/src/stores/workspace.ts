@@ -90,6 +90,9 @@ export function switchWorkspace(id: string) {
   if (id === currentId) return;
   currentId = id;
   notify();
+  if (typeof window !== "undefined") {
+    window.dispatchEvent(new CustomEvent("codex_gx:workspace-changed", { detail: id }));
+  }
 }
 
 export function createWorkspace(
@@ -108,6 +111,9 @@ export function createWorkspace(
   workspaces = [...workspaces, meta];
   currentId = id;
   notify();
+  if (typeof window !== "undefined") {
+    window.dispatchEvent(new CustomEvent("codex_gx:workspace-changed", { detail: id }));
+  }
   return meta;
 }
 
@@ -116,10 +122,14 @@ export function deleteWorkspace(id: string) {
     throw new Error("不能删除默认工作区");
   }
   workspaces = workspaces.filter((w) => w.id !== id);
-  if (currentId === id) {
+  const switched = currentId === id;
+  if (switched) {
     currentId = "default";
   }
   notify();
+  if (switched && typeof window !== "undefined") {
+    window.dispatchEvent(new CustomEvent("codex_gx:workspace-changed", { detail: "default" }));
+  }
 }
 
 export function renameWorkspace(
