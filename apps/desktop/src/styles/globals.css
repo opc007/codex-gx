@@ -260,14 +260,51 @@ kbd {
   display: flex;
   align-items: center;
   justify-content: center;
+  gap: 6px;
   flex: 1 1 auto;
   min-width: 0;
   font-size: 13px;
   font-weight: 500;
   color: var(--fg);
+}
+.topbar-thread-nav {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 22px;
+  border: none;
+  background: transparent;
+  color: var(--text-muted);
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 16px;
+  line-height: 1;
+}
+.topbar-thread-nav:hover:not(:disabled) {
+  background: var(--bg-3);
+  color: var(--fg);
+}
+.topbar-thread-nav:disabled {
+  opacity: 0.35;
+  cursor: default;
+}
+.topbar-thread-title {
+  flex: 0 1 auto;
+  min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+  max-width: 480px;
+}
+.topbar-thread-count {
+  flex: 0 0 auto;
+  font-size: 11px;
+  font-weight: 400;
+  color: var(--text-muted);
+  background: var(--bg-2);
+  padding: 1px 6px;
+  border-radius: 8px;
 }
 
 .topbar-right {

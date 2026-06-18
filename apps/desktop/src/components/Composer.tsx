@@ -2884,7 +2884,7 @@ ${diff.diff.slice(0, 5000)}${diff.truncated ? "\n... [truncated, view full in gi
                 title="点击切换 Codex 操作批准模式"
               >
                 <span className="composer-approval-icon">
-                  {requireApproval ? "🔐" : "⏱"}
+                  {requireApproval ? "🔒" : "⚡"}
                 </span>
                 <span className="composer-approval-label">
                   {requireApproval ? "请求批准" : "完全访问权限"}
