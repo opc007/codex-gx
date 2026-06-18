@@ -80,8 +80,8 @@ export type SendChatParams = {
   model: string;
   /** 历史消息（不含 tool_calls 的简化版） */
   history?: Array<{ role: string; content: string; tool_call_id?: string }>;
-  /** v0.4：是否需要用户批准 tool call */
-  requireApproval?: boolean;
+  /** v0.4：是否需要用户批准 tool call。v1.9.15 三档：true|false|"risk"|"off" */
+  requireApproval?: boolean | "risk" | "off";
   /** v0.6：plan mode — 先输出 plan 等用户批准 */
   planMode?: boolean;
   /** v0.9：附件图片 */
@@ -142,7 +142,10 @@ export async function sendChatStream(
       message: params.userMessage,
       sessionId: params.sessionId,
       messages: params.history || [],
-      requireApproval: params.requireApproval ?? true,
+      requireApproval: params.requireApproval === "off" ? false
+        : params.requireApproval === "risk" ? "risk" as const
+        : params.requireApproval !== undefined ? !!params.requireApproval
+        : true,
       planMode: params.planMode ?? false, // v0.6
       images: params.images || [], // v0.9
       projectContext: params.projectContext, // v1.9.x：项目组

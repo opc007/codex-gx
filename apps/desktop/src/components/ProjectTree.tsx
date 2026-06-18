@@ -8,23 +8,24 @@ import {
   useWorkspaceList,
   useCurrentWorkspaceId,
   switchWorkspace,
+  type WorkspaceMeta,
 } from "../stores/workspace";
 import { closeTab, openTab } from "../stores/tabs";
 import { formatRelativeTime } from "../lib/formatRelativeTime";
 import { exportSession, type ExportFormat } from "../lib/export";
+import { ProjectContextMenu } from "./ProjectContextMenu";
 
 type Props = {
   encryptedSet: Set<string>;
   onVaultPrompt: (p: { sessionId: string; mode: "encrypt" | "decrypt" }) => void;
-  onNewProject: () => void;
+  /** v1.9.14：重命名项目（由父组件弹 WorkspaceDialog edit 模式） */
+  onRenameProject: (ws: WorkspaceMeta) => void;
 };
-
-type Section = "projects" | "chats";
 
 export function ProjectTree({
   encryptedSet,
   onVaultPrompt,
-  onNewProject,
+  onRenameProject,
 }: Props) {
   const workspaces = useWorkspaceList();
   const allSessions = useSessionsStore((s) => s.sessions);
@@ -40,12 +41,19 @@ export function ProjectTree({
   );
   const [exportOpen, setExportOpen] = useState<string | null>(null);
   const [redactOnExport, setRedactOnExport] = useState(true);
-  const [collapsedSections, setCollapsedSections] = useState<Set<Section>>(new Set());
+  // v1.9.14：项目右键菜单
+  const [contextMenu, setContextMenu] = useState<{
+    ws: WorkspaceMeta;
+    x: number;
+    y: number;
+  } | null>(null);
+  // v1.9.13：section 不可折叠，移除 collapsedSections
 
   const sessionsByWs = useMemo(() => {
     const map = new Map<string, SessionMeta[]>();
     for (const w of workspaces) map.set(w.id, []);
     for (const s of allSessions) {
+      if (s.archived) continue; // v1.9.14：归档 session 不再属于 sidebar 任何项目
       const wsId = s.workspaceId ?? "default";
       if (!map.has(wsId)) map.set(wsId, []);
       map.get(wsId)!.push(s);
@@ -58,9 +66,20 @@ export function ProjectTree({
 
   const recentSessions = useMemo(() => {
     return [...allSessions]
+      .filter((s) => !s.archived) // v1.9.14：归档 session 不进最近对话
       .sort((a, b) => b.updatedAt - a.updatedAt)
       .slice(0, 20);
   }, [allSessions]);
+
+  // v1.9.14：项目排序 — 置顶在前，其余按 createdAt
+  const sortedWorkspaces = useMemo(() => {
+    return [...workspaces].sort((a, b) => {
+      if ((b.pinned ? 1 : 0) !== (a.pinned ? 1 : 0)) {
+        return (b.pinned ? 1 : 0) - (a.pinned ? 1 : 0);
+      }
+      return a.createdAt - b.createdAt;
+    });
+  }, [workspaces]);
 
   useEffect(() => {
     setExpanded((prev) => {
@@ -71,14 +90,7 @@ export function ProjectTree({
     });
   }, [currentWorkspace]);
 
-  const toggleSection = (s: Section) => {
-    setCollapsedSections((prev) => {
-      const next = new Set(prev);
-      if (next.has(s)) next.delete(s);
-      else next.add(s);
-      return next;
-    });
-  };
+  // v1.9.13：toggleSection 已移除，section 不可折叠
 
   const selectWorkspace = (wsId: string) => {
     if (wsId !== currentWorkspace) switchWorkspace(wsId);
@@ -124,47 +136,24 @@ export function ProjectTree({
     }
   };
 
-  const automationCount = 18;
-  const projectsHidden = collapsedSections.has("projects");
-  const chatsHidden = collapsedSections.has("chats");
-
   return (
     <div className="project-tree">
+      {/* v1.9.14：去掉 4 个 rail item 中无功能的 3 个（搜索/插件/自动化）和硬编码的 18 计数。
+          只保留「快速对话」入口——新建项目入口收在 Composer 下方 ProjectPicker。 */}
       <div className="pt-rail">
-        <button type="button" className="pt-rail-item" onClick={handleNewChat} title="新对话">
+        <button type="button" className="pt-rail-item" onClick={handleNewChat} title="快速对话 (Cmd+N)">
           <span className="pt-rail-icon">✏️</span>
-          <span>新对话</span>
-        </button>
-        <button type="button" className="pt-rail-item" title="搜索">
-          <span className="pt-rail-icon">🔍</span>
-          <span>搜索</span>
-        </button>
-        <button type="button" className="pt-rail-item" title="插件">
-          <span className="pt-rail-icon">🧩</span>
-          <span>插件</span>
-        </button>
-        <button type="button" className="pt-rail-item" title="自动化">
-          <span className="pt-rail-icon">⏱</span>
-          <span>自动化</span>
-          <span className="pt-rail-count">{automationCount}</span>
+          <span>快速对话</span>
         </button>
       </div>
 
+      {/* v1.9.13：Codex 真实 — section header 不可折叠，直接展开 */}
       <div className="pt-section-label">
-        <button
-          type="button"
-          className="pt-section-toggle"
-          onClick={() => toggleSection("projects")}
-          aria-expanded={!projectsHidden}
-        >
-          <span className="pt-section-chevron">{projectsHidden ? "▸" : "▾"}</span>
-          <span>项目</span>
-        </button>
+        <span>项目</span>
       </div>
 
-      {!projectsHidden && (
-        <div className="pt-list">
-          {workspaces.map((w) => {
+      <div className="pt-list">
+          {sortedWorkspaces.map((w) => {
             const sessions = sessionsByWs.get(w.id) ?? [];
             const isExpanded = expanded.has(w.id);
             const isActiveWs = w.id === currentWorkspace;
@@ -172,11 +161,16 @@ export function ProjectTree({
             return (
               <div
                 key={w.id}
-                className={`pt-project ${isActiveWs ? "active-ws" : ""}`}
+                className={`pt-project ${isActiveWs ? "active-ws" : ""} ${w.pinned ? "pinned" : ""}`}
               >
                 <div
                   className="pt-project-row"
                   onClick={() => selectWorkspace(w.id)}
+                  onContextMenu={(e) => {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    setContextMenu({ ws: w, x: e.clientX, y: e.clientY });
+                  }}
                   title={w.folderPath || w.name}
                 >
                   <span
@@ -184,18 +178,35 @@ export function ProjectTree({
                     style={{ background: w.color || "#8b5cf6" }}
                     aria-hidden="true"
                   >
-                    <svg viewBox="0 0 16 16" width="12" height="12">
-                      <path
-                        d="M1.5 3.5A1.5 1.5 0 0 1 3 2h3.5l1.5 1.5H13A1.5 1.5 0 0 1 14.5 5v7A1.5 1.5 0 0 1 13 13.5H3A1.5 1.5 0 0 1 1.5 12V3.5z"
-                        fill="white"
-                        fillOpacity="0.92"
-                      />
+                    {/* v1.9.13：Codex 真实文件柜图标（4 行 3 列抽屉） */}
+                    <svg viewBox="0 0 16 16" width="14" height="14">
+                      <rect x="2" y="2" width="12" height="12" rx="1.2" fill="white" fillOpacity="0.95" />
+                      <line x1="2" y1="5.5" x2="14" y2="5.5" stroke="currentColor" strokeOpacity="0.45" strokeWidth="0.6" />
+                      <line x1="2" y1="8.5" x2="14" y2="8.5" stroke="currentColor" strokeOpacity="0.45" strokeWidth="0.6" />
+                      <line x1="2" y1="11.5" x2="14" y2="11.5" stroke="currentColor" strokeOpacity="0.45" strokeWidth="0.6" />
+                      <circle cx="11.5" cy="3.7" r="0.55" fill="currentColor" fillOpacity="0.6" />
+                      <circle cx="11.5" cy="6.7" r="0.55" fill="currentColor" fillOpacity="0.6" />
+                      <circle cx="11.5" cy="9.7" r="0.55" fill="currentColor" fillOpacity="0.6" />
                     </svg>
                   </span>
                   <span className="pt-project-name">{w.name}</span>
+                  {w.pinned && <span className="pt-project-pin" title="已置顶">📌</span>}
                   {sessions.length > 0 && (
                     <span className="pt-project-count">{sessions.length}</span>
                   )}
+                  {/* v1.9.14：Codex 真实三点菜单按钮 */}
+                  <button
+                    type="button"
+                    className="pt-project-menu-btn"
+                    title="项目操作"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      const r = (e.currentTarget as HTMLElement).getBoundingClientRect();
+                      setContextMenu({ ws: w, x: r.right - 220, y: r.bottom + 4 });
+                    }}
+                  >
+                    ⋯
+                  </button>
                 </div>
 
                 {isExpanded && sessions.length > 0 && (
@@ -286,51 +297,49 @@ export function ProjectTree({
             );
           })}
 
-          <button type="button" className="pt-new-project" onClick={onNewProject}>
-            <span className="pt-new-project-icon">＋</span>
-            <span>新建项目</span>
-          </button>
-        </div>
-      )}
-
-      <div className="pt-section-label">
-        <button
-          type="button"
-          className="pt-section-toggle"
-          onClick={() => toggleSection("chats")}
-          aria-expanded={!chatsHidden}
-        >
-          <span className="pt-section-chevron">{chatsHidden ? "▸" : "▾"}</span>
-          <span>对话</span>
-        </button>
+          {/* v1.9.14：删除「+ 新建项目」按钮 — 用户已经在 Composer 下方 ProjectPicker 弹窗里
+              拿到「添加新项目」入口，两处重复。Codex 实际也只有一处入口。 */}
       </div>
 
-      {!chatsHidden && (
-        <div className="pt-list">
-          {recentSessions.length === 0 ? (
-            <div className="pt-empty-hint">暂无对话</div>
-          ) : (
-            recentSessions.map((s) => {
-              const wsId = s.workspaceId ?? "default";
-              return (
-                <div
-                  key={s.id}
-                  className={`pt-session-row flat ${s.id === currentId ? "active" : ""}`}
-                  onClick={() => selectSession(wsId, s.id)}
-                  title={s.title}
-                >
-                  <span className="pt-session-title">{s.title}</span>
-                  <span className="pt-session-time">
-                    {formatRelativeTime(s.updatedAt)}
-                  </span>
-                </div>
-              );
-            })
-          )}
-        </div>
-      )}
+      <div className="pt-section-label">
+        <span>对话</span>
+      </div>
+
+      <div className="pt-list">
+        {recentSessions.length === 0 ? (
+          <div className="pt-empty-hint">暂无对话</div>
+        ) : (
+          recentSessions.map((s) => {
+            const wsId = s.workspaceId ?? "default";
+            return (
+              <div
+                key={s.id}
+                className={`pt-session-row flat ${s.id === currentId ? "active" : ""}`}
+                onClick={() => selectSession(wsId, s.id)}
+                title={s.title}
+              >
+                <span className="pt-session-title">{s.title}</span>
+                <span className="pt-session-time">
+                  {formatRelativeTime(s.updatedAt)}
+                </span>
+              </div>
+            );
+          })
+        )}
+      </div>
 
       <div className="pt-bottom-spacer" />
+
+      {/* v1.9.14：项目右键菜单 — 仿 Codex Desktop 真实交互 */}
+      {contextMenu && (
+        <ProjectContextMenu
+          workspace={contextMenu.ws}
+          x={contextMenu.x}
+          y={contextMenu.y}
+          onClose={() => setContextMenu(null)}
+          onRename={(ws) => onRenameProject(ws)}
+        />
+      )}
     </div>
   );
 }

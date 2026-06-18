@@ -62,6 +62,7 @@ export function Sidebar() {
   const setMessages = useSessionsStore((s) => s.setMessages);
   const currentWs = useCurrentWorkspace();
   const [wsDialogMode, setWsDialogMode] = useState<null | "create" | "edit">(null);
+  const [wsEditing, setWsEditing] = useState<WorkspaceMeta | null>(null); // v1.9.14：edit 模式的目标项目
   const currentUser = useCurrentUser();
   const userList = useUserList();
   const [themeMode, setThemeMode] = useThemeMode();
@@ -208,7 +209,10 @@ export function Sidebar() {
             setVaultPassword("");
             setVaultPrompt(p);
           }}
-          onNewProject={() => setWsDialogMode("create")}
+          onRenameProject={(ws) => {
+            setWsEditing(ws); // v1.9.14：从 sidebar 菜单的「重命名项目」直接打开 edit dialog
+            setWsDialogMode("edit");
+          }}
         />
       </div>
 
@@ -638,8 +642,8 @@ export function Sidebar() {
       {wsDialogMode && (
         <WorkspaceDialog
           mode={wsDialogMode}
-          initial={wsDialogMode === "edit" ? currentWs : undefined}
-          onClose={() => setWsDialogMode(null)}
+          initial={wsDialogMode === "edit" ? (wsEditing ?? currentWs) : undefined}
+          onClose={() => { setWsDialogMode(null); setWsEditing(null); }}
         />
       )}
     </aside>

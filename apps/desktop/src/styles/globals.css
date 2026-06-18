@@ -314,26 +314,23 @@ kbd {
   flex: 0 0 auto;
 }
 
-.topbar-logo {
+/* v1.9.13：Codex 顶栏极简 — 只放返回按钮（左）和 thread 标题（中心） */
+.topbar-back-btn {
   display: inline-flex;
   align-items: center;
   justify-content: center;
   width: 24px;
   height: 24px;
-  border-radius: 6px;
-  background: var(--accent);
-  color: white;
-  font-size: 14px;
+  border: none;
+  background: transparent;
+  color: var(--text-muted);
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 18px;
+  font-weight: 400;
   line-height: 1;
-  font-weight: 600;
 }
-
-.topbar-title {
-  font-size: 14px;
-  font-weight: 600;
-  color: var(--fg);
-  letter-spacing: -0.01em;
-}
+.topbar-back-btn:hover { background: var(--bg-3); color: var(--fg); }
 
 .topbar-version {
   font-size: 11px;
@@ -1181,6 +1178,64 @@ kbd {
   background: var(--bg-elevated);
 }
 
+/* v1.9.13：Codex 真实 — composer 下方一行 3 个信息 chip（项目 / 本地 / 分支） */
+.composer-context-pills {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 4px 0 4px;
+  flex-wrap: wrap;
+}
+.context-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 11.5px;
+  color: var(--text-2);
+  background: transparent;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  padding: 3px 9px;
+  cursor: default;
+  user-select: none;
+  max-width: 280px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.context-pill-icon {
+  font-size: 11px;
+  opacity: 0.85;
+  flex: 0 0 auto;
+}
+.context-pill-text {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  min-width: 0;
+}
+.context-pill-caret {
+  font-size: 9px;
+  color: var(--text-muted);
+  flex: 0 0 auto;
+}
+
+/* v1.9.14：可点击 chip（项目路径 / 选择目录） */
+.context-pill-clickable {
+  cursor: pointer;
+  transition: background 0.1s ease, border-color 0.1s ease;
+}
+.context-pill-clickable:hover {
+  background: var(--bg-2);
+  border-color: var(--border-2);
+  color: var(--fg);
+}
+.context-pill-clickable:active { background: var(--bg-3); }
+.context-pill-warn {
+  border-color: var(--warning, #d4a72c);
+  color: var(--warning, #d4a72c);
+}
+
 .composer-input-row {
   display: flex;
   align-items: flex-end;
@@ -1201,11 +1256,31 @@ kbd {
 
 .composer-input::placeholder { color: var(--text-muted); }
 
+/* v1.9.13：Codex 极简 Composer — bottom row 只剩右下角"模型下拉 + ↑ 发送按钮" */
 .composer-bottom-row {
   display: flex;
   align-items: center;
+  justify-content: space-between;
   gap: 4px;
-  padding: 0 8px 0 8px;
+  padding: 0 8px;
+  min-height: 36px;
+}
+.composer-bottom-row-minimal {
+  padding-top: 4px;
+  padding-bottom: 4px;
+}
+.composer-bottom-left {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  flex: 1 1 auto;
+  min-width: 0;
+}
+.composer-bottom-right {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  margin-left: auto;
 }
 
 .composer-model-chip {
@@ -1213,13 +1288,14 @@ kbd {
   align-items: center;
   gap: 4px;
   font-size: 12px;
-  padding: 4px 8px;
+  padding: 4px 6px 4px 10px;
   border-radius: 8px;
   background: transparent;
   border: none;
   color: var(--fg-2);
   cursor: pointer;
   height: 28px;
+  position: relative;
 }
 .composer-model-chip:hover { background: var(--bg-3); }
 
@@ -1229,54 +1305,45 @@ kbd {
   font-size: 12px;
   color: var(--fg-2);
   padding: 0;
+  padding-right: 2px;
   cursor: pointer;
   outline: none;
+  appearance: none;
+  -webkit-appearance: none;
 }
-
-.composer-icon-btn {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 28px;
-  height: 28px;
-  border-radius: 8px;
-  border: none;
-  background: transparent;
-  color: var(--fg-2);
-  font-size: 14px;
-  cursor: pointer;
+.composer-model-caret {
+  font-size: 9px;
+  color: var(--text-muted);
+  pointer-events: none;
 }
-.composer-icon-btn:hover { background: var(--bg-3); color: var(--fg); }
-.composer-icon-btn.recording {
-  background: var(--accent);
-  color: white;
-  animation: voice-pulse 1s ease-in-out infinite;
-}
-.composer-icon-btn.busy { opacity: 0.5; cursor: wait; }
-.composer-icon-btn:disabled { opacity: 0.4; cursor: not-allowed; }
 
 @keyframes voice-pulse {
   0%, 100% { transform: scale(1); }
   50% { transform: scale(1.08); }
 }
 
+/* v1.9.13：Codex 风格 ↑ 圆形发送按钮（更小、更精致） */
 .composer-send-btn {
-  margin-left: auto;
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 32px;
-  height: 32px;
-  border-radius: 10px;
+  width: 30px;
+  height: 30px;
+  border-radius: 50%;
   border: none;
   background: var(--accent);
   color: white;
-  font-size: 14px;
+  font-size: 15px;
   font-weight: 600;
   cursor: pointer;
-  transition: background 0.12s ease, opacity 0.12s ease;
+  transition: background 0.12s ease, opacity 0.12s ease, transform 0.06s ease;
+  flex: 0 0 auto;
 }
-.composer-send-btn:hover:not(:disabled) { background: var(--accent-2); }
+.composer-send-btn:hover:not(:disabled) {
+  background: var(--accent-2);
+  transform: translateY(-1px);
+}
+.composer-send-btn:active:not(:disabled) { transform: translateY(0); }
 .composer-send-btn:disabled {
   background: var(--bg-3);
   color: var(--text-muted);
@@ -1284,19 +1351,18 @@ kbd {
 }
 
 .composer-cancel-btn {
-  margin-left: auto;
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  height: 32px;
-  padding: 0 12px;
-  border-radius: 10px;
+  width: 30px;
+  height: 30px;
+  border-radius: 50%;
   border: none;
   background: var(--bg-3);
   color: var(--fg);
-  font-size: 12px;
-  font-weight: 500;
+  font-size: 13px;
   cursor: pointer;
+  flex: 0 0 auto;
 }
 .composer-cancel-btn:hover { background: var(--error); color: white; }
 
@@ -2851,97 +2917,7 @@ kbd {
   color: var(--warning, #e6a700);
 }
 
-/* v1.9.7: Codex 风格 — Composer 内联审批模式切换 */
-.composer-approval-wrap {
-  position: relative;
-}
-.composer-approval-chip {
-  display: inline-flex;
-  align-items: center;
-  gap: 4px;
-  padding: 3px 8px;
-  font-size: 11px;
-  color: var(--text-2);
-  background: var(--bg-3);
-  border: 1px solid var(--border);
-  border-radius: 999px;
-  cursor: pointer;
-  transition: background 0.1s ease;
-}
-.composer-approval-chip:hover { background: var(--bg); }
-.composer-approval-chip.mode-auto { color: var(--accent); }
-.composer-approval-icon { font-size: 11px; opacity: 0.85; }
-.composer-approval-label { font-size: 11px; }
-.composer-approval-caret { font-size: 9px; opacity: 0.6; }
-
-.composer-approval-menu {
-  position: absolute;
-  bottom: 100%;
-  left: 0;
-  margin-bottom: 6px;
-  min-width: 300px;
-  background: var(--bg-elevated);
-  border: 1px solid var(--border);
-  border-radius: 8px;
-  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.25);
-  padding: 4px;
-  z-index: 50;
-}
-.composer-approval-menu-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  padding: 8px 10px 6px;
-  font-size: 12px;
-  color: var(--text);
-}
-.composer-approval-help {
-  font-size: 11px;
-  color: var(--text-muted);
-  text-decoration: underline;
-}
-.composer-approval-option {
-  display: flex;
-  align-items: flex-start;
-  gap: 8px;
-  width: 100%;
-  padding: 8px 10px;
-  border: none;
-  background: transparent;
-  border-radius: 6px;
-  color: var(--fg);
-  text-align: left;
-  cursor: pointer;
-  transition: background 0.1s ease;
-}
-.composer-approval-option:hover { background: var(--bg-3); }
-.composer-approval-option.active { background: var(--bg-3); }
-.composer-approval-option-icon {
-  font-size: 13px;
-  flex-shrink: 0;
-  margin-top: 1px;
-}
-.composer-approval-option-body {
-  flex: 1;
-  display: flex;
-  flex-direction: column;
-  gap: 1px;
-  min-width: 0;
-}
-.composer-approval-option-title {
-  font-size: 12.5px;
-  font-weight: 500;
-}
-.composer-approval-option-desc {
-  font-size: 11px;
-  color: var(--text-muted);
-}
-.composer-approval-check {
-  font-size: 13px;
-  color: var(--accent);
-  flex-shrink: 0;
-  margin-top: 1px;
-}
+/* v1.9.13：审批模式 UI 改为极简 — 不再在 Composer 里出现（保留状态与 backend 逻辑） */
 
 /* v1.9.7: Codex 风格 — Composer 下方项目下拉 */
 .project-picker {
@@ -3333,6 +3309,175 @@ kbd {
   font-weight: 500;
 }
 
+/* v1.9.15: Composer 左侧 + 加号按钮（Codex 风格） */
+.composer-attach-wrap {
+  position: relative;
+  display: inline-flex;
+}
+.composer-plus-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  border: 1px solid var(--border);
+  background: var(--bg-2);
+  color: var(--text);
+  border-radius: 50%;
+  font-size: 16px;
+  line-height: 1;
+  cursor: pointer;
+  padding: 0;
+  transition: background 0.12s, color 0.12s, border-color 0.12s;
+}
+.composer-plus-btn:hover:not(:disabled) {
+  background: var(--bg-3);
+  border-color: var(--border-2);
+  color: var(--fg);
+}
+.composer-plus-btn:disabled { opacity: 0.4; cursor: not-allowed; }
+
+.attach-menu {
+  position: absolute;
+  left: 0;
+  bottom: calc(100% + 6px);
+  min-width: 240px;
+  background: var(--bg-1);
+  border: 1px solid var(--border-2);
+  border-radius: 8px;
+  padding: 4px;
+  box-shadow: 0 -8px 24px rgba(0, 0, 0, 0.35);
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  z-index: 50;
+}
+.attach-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 7px 10px;
+  border: none;
+  background: transparent;
+  color: var(--text);
+  text-align: left;
+  cursor: pointer;
+  border-radius: 5px;
+  font: inherit;
+}
+.attach-item:hover { background: var(--bg-3); color: var(--fg); }
+.attach-item.active { color: var(--fg); }
+.attach-icon { width: 16px; text-align: center; flex-shrink: 0; }
+.attach-label { flex: 1; }
+.attach-sep { height: 1px; background: var(--border); margin: 4px 6px; }
+.attach-toggle {
+  width: 28px;
+  height: 16px;
+  background: var(--bg-3);
+  border-radius: 999px;
+  position: relative;
+  flex-shrink: 0;
+  transition: background 0.15s;
+}
+.attach-toggle.on { background: var(--accent, #10a37f); }
+.attach-toggle-knob {
+  position: absolute;
+  top: 2px;
+  left: 2px;
+  width: 12px;
+  height: 12px;
+  background: #fff;
+  border-radius: 50%;
+  transition: left 0.15s;
+}
+.attach-toggle.on .attach-toggle-knob { left: 14px; }
+
+/* v1.9.15: 审批模式 chip（Codex 真实三档） */
+.composer-approval-wrap {
+  position: relative;
+  display: inline-flex;
+}
+.composer-approval-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 3px 8px;
+  font-size: 12px;
+  background: var(--bg-2);
+  color: var(--text);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  cursor: pointer;
+  transition: background 0.12s, color 0.12s, border-color 0.12s;
+}
+.composer-approval-chip:hover {
+  background: var(--bg-3);
+  border-color: var(--border-2);
+  color: var(--fg);
+}
+.composer-approval-chip.mode-off { color: var(--error, #ef4444); border-color: var(--error, #ef4444); }
+.composer-approval-chip.mode-risk { color: var(--warn, #f59e0b); border-color: var(--warn, #f59e0b); }
+.composer-approval-chip.mode-full { color: var(--accent, #10a37f); border-color: var(--accent, #10a37f); }
+.approval-icon { font-size: 11px; }
+.approval-label { font-weight: 500; }
+.approval-caret { font-size: 9px; opacity: 0.7; }
+
+.approval-menu {
+  position: absolute;
+  left: 0;
+  bottom: calc(100% + 6px);
+  min-width: 320px;
+  background: var(--bg-1);
+  border: 1px solid var(--border-2);
+  border-radius: 8px;
+  padding: 6px;
+  box-shadow: 0 -8px 24px rgba(0, 0, 0, 0.35);
+  z-index: 50;
+}
+.approval-menu-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 6px 10px 8px;
+  font-size: 12.5px;
+  color: var(--text-2);
+}
+.approval-learn-more {
+  font-size: 11px;
+  color: var(--accent, #10a37f);
+  text-decoration: none;
+  cursor: pointer;
+}
+.approval-learn-more:hover { text-decoration: underline; }
+.approval-menu-item {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  padding: 8px 10px;
+  border: none;
+  background: transparent;
+  color: var(--text);
+  text-align: left;
+  cursor: pointer;
+  border-radius: 6px;
+  font: inherit;
+  width: 100%;
+  position: relative;
+}
+.approval-menu-item:hover { background: var(--bg-3); }
+.approval-menu-item.active { background: var(--bg-3); }
+.approval-menu-icon { font-size: 16px; flex-shrink: 0; line-height: 1.2; }
+.approval-menu-text { flex: 1; min-width: 0; }
+.approval-menu-title { font-size: 13px; font-weight: 500; color: var(--fg); }
+.approval-menu-desc { font-size: 11.5px; color: var(--text-muted); margin-top: 2px; }
+.approval-menu-check {
+  font-size: 12px;
+  color: var(--accent, #10a37f);
+  flex-shrink: 0;
+  align-self: center;
+  font-weight: bold;
+}
+
 /* v1.9.6: 队列 chip（Codex 风格：排队下轮） */
 .composer-queue-chip {
   display: inline-flex;
@@ -3423,38 +3568,17 @@ kbd {
   flex-shrink: 0;
 }
 .pt-rail-item > span:nth-child(2) { flex: 1; }
-.pt-rail-count {
-  font-size: 11px;
-  color: var(--text-muted);
-  background: var(--bg-3);
-  border-radius: 999px;
-  padding: 0 6px;
-  min-width: 18px;
-  text-align: center;
-}
+/* v1.9.14：删除 .pt-rail-count — 自动化按钮被移除，硬编码的 18 也无意义 */
 
+/* v1.9.13：Codex 真实 — section header 静态、粗体、小字号、中灰色 */
 .pt-section-label {
   display: flex;
   align-items: center;
   padding: 14px 12px 4px 12px;
-}
-.pt-section-toggle {
-  display: flex;
-  align-items: center;
-  gap: 4px;
-  padding: 0;
-  border: none;
-  background: transparent;
-  color: var(--text-muted);
-  font-size: 11px;
-  font-weight: 600;
-  text-transform: uppercase;
-  letter-spacing: 0.05em;
-  cursor: pointer;
-}
-.pt-section-chevron {
-  font-size: 9px;
-  width: 12px;
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--fg);
+  letter-spacing: 0.01em;
 }
 
 .pt-list {
@@ -3481,9 +3605,10 @@ kbd {
 }
 .pt-project-row:hover { background: var(--bg-3); color: var(--fg); }
 
+/* v1.9.13：Codex 真实文件柜图标容器 */
 .pt-project-folder {
-  width: 16px;
-  height: 14px;
+  width: 18px;
+  height: 16px;
   border-radius: 3px;
   display: inline-flex;
   align-items: center;
@@ -3491,18 +3616,9 @@ kbd {
   flex-shrink: 0;
   position: relative;
   top: 1px;
+  color: rgba(0, 0, 0, 0.5);
 }
-.pt-project-folder::before {
-  content: "";
-  position: absolute;
-  top: -2px;
-  left: 1px;
-  width: 6px;
-  height: 3px;
-  background: inherit;
-  border-radius: 2px 2px 0 0;
-  filter: brightness(0.85);
-}
+.pt-project-folder svg { display: block; }
 .pt-project-name {
   flex: 1;
   min-width: 0;
@@ -3519,6 +3635,65 @@ kbd {
   min-width: 18px;
   text-align: center;
   flex-shrink: 0;
+}
+
+/* v1.9.14：置顶徽标 + 三点菜单按钮（Codex 真实） */
+.pt-project-pin { font-size: 11px; flex-shrink: 0; }
+.pt-project-menu-btn {
+  border: none;
+  background: transparent;
+  color: var(--text-muted);
+  font-size: 16px;
+  line-height: 1;
+  padding: 2px 4px;
+  border-radius: 4px;
+  cursor: pointer;
+  opacity: 0;
+  transition: opacity 0.12s;
+  flex-shrink: 0;
+}
+.pt-project-row:hover .pt-project-menu-btn { opacity: 1; }
+.pt-project-menu-btn:hover { background: var(--bg-2); color: var(--fg); }
+.pt-project.pinned .pt-project-name { color: var(--fg); }
+
+/* v1.9.14：项目右键菜单（仿 Codex Desktop 真实交互） */
+.project-context-menu {
+  position: fixed;
+  z-index: 9999;
+  min-width: 220px;
+  background: var(--bg-1);
+  border: 1px solid var(--border-2);
+  border-radius: 8px;
+  padding: 4px;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.35);
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  font-size: 12.5px;
+}
+.pcm-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 7px 10px;
+  border: none;
+  background: transparent;
+  color: var(--text);
+  text-align: left;
+  cursor: pointer;
+  border-radius: 5px;
+  font: inherit;
+}
+.pcm-item:hover:not(:disabled) { background: var(--bg-3); color: var(--fg); }
+.pcm-item:disabled { color: var(--text-muted); cursor: not-allowed; }
+.pcm-icon { width: 16px; text-align: center; flex-shrink: 0; }
+.pcm-label { flex: 1; }
+.pcm-danger { color: var(--error, #ef4444); }
+.pcm-danger:hover:not(:disabled) { background: rgba(239, 68, 68, 0.1); }
+.pcm-sep {
+  height: 1px;
+  background: var(--border);
+  margin: 4px 6px;
 }
 
 .pt-sessions {
@@ -3592,26 +3767,7 @@ kbd {
   box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
 }
 
-.pt-new-project {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  margin: 6px 8px 0 8px;
-  padding: 5px 8px;
-  border: 1px dashed var(--border);
-  border-radius: 6px;
-  background: transparent;
-  color: var(--text-2);
-  font-size: 12.5px;
-  cursor: pointer;
-  text-align: left;
-}
-.pt-new-project:hover {
-  background: var(--bg-3);
-  border-color: var(--border-2);
-  color: var(--fg);
-}
-.pt-new-project-icon { color: var(--text-muted); }
+/* v1.9.14：删除 .pt-new-project — 新建项目入口收在 Composer 下方 ProjectPicker 弹窗内 */
 
 .pt-empty-hint {
   padding: 8px 12px;

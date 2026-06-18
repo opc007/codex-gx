@@ -21,6 +21,10 @@ export type SessionMeta = {
   side?: boolean;
   /// v1.8：旁问过期时间
   expiresAt?: number;
+  /// v1.9.14：归档标记（项目级「归档对话」操作时设为 true，sidebar 项目列表过滤掉）
+  archived?: boolean;
+  /// v1.9.14：归档时间
+  archivedAt?: number;
 };
 
 export type PersistedMessage = {
@@ -59,6 +63,9 @@ export type SessionsStore = {
   create: (title?: string) => SessionMeta;
   remove: (id: string) => void;
   rename: (id: string, title: string) => void;
+  /** v1.9.14：归档/恢复某个 workspace 的所有 sessions（项目级操作） */
+  archiveWorkspace: (workspaceId: string) => void;
+  restoreWorkspace: (workspaceId: string) => void;
   /** v1.8: Fork 当前 session — 复制所有 messages 到新 session，标记 parentId/forkPointMessageId */
   fork: (label?: string) => SessionMeta | null;
   /** v1.8: Side 旁问 — 临时 session 24h 后过期 */
@@ -266,6 +273,34 @@ let state: SessionsStore = {
   rename: (id, title) => {
     const sessions = state.sessions.map((s) =>
       s.id === id ? { ...s, title, updatedAt: Date.now() } : s
+    );
+    state = { ...state, sessions };
+    pendingSessionsList = true;
+    schedulePersist(sessions, state.currentId, []);
+    listeners.forEach((l) => l());
+  },
+  /// v1.9.14：归档某个 workspace 下所有 sessions（项目级「归档对话」）
+  archiveWorkspace: (workspaceId: string) => {
+    const now = Date.now();
+    const sessions = state.sessions.map((s) =>
+      s.workspaceId === workspaceId && !s.archived
+        ? { ...s, archived: true, archivedAt: now, updatedAt: now }
+        : s,
+    );
+    state = { ...state, sessions };
+    pendingSessionsList = true;
+    schedulePersist(sessions, state.currentId, []);
+    listeners.forEach((l) => l());
+  },
+  /// v1.9.14：恢复某个 workspace 下所有归档 sessions
+  restoreWorkspace: (workspaceId: string) => {
+    const sessions = state.sessions.map((s) =>
+      s.workspaceId === workspaceId && s.archived
+        ? (() => {
+            const { archived: _a, archivedAt: _t, ...rest } = s;
+            return rest;
+          })()
+        : s,
     );
     state = { ...state, sessions };
     pendingSessionsList = true;

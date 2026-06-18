@@ -22,6 +22,8 @@ export type WorkspaceMeta = {
   description?: string;
   /** 颜色色标（便于 Sidebar 区分） */
   color?: string;
+  /** v1.9.14：是否置顶（sidebar 项目列表置顶显示） */
+  pinned?: boolean;
 };
 
 let currentId: string = loadInitial();
@@ -147,6 +149,14 @@ export function renameWorkspace(
           ...(opts.color !== undefined ? { color: opts.color } : {}),
         }
       : w,
+  );
+  notify();
+}
+
+/** v1.9.14：切换置顶状态（Codex "置顶项目" 入口） */
+export function togglePinWorkspace(id: string) {
+  workspaces = workspaces.map((w) =>
+    w.id === id ? { ...w, pinned: !w.pinned } : w,
   );
   notify();
 }

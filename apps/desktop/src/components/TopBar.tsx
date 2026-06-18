@@ -1,7 +1,6 @@
 import { useState } from "react";
 import { open as openUrl } from "@tauri-apps/plugin-shell";
-import { useSessionsStore, getSessionsState } from "../stores/sessions";
-import { getCurrentWorkspaceId } from "../stores/workspace";
+import { useSessionsStore } from "../stores/sessions";
 
 type UpdateInfo = {
   currentVersion: string;
@@ -16,60 +15,38 @@ export function TopBar() {
   const currentSession = useSessionsStore((s) =>
     s.sessions.find((x) => x.id === s.currentId)
   );
-  const allSessions = useSessionsStore((s) => s.sessions);
 
-  const wsId = getCurrentWorkspaceId();
-  const order = allSessions
-    .filter((s) => (s.workspaceId ?? "default") === wsId)
-    .sort((a, b) => b.updatedAt - a.updatedAt);
-  const idx = order.findIndex((s) => s.id === currentSession?.id);
-
-  const goPrev = () => {
-    if (order.length === 0) return;
-    const next = order[(idx - 1 + order.length) % order.length];
-    if (next) getSessionsState().setCurrent(next.id);
-  };
-  const goNext = () => {
-    if (order.length === 0) return;
-    const next = order[(idx + 1) % order.length];
-    if (next) getSessionsState().setCurrent(next.id);
-  };
+  // v1.9.13：thread 切换由 App.tsx 的全局快捷键 Cmd+Shift+{ / } 接管
 
   return (
     <header className="topbar">
+      {/* v1.9.13：Codex 极简 — 顶栏只放 1 个返回 + 1 个 thread 标题。thread 切换用 Cmd+Shift+{ / } 快捷键（见 App.tsx） */}
       <div className="topbar-left">
-        <span className="topbar-logo" aria-hidden="true">✦</span>
-        <span className="topbar-title">Codex gx</span>
-      </div>
-      <div className="topbar-center">
         <button
           type="button"
-          className="topbar-thread-nav"
-          onClick={goPrev}
-          disabled={order.length < 2}
-          title="上一 thread (Cmd+Shift+{)"
+          className="topbar-back-btn"
+          onClick={() => {
+            // 折叠侧栏（Codex 顶栏返回按钮效果）
+            try {
+              const next = localStorage.getItem("codex_gx_sidebar_collapsed") !== "1";
+              localStorage.setItem("codex_gx_sidebar_collapsed", next ? "1" : "0");
+              window.dispatchEvent(new CustomEvent("codex_gx:sidebar-toggle"));
+            } catch {
+              /* ignore */
+            }
+          }}
+          title="折叠/展开侧栏 (Cmd+B)"
+          aria-label="返回"
         >
           ‹
         </button>
+      </div>
+      <div className="topbar-center">
         <div className="topbar-thread-title" title={currentSession?.title || "Codex"}>
           {currentSession ? currentSession.title : "Codex"}
         </div>
-        <button
-          type="button"
-          className="topbar-thread-nav"
-          onClick={goNext}
-          disabled={order.length < 2}
-          title="下一 thread (Cmd+Shift+})"
-        >
-          ›
-        </button>
-        {currentSession && (
-          <span className="topbar-thread-count" title={`项目内共 ${order.length} 个 thread`}>
-            {idx >= 0 ? idx + 1 : 0} / {order.length}
-          </span>
-        )}
       </div>
-      <div className="topbar-right">{/* Codex gx：设置入口收在左下角用户头像 */}</div>
+      <div className="topbar-right" />
 
       {updateInfo && (
         <div className="update-dialog-overlay" onClick={() => setUpdateInfo(null)}>

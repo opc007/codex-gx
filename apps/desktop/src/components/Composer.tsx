@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
-import { open as openDialog } from "@tauri-apps/plugin-dialog";
+import { open as openFileDialog } from "@tauri-apps/plugin-dialog";
 import { useSessionsStore, getSessionsState, setSessionsState, type PersistedMessage } from "../stores/sessions";
 import { useTranslation, setLocale as i18nSetLocale } from "../i18n";
 import { redactSimple, detectTypes } from "../lib/redact";
@@ -14,11 +14,17 @@ import { BUILTIN_NAME_SET, searchSlashCommands, type SlashCommand } from "../lib
 
 type Props = {
   sessionId: string | null;
-  requireApproval: boolean;
-  setRequireApproval: (v: boolean) => void;
+  /** v1.9.15：三档审批模式（full / risk / off） */
+  requireApproval: ApprovalMode;
+  setRequireApproval: (v: ApprovalMode) => void;
   onRequestNewProject?: () => void;
   onPickNoProject?: () => void;
+  /** v1.9.14：点击「路径 chip」编辑当前项目（绑定 WorkspaceDialog edit 模式） */
+  onEditProject?: () => void;
 };
+
+/** v1.9.15：审批模式三档（Codex 风格：Composer 内联切换） */
+export type ApprovalMode = "full" | "risk" | "off";
 
 type ApiKeysStatus = {
   minimax_configured: boolean;
@@ -44,7 +50,7 @@ function providerConfigured(id: string, status: ApiKeysStatus): boolean {
   }
 }
 
-export function Composer({ sessionId, requireApproval, setRequireApproval, onRequestNewProject, onPickNoProject }: Props) {
+export function Composer({ sessionId, requireApproval, setRequireApproval, onRequestNewProject, onPickNoProject, onEditProject }: Props) {
   const t = useTranslation();
   const currentWs = useCurrentWorkspace();
   const projectContext = {
@@ -70,6 +76,8 @@ export function Composer({ sessionId, requireApproval, setRequireApproval, onReq
   });
   const [approvalMenuOpen, setApprovalMenuOpen] = useState(false);
   const approvalMenuRef = useRef<HTMLDivElement | null>(null);
+  // v1.9.15：附件菜单（Codex 风格 + 上传按钮弹窗）
+  const [attachMenuOpen, setAttachMenuOpen] = useState(false);
   // v0.9：附件图片
   const [attachedImages, setAttachedImages] = useState<Array<{ path: string; mime: string; name: string }>>([]);
   // v0.6：plan mode
@@ -129,9 +137,10 @@ export function Composer({ sessionId, requireApproval, setRequireApproval, onReq
     return () => window.removeEventListener("api-keys:changed", onKeys);
   }, []);
 
-  // v1.2：voice input 状态
+  // v1.2：voice input 状态（v1.9.13：UI 隐藏，保留内部状态以备未来重启用）
   const [recording, setRecording] = useState(false);
-  const [voiceBusy, setVoiceBusy] = useState(false);
+  const voiceBusyRef = useRef(false);
+  const setVoiceBusy = (v: boolean) => { voiceBusyRef.current = v; };
   const [voiceHint, setVoiceHint] = useState<string | null>(null);
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const recordedChunksRef = useRef<Blob[]>([]);
@@ -1132,27 +1141,38 @@ M3 / Claude / GPT 会自动调用：
     }
     if (trimmed === "/approval" || trimmed.startsWith("/approval ")) {
       const arg = trimmed.slice(10).trim();
-      if (arg === "on") {
-        setRequireApproval(true);
+      if (arg === "on" || arg === "full") {
+        setRequireApproval("full");
         appendMessage(sessionId, {
           id: crypto.randomUUID(),
           role: "assistant",
-          text: "🔐 已开启手动批准模式。每个 tool call 会弹模态框让你确认。",
+          text: "🛡 已设为 **请求批准**。所有外部操作都会弹审批。",
+          createdAt: Date.now(),
+        });
+      } else if (arg === "risk" || arg === "risk-only") {
+        setRequireApproval("risk");
+        appendMessage(sessionId, {
+          id: crypto.randomUUID(),
+          role: "assistant",
+          text: "🕐 已设为 **替我审批**。仅风险操作会弹审批。",
           createdAt: Date.now(),
         });
       } else if (arg === "off") {
-        setRequireApproval(false);
+        setRequireApproval("off");
         appendMessage(sessionId, {
           id: crypto.randomUUID(),
           role: "assistant",
-          text: "⚡ 已关闭手动批准模式。所有 tool call 自动执行（适合信任模型时）。",
+          text: "🔓 已设为 **完全访问权限**。所有 tool call 自动执行。",
           createdAt: Date.now(),
         });
       } else {
+        const label = requireApproval === "off" ? "完全访问权限"
+          : requireApproval === "risk" ? "替我审批"
+          : "请求批准";
         appendMessage(sessionId, {
           id: crypto.randomUUID(),
           role: "assistant",
-          text: `🔐 当前批准模式：**${requireApproval ? "手动（on）" : "自动（off）"}**\n\n切换：/approval on | /approval off`,
+          text: `🔐 当前批准模式：**${label}**\n\n切换：\n  \`/approval on\`     → 请求批准\n  \`/approval risk\`   → 替我审批\n  \`/approval off\`    → 完全访问权限`,
           createdAt: Date.now(),
         });
       }
@@ -2423,7 +2443,9 @@ ${diff.diff.slice(0, 5000)}${diff.truncated ? "\n... [truncated, view full in gi
           sessionId,
           userMessage: reviewPrompt,
           model,
-          requireApproval,
+          requireApproval: requireApproval === "off" ? false
+            : requireApproval === "risk" ? "risk" as const
+            : true,
           planMode,
           history: buildChatHistory(sessionId, [userMsg.id]),
         });
@@ -2502,7 +2524,9 @@ ${diff.diff.slice(0, 5000)}${diff.truncated ? "\n... [truncated, view full in gi
         sessionId,
         userMessage: trimmed,
         model,
-        requireApproval,
+        requireApproval: requireApproval === "off" ? false
+          : requireApproval === "risk" ? "risk" as const
+          : true,
         planMode,
         images: imagesToSend,
         projectContext,
@@ -2850,103 +2874,87 @@ ${diff.diff.slice(0, 5000)}${diff.truncated ? "\n... [truncated, view full in gi
               }}
             />
           </div>
-          <div className="composer-bottom-row">
-            <label
-              className={`composer-model-chip${modelReady ? "" : " model-missing"}`}
-              title={modelReady ? "切换模型" : "当前模型未配置 Key，请点击 ⋯ → API Key 设置"}
-            >
-              <span style={{ fontSize: 12 }}>🧠</span>
-              <select
-                value={model}
-                disabled={busy}
-                onChange={(e) => {
-                  const v = e.target.value;
-                  setModel(v);
-                  try {
-                    localStorage.setItem(MODEL_STORAGE_KEY, v);
-                  } catch {
-                    /* ignore */
-                  }
-                }}
-              >
-                {availableModels.map((o) => (
-                  <option key={o.value} value={o.value}>
-                    {o.group}: {o.label}
-                  </option>
-                ))}
-              </select>
-            </label>
-            <div className="composer-approval-wrap" ref={approvalMenuRef}>
+          <div className="composer-bottom-row composer-bottom-row-minimal">
+            <div className="composer-bottom-left">
+            {/* v1.9.15：+ 加号按钮 — Codex 风格附件/操作入口（仿真实截图） */}
+            <div className="composer-attach-wrap">
               <button
                 type="button"
-                className={`composer-approval-chip ${requireApproval ? "mode-request" : "mode-auto"}`}
-                onClick={() => setApprovalMenuOpen((v) => !v)}
-                title="点击切换 Codex 操作批准模式"
+                className="composer-plus-btn"
+                title="附件 / 上传文件"
+                onClick={() => setAttachMenuOpen((v) => !v)}
+                disabled={!sessionId}
+                aria-label="附件"
               >
-                <span className="composer-approval-icon">
-                  {requireApproval ? "🔒" : "⚡"}
-                </span>
-                <span className="composer-approval-label">
-                  {requireApproval ? "请求批准" : "完全访问权限"}
-                </span>
-                <span className="composer-approval-caret">▾</span>
+                ＋
               </button>
-              {approvalMenuOpen && (
-                <div className="composer-approval-menu" role="menu">
-                  <div className="composer-approval-menu-header">
-                    <span>应如何批准 Codex 操作？</span>
-                    <a className="composer-approval-help" href="#" onClick={(e) => e.preventDefault()}>了解更多</a>
-                  </div>
-                  <button
-                    type="button"
-                    className={`composer-approval-option ${requireApproval ? "active" : ""}`}
-                    onClick={() => {
-                      setRequireApproval(true);
-                      setApprovalMenuOpen(false);
-                    }}
-                  >
-                    <span className="composer-approval-option-icon">⏱</span>
-                    <span className="composer-approval-option-body">
-                      <span className="composer-approval-option-title">请求批准</span>
-                      <span className="composer-approval-option-desc">编辑外部文件和使用互联网始终询问</span>
-                    </span>
-                    {requireApproval && <span className="composer-approval-check">✓</span>}
-                  </button>
-                  <button
-                    type="button"
-                    className="composer-approval-option"
-                    onClick={() => {
-                      // 留作"风险操作请求批准"——当前实现等同 request 模式
-                      setRequireApproval(true);
-                      setApprovalMenuOpen(false);
-                    }}
-                  >
-                    <span className="composer-approval-option-icon">⏱</span>
-                    <span className="composer-approval-option-body">
-                      <span className="composer-approval-option-title">替我批准</span>
-                      <span className="composer-approval-option-desc">仅对检测到的风险操作请求批准</span>
-                    </span>
-                  </button>
-                  <button
-                    type="button"
-                    className={`composer-approval-option ${!requireApproval ? "active" : ""}`}
-                    onClick={() => {
-                      setRequireApproval(false);
-                      setApprovalMenuOpen(false);
-                    }}
-                  >
-                    <span className="composer-approval-option-icon">⏱</span>
-                    <span className="composer-approval-option-body">
-                      <span className="composer-approval-option-title">完全访问权限</span>
-                      <span className="composer-approval-option-desc">可不受限制地访问互联网和您电脑上的任何文件</span>
-                    </span>
-                    {!requireApproval && <span className="composer-approval-check">✓</span>}
-                  </button>
-                </div>
+              {attachMenuOpen && (
+                <AttachMenu
+                  onClose={() => setAttachMenuOpen(false)}
+                  planMode={planMode}
+                  onTogglePlanMode={() => {
+                    setPlanMode((v) => !v);
+                    setAttachMenuOpen(false);
+                  }}
+                  onPickFiles={async () => {
+                    setAttachMenuOpen(false);
+                    try {
+                      const sel = await openFileDialog({
+                        multiple: true,
+                        filters: [
+                          { name: "图片", extensions: ["png", "jpg", "jpeg", "gif", "webp"] },
+                          { name: "所有文件", extensions: ["*"] },
+                        ],
+                      });
+                      if (!sel) return;
+                      const arr = Array.isArray(sel) ? sel : [sel];
+                      for (const p of arr) {
+                        const lower = p.toLowerCase();
+                        const mime = lower.endsWith(".png") ? "image/png"
+                          : lower.endsWith(".jpg") || lower.endsWith(".jpeg") ? "image/jpeg"
+                          : lower.endsWith(".gif") ? "image/gif"
+                          : lower.endsWith(".webp") ? "image/webp" : "application/octet-stream";
+                        const name = p.split("/").pop() || p;
+                        if (mime.startsWith("image/")) {
+                          setAttachedImages((prev) => [...prev, { path: p, mime, name }]);
+                        } else {
+                          // 通用文件以 text 形式贴到输入框（Codex 风格"添加文件"）
+                          setText((t) => (t ? `${t}\n\n@${p}` : `@${p}`));
+                        }
+                      }
+                    } catch (e) {
+                      console.warn("pick file failed:", e);
+                    }
+                  }}
+                />
               )}
             </div>
-            {/* v1.9.6: Codex 风格 context 指示器 */}
-            <ContextIndicator model={model} />
+
+            {/* v1.9.15：权限模式 chip（Codex 真实三档菜单） */}
+            <div className="composer-approval-wrap">
+              <button
+                type="button"
+                className={`composer-approval-chip mode-${requireApproval}`}
+                title="切换审批模式（Codex 风格三档）"
+                onClick={() => setApprovalMenuOpen((v) => !v)}
+              >
+                <span className="approval-icon">
+                  {requireApproval === "off" ? "🔓" : requireApproval === "risk" ? "🕐" : "🛡"}
+                </span>
+                <span className="approval-label">
+                  {requireApproval === "off" ? "完全访问权限" : requireApproval === "risk" ? "替我审批" : "请求批准"}
+                </span>
+                <span className="approval-caret">▾</span>
+              </button>
+              {approvalMenuOpen && (
+                <ApprovalMenu
+                  current={requireApproval}
+                  onPick={(m) => { setRequireApproval(m); setApprovalMenuOpen(false); }}
+                  onClose={() => setApprovalMenuOpen(false)}
+                />
+              )}
+            </div>
+
             {queuedPrompts.length > 0 && (
               <span
                 className="composer-queue-chip"
@@ -2965,108 +2973,60 @@ ${diff.diff.slice(0, 5000)}${diff.truncated ? "\n... [truncated, view full in gi
                 </button>
               </span>
             )}
-            <button
-              className="composer-icon-btn"
-              title="添加图片"
-              onClick={async () => {
-                try {
-                  const selected = await openDialog({
-                    multiple: true,
-                    filters: [{ name: "Image", extensions: ["png", "jpg", "jpeg", "gif", "webp"] }],
-                  });
-                  if (Array.isArray(selected)) {
-                    for (const p of selected) {
-                      const lower = p.toLowerCase();
-                      const mime = lower.endsWith(".png") ? "image/png"
-                        : lower.endsWith(".jpg") || lower.endsWith(".jpeg") ? "image/jpeg"
-                        : lower.endsWith(".gif") ? "image/gif"
-                        : lower.endsWith(".webp") ? "image/webp" : "image/png";
-                      const name = p.split("/").pop() || p;
-                      setAttachedImages((prev) => [...prev, { path: p, mime, name }]);
+            </div>
+            <div className="composer-bottom-right">
+              <label
+                className={`composer-model-chip${modelReady ? "" : " model-missing"}`}
+                title={modelReady ? "切换模型" : "当前模型未配置 Key，请点击 ⋯ → API Key 设置"}
+              >
+                <select
+                  value={model}
+                  disabled={busy}
+                  onChange={(e) => {
+                    const v = e.target.value;
+                    setModel(v);
+                    try {
+                      localStorage.setItem(MODEL_STORAGE_KEY, v);
+                    } catch {
+                      /* ignore */
                     }
-                  }
-                } catch (e) {
-                  console.warn("attach failed:", e);
-                }
-              }}
-            >
-              📎
-            </button>
-            {/* v1.9.6: Appshots 按钮（Codex App 风格：截屏 + 一键发到 chat） */}
-            <button
-              className="composer-icon-btn"
-              title="Appshots：截取主屏幕并附到当前会话"
-              onClick={async () => {
-                if (busy || !sessionId) return;
-                try {
-                  const meta = await invoke<{
-                    width: number;
-                    height: number;
-                    displayId: string;
-                    dataBase64: string;
-                    format: string;
-                  }>("screen_screenshot");
-                  const dataUrl = `data:image/${meta.format || "png"};base64,${meta.dataBase64}`;
-                  appendMessage(sessionId, {
-                    id: crypto.randomUUID(),
-                    role: "user",
-                    text: `📸 Appshot · ${meta.displayId} · ${meta.width}×${meta.height}`,
-                    imageUrl: dataUrl,
-                    createdAt: Date.now(),
-                  });
-                } catch (e) {
-                  appendMessage(sessionId, {
-                    id: crypto.randomUUID(),
-                    role: "assistant",
-                    text: `❌ Appshots 失败：${e}`,
-                    createdAt: Date.now(),
-                  });
-                }
-              }}
-            >
-              📸
-            </button>
-            <button
-              className={`composer-icon-btn ${recording ? "recording" : ""} ${voiceBusy ? "busy" : ""}`}
-              title={
-                recording
-                  ? "点击停止录音"
-                  : voiceBusy
-                    ? "转写中…"
-                    : "语音输入（本地 Whisper）"
-              }
-              disabled={voiceBusy}
-              onClick={() => {
-                if (recording) stopRecording();
-                else void startRecording();
-              }}
-            >
-              {recording ? "⏹" : voiceBusy ? "⏳" : "🎙"}
-            </button>
-            {busy ? (
-              <button
-                className="composer-cancel-btn"
-                onClick={async () => {
-                  try {
-                    await invoke("cancel_chat", { sessionId });
-                  } catch (e) {
-                    console.warn("cancel failed:", e);
-                  }
-                }}
-              >
-                ⏹ 停止
-              </button>
-            ) : (
-              <button
-                className="composer-send-btn"
-                disabled={!sessionId || !text.trim()}
-                onClick={onSend}
-                title="发送 (Enter)"
-                aria-label="发送"
-              >
-                ↑
-              </button>
-            )}
+                  }}
+                >
+                  {availableModels.map((o) => (
+                    <option key={o.value} value={o.value}>
+                      {o.group}: {o.label}
+                    </option>
+                  ))}
+                </select>
+                <span className="composer-model-caret">▾</span>
+              </label>
+              {busy ? (
+                <button
+                  className="composer-cancel-btn"
+                  onClick={async () => {
+                    try {
+                      await invoke("cancel_chat", { sessionId });
+                    } catch (e) {
+                      console.warn("cancel failed:", e);
+                    }
+                  }}
+                  title="停止生成"
+                  aria-label="停止"
+                >
+                  ⏹
+                </button>
+              ) : (
+                <button
+                  className="composer-send-btn"
+                  disabled={!sessionId || !text.trim()}
+                  onClick={onSend}
+                  title="发送 (Enter)"
+                  aria-label="发送"
+                >
+                  ↑
+                </button>
+              )}
+            </div>
           </div>
         </div>
         <div className="composer-context-pills">
@@ -3077,15 +3037,33 @@ ${diff.diff.slice(0, 5000)}${diff.truncated ? "\n... [truncated, view full in gi
             onCreateNew={() => onRequestNewProject?.()}
             onPickNone={() => onPickNoProject?.()}
           />
-          <span className="context-pill" title="本地桌面模式">
-            <span className="context-pill-icon">💻</span>
-            本地模式
-          </span>
+          {/* v1.9.14：「路径 chip」改成可点击 → 编辑当前项目路径/名称/颜色（与 Codex chip 可点开 popover 一致） */}
           {currentWs.folderPath && (
-            <span className="context-pill context-pill-path" title={currentWs.folderPath}>
+            <button
+              type="button"
+              className="context-pill context-pill-path context-pill-clickable"
+              onClick={() => onEditProject?.()}
+              title={`项目路径：${currentWs.folderPath}\n点击修改项目名称、颜色或更换目录`}
+            >
               <span className="context-pill-icon">📂</span>
-              {currentWs.folderPath.split("/").filter(Boolean).slice(-2).join("/")}
-            </span>
+              <span className="context-pill-text">
+                {currentWs.folderPath.split("/").filter(Boolean).slice(-2).join("/")}
+              </span>
+              <span className="context-pill-caret">▾</span>
+            </button>
+          )}
+          {/* v1.9.14：项目没绑路径时给个可点击的「选择目录」chip */}
+          {!currentWs.folderPath && currentWs.id !== "default" && (
+            <button
+              type="button"
+              className="context-pill context-pill-path context-pill-clickable context-pill-warn"
+              onClick={() => onEditProject?.()}
+              title="当前项目还未绑定本地目录，点击选择目录"
+            >
+              <span className="context-pill-icon">📁</span>
+              <span className="context-pill-text">选择目录</span>
+              <span className="context-pill-caret">▾</span>
+            </button>
           )}
         </div>
         <div className="composer-hint">
@@ -3100,49 +3078,13 @@ ${diff.diff.slice(0, 5000)}${diff.truncated ? "\n... [truncated, view full in gi
   );
 }
 
-// v1.9.6：Context 指示器（Codex App 风格：当前会话已用 token / 模型上下文窗口）
-const MODEL_CONTEXT_WINDOW: Record<string, number> = {
-  "MiniMax-M3": 1_000_000,
-  "minimax-m3": 1_000_000,
-  "claude-opus-4-8": 200_000,
-  "claude-sonnet-4-5": 200_000,
-  "deepseek-v4-pro": 128_000,
-  "deepseek-chat": 64_000,
-  "deepseek-reasoner": 64_000,
-  "gpt-5.5": 128_000,
-  "gpt-5": 128_000,
-  "gpt-5-mini": 128_000,
-};
-
+/* v1.9.13：ContextIndicator 已从 Composer 移除（Codex 极简），下面注释保留历史：
 function ContextIndicator({ model }: { model: string }) {
-  const sessionId = useSessionsStore((s) => s.currentId);
-  const messages = useSessionsStore((s) => (sessionId ? s.messages[sessionId] : undefined)) ?? [];
-  const totalTokens = messages.reduce(
-    (sum, m) => sum + (m.inputTokens || 0) + (m.outputTokens || 0),
-    0,
-  );
-  const window = MODEL_CONTEXT_WINDOW[model] ?? 128_000;
-  const pct = Math.min(100, (totalTokens / window) * 100);
-  const color =
-    pct < 50 ? "var(--success, #1a7f37)" : pct < 80 ? "var(--warn, #d4a72c)" : "var(--error, #cf222e)";
-  return (
-    <span
-      className="composer-context-indicator"
-      title={`本会话已用 ${totalTokens.toLocaleString()} / ${window.toLocaleString()} tokens (${pct.toFixed(1)}%)`}
-    >
-      <span
-        className="context-bar"
-        style={{ ["--pct" as any]: `${pct}%`, ["--bar-color" as any]: color }}
-      />
-      <span className="context-text">
-        {totalTokens >= 1000 ? `${(totalTokens / 1000).toFixed(1)}k` : totalTokens}
-        <span className="context-pct" style={{ color }}>
-          {" "}{pct.toFixed(0)}%
-        </span>
-      </span>
-    </span>
-  );
+  // ... 已删除
+  // 返回:
+  //   <span className="composer-context-indicator"> ... </span>
 }
+*/
 
 // v1.9.7: ProjectPicker（Codex 风格：Composer 输入框下方的项目下拉）
 function ProjectPicker({
@@ -3278,6 +3220,143 @@ function ProjectPicker({
           </div>
         </div>
       )}
+    </div>
+  );
+}
+
+// ============================================================
+// v1.9.15：附件菜单（Codex 风格 + 加号按钮弹窗）
+// ============================================================
+function AttachMenu({
+  onClose,
+  onPickFiles,
+  planMode,
+  onTogglePlanMode,
+}: {
+  onClose: () => void;
+  onPickFiles: () => void;
+  planMode: boolean;
+  onTogglePlanMode: () => void;
+}) {
+  useEffect(() => {
+    const onDoc = (e: MouseEvent) => {
+      const el = e.target as HTMLElement;
+      if (!el.closest(".composer-attach-wrap")) onClose();
+    };
+    const onEsc = (e: KeyboardEvent) => { if (e.key === "Escape") onClose(); };
+    document.addEventListener("mousedown", onDoc);
+    document.addEventListener("keydown", onEsc);
+    return () => {
+      document.removeEventListener("mousedown", onDoc);
+      document.removeEventListener("keydown", onEsc);
+    };
+  }, [onClose]);
+  return (
+    <div className="attach-menu" role="menu" onContextMenu={(e) => e.preventDefault()}>
+      <button type="button" className="attach-item" role="menuitem" onClick={onPickFiles}>
+        <span className="attach-icon">📎</span>
+        <span className="attach-label">添加照片和文件</span>
+      </button>
+      <div className="attach-sep" />
+      <button
+        type="button"
+        className={`attach-item ${planMode ? "active" : ""}`}
+        role="menuitem"
+        onClick={onTogglePlanMode}
+      >
+        <span className="attach-icon">📋</span>
+        <span className="attach-label">计划模式</span>
+        <span className={`attach-toggle ${planMode ? "on" : ""}`} aria-hidden="true">
+          <span className="attach-toggle-knob" />
+        </span>
+      </button>
+    </div>
+  );
+}
+
+// ============================================================
+// v1.9.15：审批模式菜单（Codex 真实三档：请求批准 / 替我审批 / 完全访问权限）
+// ============================================================
+function ApprovalMenu({
+  current,
+  onPick,
+  onClose,
+}: {
+  current: ApprovalMode;
+  onPick: (m: ApprovalMode) => void;
+  onClose: () => void;
+}) {
+  useEffect(() => {
+    const onDoc = (e: MouseEvent) => {
+      const el = e.target as HTMLElement;
+      if (!el.closest(".composer-approval-wrap")) onClose();
+    };
+    const onEsc = (e: KeyboardEvent) => { if (e.key === "Escape") onClose(); };
+    document.addEventListener("mousedown", onDoc);
+    document.addEventListener("keydown", onEsc);
+    return () => {
+      document.removeEventListener("mousedown", onDoc);
+      document.removeEventListener("keydown", onEsc);
+    };
+  }, [onClose]);
+
+  const items: Array<{ value: ApprovalMode; icon: string; title: string; desc: string }> = [
+    {
+      value: "full",
+      icon: "🛡",
+      title: "请求批准",
+      desc: "编辑外部文件和使用互联网始终询问",
+    },
+    {
+      value: "risk",
+      icon: "🕐",
+      title: "替我审批",
+      desc: "仅对检测到的风险操作请求批准",
+    },
+    {
+      value: "off",
+      icon: "🔓",
+      title: "完全访问权限",
+      desc: "可不受限制地访问互联网和您电脑上的任何文件",
+    },
+  ];
+
+  return (
+    <div className="approval-menu" role="menu" onContextMenu={(e) => e.preventDefault()}>
+      <div className="approval-menu-header">
+        <span>应如何批准 Codex 操作？</span>
+        <a
+          href="#"
+          className="approval-learn-more"
+          onClick={(e) => {
+            e.preventDefault();
+            alert(
+              "审批模式说明：\n\n" +
+                "• 请求批准（默认）：任何外部操作（编辑文件、执行命令、访问网络）都会弹出审批框。\n\n" +
+                "• 替我审批：模型先判断风险，仅对可能有害的操作才弹审批。\n\n" +
+                "• 完全访问权限：信任模型，所有操作直接执行。",
+            );
+          }}
+        >
+          了解更多
+        </a>
+      </div>
+      {items.map((it) => (
+        <button
+          key={it.value}
+          type="button"
+          className={`approval-menu-item ${current === it.value ? "active" : ""}`}
+          role="menuitem"
+          onClick={() => onPick(it.value)}
+        >
+          <span className="approval-menu-icon">{it.icon}</span>
+          <div className="approval-menu-text">
+            <div className="approval-menu-title">{it.title}</div>
+            <div className="approval-menu-desc">{it.desc}</div>
+          </div>
+          {current === it.value && <span className="approval-menu-check">✓</span>}
+        </button>
+      ))}
     </div>
   );
 }

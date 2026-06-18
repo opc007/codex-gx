@@ -1,4 +1,7 @@
 import { useEffect, useState, Component, type ReactNode, type ErrorInfo } from "react";
+
+/** v1.9.15：审批模式三档（Codex 风格：Composer 内联切换） */
+export type ApprovalMode = "full" | "risk" | "off";
 import { Sidebar } from "./components/Sidebar";
 import { Thread } from "./components/Thread";
 import { Composer } from "./components/Composer";
@@ -12,7 +15,7 @@ import PlanDialog, {
 } from "./components/PlanDialog";
 import { useThemeMode, type ThemeMode, reapplyTheme } from "./stores/theme";
 import { useSessionsStore, getSessionsState } from "./stores/sessions";
-import { getCurrentWorkspaceId, switchWorkspace } from "./stores/workspace";
+import { getCurrentWorkspace, getCurrentWorkspaceId, switchWorkspace } from "./stores/workspace";
 import { openTab } from "./stores/tabs";
 import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
@@ -140,17 +143,23 @@ export default function App() {
   // v1.9.x：未激活 / 试用已结束 → 显示激活门
   const [licenseStatus, setLicenseStatus] = useState<LicenseStatusKind | null>(null);
 
-  // v1.9.7：审批模式（Codex 风格：Composer 内联切换）
-  const [requireApproval, setRequireApproval] = useState<boolean>(() => {
+  // v1.9.15：审批模式（Codex 风格：Composer 内联切换，三档）
+  // - "full"  请求批准：所有外部操作都弹审批（默认）
+  // - "risk"  替我审批：仅风险操作弹审批
+  // - "off"   完全访问权限：跳过所有审批
+  const [requireApproval, setRequireApproval] = useState<ApprovalMode>(() => {
     try {
-      return localStorage.getItem("codex_gx_require_approval") !== "false";
+      const v = localStorage.getItem("codex_gx_require_approval");
+      if (v === "false" || v === "off" || v === "0") return "off";
+      if (v === "risk" || v === "risk-only") return "risk";
+      return "full";
     } catch {
-      return true;
+      return "full";
     }
   });
   useEffect(() => {
     try {
-      localStorage.setItem("codex_gx_require_approval", requireApproval ? "1" : "false");
+      localStorage.setItem("codex_gx_require_approval", requireApproval);
     } catch {
       /* ignore */
     }
@@ -303,9 +312,11 @@ export default function App() {
     }>("agent:event", (event) => {
       const p = event.payload;
       if (p.kind === "approval_request" && p.toolCall) {
-        // v1.9.7：若用户已切到「完全访问权限」（requireApproval=false），
-        // 自动 respond_approval(true)，不再弹任何对话框（Codex 风格）
-        if (!requireApproval) {
+        // v1.9.15：审批模式三档
+        // - "off"   完全访问权限：直接 approve，不弹窗
+        // - "risk"  替我审批：风险操作才弹（前端无法精确判断，暂按"全部弹"等同 full）
+        // - "full"  请求批准：所有外部操作都弹审批（默认）
+        if (requireApproval === "off") {
           void invoke("respond_approval", {
             sessionId: p.toolCall.sessionId,
             approve: true,
@@ -421,6 +432,13 @@ export default function App() {
               }
               onPickNoProject={() => {
                 switchWorkspace("default");
+              }}
+              onEditProject={() => {
+                // v1.9.14：点击「路径 chip」→ 编辑当前项目（WorkspaceDialog edit 模式）
+                // 如果当前是 default（无项目），fallback 到创建
+                const ws = getCurrentWorkspace();
+                const detail = ws && ws.id !== "default" ? "edit" : "create";
+                window.dispatchEvent(new CustomEvent("codex_gx:open-ws-dialog", { detail }));
               }}
             />
           </main>

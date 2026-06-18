@@ -270,6 +270,8 @@ pub fn run() {
         })
         .invoke_handler(tauri::generate_handler![
             ping,
+            reveal_in_finder, // v1.9.14：Codex 「在 Finder 中显示」
+            create_permanent_worktree, // v1.9.14：Codex 「创建永久工作树」
             chat,
             agent_run,
             cancel_chat,
@@ -495,6 +497,78 @@ pub fn run() {
 fn ping() -> String {
     let v = env!("CARGO_PKG_VERSION");
     format!("AgentShell Rust backend v{}", v)
+}
+
+/// v1.9.14：在 Finder/Explorer 中显示文件或目录（Codex 真实「在 Finder 中显示」入口）
+/// - macOS: `open -R <path>`  启动 Finder 并高亮选中
+/// - Windows: `explorer /select,<path>`
+/// - Linux: `xdg-open <parent_dir>`
+#[tauri::command]
+fn reveal_in_finder(path: String) -> Result<(), String> {
+    use std::process::Command;
+    let p = std::path::PathBuf::from(&path);
+    if !p.exists() {
+        return Err(format!("路径不存在：{}", path));
+    }
+    #[cfg(target_os = "macos")]
+    {
+        let status = Command::new("open").arg("-R").arg(&p).status()
+            .map_err(|e| format!("open -R 失败：{}", e))?;
+        if !status.success() {
+            return Err(format!("open 退出码：{:?}", status.code()));
+        }
+    }
+    #[cfg(target_os = "windows")]
+    {
+        // explorer /select,<path> 没有合适的退出码判断，fire-and-forget
+        Command::new("explorer")
+            .arg(format!("/select,{}", p.display()))
+            .spawn()
+            .map_err(|e| format!("explorer 启动失败：{}", e))?;
+    }
+    #[cfg(all(unix, not(target_os = "macos")))]
+    {
+        let parent = p.parent().unwrap_or_else(|| std::path::Path::new("."));
+        Command::new("xdg-open").arg(parent).spawn()
+            .map_err(|e| format!("xdg-open 失败：{}", e))?;
+    }
+    Ok(())
+}
+
+/// v1.9.14：创建永久 git worktree 作为新项目（Codex 真实「创建永久工作树」入口）
+/// - 在 `$CODEX_HOME/worktrees/<ws_id>/` 下执行 `git worktree add`
+/// - 简化：当前目录非 git 仓库时返回错误，前端会提示
+#[tauri::command]
+fn create_permanent_worktree(
+    source_path: String,
+    workspace_id: String,
+    branch_label: String,
+) -> Result<String, String> {
+    use std::path::PathBuf;
+    use std::process::Command;
+    let home: PathBuf = std::env::var_os("HOME")
+        .or_else(|| std::env::var_os("USERPROFILE"))
+        .map(PathBuf::from)
+        .ok_or_else(|| "解析 HOME 失败".to_string())?;
+    let wt_root = home.join(".agentshell").join("worktrees").join(&workspace_id);
+    std::fs::create_dir_all(&wt_root).map_err(|e| format!("创建 worktree 目录失败：{}", e))?;
+    let label = branch_label.trim();
+    if label.is_empty() {
+        return Err("分支名不能为空".to_string());
+    }
+    // 用 git worktree add -b <branch> <wt_root> HEAD（detached 起点）
+    let status = Command::new("git")
+        .arg("worktree").arg("add")
+        .arg("-b").arg(label)
+        .arg(&wt_root)
+        .arg("HEAD")
+        .current_dir(&source_path)
+        .status()
+        .map_err(|e| format!("git worktree 启动失败：{}（请确认目录是 git 仓库）", e))?;
+    if !status.success() {
+        return Err(format!("git worktree add 失败：{:?}", status.code()));
+    }
+    Ok(wt_root.to_string_lossy().to_string())
 }
 
 /// 同步聊天（保留以兼容）
