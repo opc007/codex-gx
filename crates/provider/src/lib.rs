@@ -13,6 +13,7 @@ pub mod deepseek;
 pub mod error;
 pub mod local;
 pub mod minimax;
+pub mod minimax_media;
 pub mod model;
 pub mod openai_compat;
 pub mod registry;
@@ -28,6 +29,10 @@ pub use local::{
     OllamaModelEntry, OllamaProvider,
 };
 pub use minimax::MinimaxProvider;
+pub use minimax_media::{
+    ImageGenerationRequest, ImageGenerationResponse, MinimaxMedia, VideoGenerationRequest,
+    VideoQueryResponse, VideoSubmitResponse,
+};
 pub use model::{Model, ModelCapabilities, ModelInfo, StopReason, Usage};
 pub use openai_compat::OpenAiCompatProvider;
 pub use registry::ProviderRegistry;

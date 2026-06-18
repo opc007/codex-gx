@@ -112,6 +112,27 @@ export function MessageBubble({ msg }: Props) {
           </details>
         )}
         <div className="bubble-text">{msg.text}</div>
+        {/* v1.9.6: 多模态生图 */}
+        {msg.mediaGallery && msg.mediaGallery.length > 0 && (
+          <div className="media-gallery">
+            {msg.mediaGallery.map((u, i) => (
+              <a key={i} href={u} target="_blank" rel="noreferrer" title="点击查看原图 / 右键保存">
+                <img src={u} alt={`generated-${i}`} loading="lazy" />
+              </a>
+            ))}
+          </div>
+        )}
+        {/* v1.9.6: 多模态生视频 */}
+        {msg.mediaVideo && (
+          <div className="media-video">
+            <video src={msg.mediaVideo} controls preload="metadata" />
+            <div className="media-video-actions">
+              <a href={msg.mediaVideo} target="_blank" rel="noreferrer" download>
+                ⬇️ 下载视频
+              </a>
+            </div>
+          </div>
+        )}
       </div>
       <ReplayDialog record={replayTarget} onClose={() => setReplayTarget(null)} />
     </div>

@@ -856,7 +856,7 @@ export function Composer({ sessionId }: Props) {
       const helpMsg: PersistedMessage = {
         id: crypto.randomUUID(),
         role: "assistant",
-        text: `📖 Codex gx v1.4 命令帮助：
+        text: `📖 Codex gx v1.9.6 命令帮助：
 
 通用：
 /help      - 显示此帮助
@@ -962,7 +962,26 @@ M3 / Claude / GPT 会自动调用：
 - /learn feedback bad   - 👎 负面反馈
 - /learn reset          - 重置所有学习数据
 - Top bar 🧠 打开学习面板
-- 自动跟踪模型 / 工具 / 命令 / 提示长度 / 语言`,
+- 自动跟踪模型 / 工具 / 命令 / 提示长度 / 语言
+
+🎨 v1.9.6 多模态生图 (MiniMax):
+/image <提示词>                     - 文生图（图灵 / image-01）
+  --model <modelId>                - 指定模型（image-01 / image-02）
+  --w 1024 --h 1024                - 尺寸
+  --n 1                            - 生成张数
+  --ref <url1,url2>                - 参考图（图生图）
+  示例: /image a cute cat, anime style --w 768 --h 768
+
+🎬 v1.9.6 多模态生视频 (MiniMax-Hailuo):
+/video <提示词>                    - 文生视频（最长 6s / 768P）
+  --model MiniMax-Hailuo-2.3       - 模型（Hailuo-2.3 / 2）
+  --duration 6|10                  - 时长（秒）
+  --resolution 768P|1080P          - 分辨率（API 仅支持 768P / 1080P）
+  --first <url>                    - 首帧图（图生视频）
+  --ref <url1,url2>                - 主体参考
+  --wait 240                       - 等待上限（秒）
+  示例: /video a cat walking in rain --duration 6
+  ⚠️ 视频生成通常 60-180s，前端会自动等结果`,
         createdAt: Date.now(),
       };
       appendMessage(sessionId, helpMsg);
@@ -1377,6 +1396,240 @@ M3 / Claude / GPT 会自动调用：
       return;
     }
 
+    // v1.9.6: /image （MiniMax 文/图生图）
+    if (trimmed === "/image" || trimmed.startsWith("/image ")) {
+      const arg = trimmed.slice(6).trim();
+      if (!arg) {
+        appendMessage(sessionId, {
+          id: crypto.randomUUID(),
+          role: "assistant",
+          createdAt: Date.now(),
+          text: `🎨 用法: \`/image <提示词>\`\n\n可选项: \`--model <modelId>\` · \`--w 1024 --h 1024\` · \`--n 1\` · \`--ref <url1,url2>\`\n\n示例: \n  \`/image a cute cat, anime style\`\n  \`/image a mountain --model image-02 --w 1280 --h 720\`\n  \`/image a logo --ref https://example.com/style.png\``,
+        });
+        setText("");
+        return;
+      }
+      // 解析 flag
+      const tokens = arg.match(/(?:[^\s"]+|"[^"]*")+/g) || [];
+      const flags: string[] = [];
+      const posArgs: string[] = [];
+      for (let i = 0; i < tokens.length; i++) {
+        const t = tokens[i];
+        if (t.startsWith("--")) {
+          flags.push(t);
+        } else if (
+          (t === "--ref" || t === "--model" || t === "--w" || t === "--h" || t === "--n") &&
+          tokens[i + 1]
+        ) {
+          flags.push(t, tokens[i + 1]);
+          i++;
+        } else {
+          posArgs.push(t);
+        }
+      }
+      const getFlag = (name: string) => {
+        const idx = flags.indexOf(name);
+        return idx >= 0 ? flags[idx + 1] : undefined;
+      };
+      const prompt = posArgs.join(" ").trim();
+      if (!prompt) {
+        appendMessage(sessionId, {
+          id: crypto.randomUUID(),
+          role: "assistant",
+          createdAt: Date.now(),
+          text: "❌ 缺少提示词，例如 `/image a cute cat`",
+        });
+        setText("");
+        return;
+      }
+      const refStr = getFlag("--ref");
+      const refUrls = refStr
+        ? refStr.split(",").map((u) => u.trim()).filter(Boolean)
+        : null;
+      const args: {
+        prompt: string;
+        model?: string;
+        width?: number;
+        height?: number;
+        n?: number;
+        image_urls?: string[];
+      } = { prompt };
+      const m = getFlag("--model");
+      if (m) args.model = m;
+      const w = getFlag("--w");
+      if (w) args.width = parseInt(w, 10);
+      const h = getFlag("--h");
+      if (h) args.height = parseInt(h, 10);
+      const n = getFlag("--n");
+      if (n) args.n = parseInt(n, 10);
+      if (refUrls && refUrls.length > 0) args.image_urls = refUrls;
+      // 把用户原始命令也显示
+      appendMessage(sessionId, {
+        id: crypto.randomUUID(),
+        role: "user",
+        text: `/image ${prompt}`,
+        createdAt: Date.now(),
+      });
+      const startId = `media-image-${crypto.randomUUID()}`;
+      appendMessage(sessionId, {
+        id: startId,
+        role: "assistant",
+        createdAt: Date.now(),
+        text: `🎨 正在生成图像…\n\n  prompt: ${prompt}\n  model: ${args.model || "image-01 (默认)"}\n  size:  ${args.width || 1024}×${args.height || 1024}${refUrls ? `\n  ref:   ${refUrls.length} 张` : ""}`,
+      });
+      setText("");
+      try {
+        const r = await invoke<{
+          id: string;
+          image_urls: string[];
+          success_count: string;
+          failed_count: string;
+        }>("media_generate_image", { args });
+        // 把生成结果用 media-gallery 标记的消息保存
+        const galId = `gallery-${crypto.randomUUID()}`;
+        appendMessage(sessionId, {
+          id: galId,
+          role: "assistant",
+          createdAt: Date.now(),
+          text: `✅ 图像生成成功 · id \`${r.id.slice(0, 16)}\`\n\n${r.image_urls.map((u, i) => `![generated-${i}](${u})`).join("\n\n")}\n\n💡 右键图片 → 复制 / 在浏览器中打开。\n⚠️ 链接 24h 内有效，建议右键保存到本地。`,
+          mediaGallery: r.image_urls,
+        });
+      } catch (e) {
+        appendMessage(sessionId, {
+          id: crypto.randomUUID(),
+          role: "assistant",
+          createdAt: Date.now(),
+          text: `❌ 图像生成失败：${e}`,
+        });
+      }
+      return;
+    }
+
+    // v1.9.6: /video （MiniMax 文生视频）
+    if (trimmed === "/video" || trimmed.startsWith("/video ")) {
+      const arg = trimmed.slice(6).trim();
+      if (!arg) {
+        appendMessage(sessionId, {
+          id: crypto.randomUUID(),
+          role: "assistant",
+          createdAt: Date.now(),
+          text: `🎬 用法: \`/video <提示词>\`\n\n可选项: \`--model MiniMax-Hailuo-2.3\` · \`--duration 6|10\` · \`--resolution 720P|1080P\` · \`--first <url>\` · \`--ref <url1,url2>\` · \`--wait 240\`\n\n示例: \n  \`/video a cat walking in the rain\`\n  \`/video a city skyline --duration 10 --resolution 1080P\`\n  \`/video a dancer --first https://example.com/pose.png\`\n\n⚠️ 视频生成通常 1-3 分钟，会自动等待结果。`,
+        });
+        setText("");
+        return;
+      }
+      const tokens = arg.match(/(?:[^\s"]+|"[^"]*")+/g) || [];
+      const flags: string[] = [];
+      const posArgs: string[] = [];
+      for (let i = 0; i < tokens.length; i++) {
+        const t = tokens[i];
+        if (t.startsWith("--")) {
+          flags.push(t);
+        } else if (
+          (t === "--ref" ||
+            t === "--model" ||
+            t === "--duration" ||
+            t === "--resolution" ||
+            t === "--first" ||
+            t === "--wait") &&
+          tokens[i + 1]
+        ) {
+          flags.push(t, tokens[i + 1]);
+          i++;
+        } else {
+          posArgs.push(t);
+        }
+      }
+      const getFlag = (name: string) => {
+        const idx = flags.indexOf(name);
+        return idx >= 0 ? flags[idx + 1] : undefined;
+      };
+      const prompt = posArgs.join(" ").trim();
+      if (!prompt) {
+        appendMessage(sessionId, {
+          id: crypto.randomUUID(),
+          role: "assistant",
+          createdAt: Date.now(),
+          text: "❌ 缺少提示词，例如 `/video a cat walking`",
+        });
+        setText("");
+        return;
+      }
+      const args: {
+        prompt: string;
+        model?: string;
+        duration?: number;
+        resolution?: string;
+        first_frame_image?: string;
+        subject_reference?: string[];
+        wait_secs?: number;
+      } = { prompt };
+      const m = getFlag("--model");
+      if (m) args.model = m;
+      const dur = getFlag("--duration");
+      if (dur) args.duration = parseInt(dur, 10);
+      const res = getFlag("--resolution");
+      if (res) args.resolution = res;
+      const first = getFlag("--first");
+      if (first) args.first_frame_image = first;
+      const refStr = getFlag("--ref");
+      if (refStr) {
+        args.subject_reference = refStr
+          .split(",")
+          .map((u) => u.trim())
+          .filter(Boolean);
+      }
+      const wait = getFlag("--wait");
+      if (wait) args.wait_secs = parseInt(wait, 10);
+      appendMessage(sessionId, {
+        id: crypto.randomUUID(),
+        role: "user",
+        text: `/video ${prompt}`,
+        createdAt: Date.now(),
+      });
+      appendMessage(sessionId, {
+        id: crypto.randomUUID(),
+        role: "assistant",
+        createdAt: Date.now(),
+        text: `🎬 视频生成中…\n\n  prompt:  ${prompt}\n  model:   ${args.model || "MiniMax-Hailuo-2.3 (默认)"}\n  duration:${args.duration || 6}s\n  resol.:  ${args.resolution || "720P"}${args.first_frame_image ? `\n  first:   ${args.first_frame_image}` : ""}${args.subject_reference ? `\n  ref:     ${args.subject_reference.length} 张` : ""}\n\n⏳ 通常 60-180 秒，最多等 ${args.wait_secs || 240}s`,
+      });
+      setText("");
+      try {
+        const r = await invoke<{
+          task_id: string;
+          status: string;
+          video_url: string | null;
+          file_id: string | null;
+          message: string | null;
+          elapsed_secs: number;
+        }>("media_generate_video", { args });
+        if (r.video_url) {
+          appendMessage(sessionId, {
+            id: crypto.randomUUID(),
+            role: "assistant",
+            createdAt: Date.now(),
+            text: `✅ 视频生成完成 · 用时 ${r.elapsed_secs}s\n\n  task_id:  \`${r.task_id}\`\n  file_id:  ${r.file_id || "—"}\n  status:   ${r.status}\n  🎥 [下载视频](${r.video_url})\n\n💡 右键视频链接 → 链接另存为 / 在浏览器中打开。\n⚠️ 链接会过期，建议立即下载。`,
+            mediaVideo: r.video_url,
+          });
+        } else {
+          appendMessage(sessionId, {
+            id: crypto.randomUUID(),
+            role: "assistant",
+            createdAt: Date.now(),
+            text: `⚠️ 视频任务结束但无 URL\n\n  status:  ${r.status}\n  message: ${r.message || "—"}\n  task_id: \`${r.task_id}\``,
+          });
+        }
+      } catch (e) {
+        appendMessage(sessionId, {
+          id: crypto.randomUUID(),
+          role: "assistant",
+          createdAt: Date.now(),
+          text: `❌ 视频生成失败：${e}`,
+        });
+      }
+      return;
+    }
+
     // v1.9.2: /pocket
     if (trimmed === "/pocket" || trimmed.startsWith("/pocket ")) {
       const arg = trimmed.slice(7).trim();
@@ -1618,6 +1871,8 @@ M3 / Claude / GPT 会自动调用：
           "pocket",
           // v1.9.4
           "vision",
+          // v1.9.6
+          "image", "video",
         ]);
         if (!known.has(name)) {
           try {

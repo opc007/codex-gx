@@ -2812,3 +2812,57 @@ kbd {
 .composer-model-chip.model-missing {
   color: var(--warning, #e6a700);
 }
+
+/* v1.9.6: 多模态生图 / 生视频 */
+.media-gallery {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+  gap: 8px;
+  margin-top: 8px;
+}
+.media-gallery a {
+  display: block;
+  border-radius: 8px;
+  overflow: hidden;
+  border: 1px solid var(--border-color, rgba(255, 255, 255, 0.12));
+  transition: transform 0.15s ease, border-color 0.15s ease;
+}
+.media-gallery a:hover {
+  transform: scale(1.02);
+  border-color: var(--accent, #4f8ef7);
+}
+.media-gallery img {
+  display: block;
+  width: 100%;
+  height: auto;
+  max-height: 360px;
+  object-fit: cover;
+  background: rgba(0, 0, 0, 0.3);
+}
+.media-video {
+  margin-top: 8px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.media-video video {
+  width: 100%;
+  max-height: 480px;
+  border-radius: 8px;
+  background: #000;
+}
+.media-video-actions {
+  display: flex;
+  gap: 8px;
+}
+.media-video-actions a {
+  color: var(--accent, #4f8ef7);
+  text-decoration: none;
+  font-size: 13px;
+  padding: 4px 10px;
+  border-radius: 6px;
+  border: 1px solid var(--border-color, rgba(255, 255, 255, 0.12));
+}
+.media-video-actions a:hover {
+  background: var(--accent-bg, rgba(79, 142, 247, 0.1));
+}

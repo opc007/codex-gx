@@ -25,6 +25,7 @@ mod lint_tauri;
 mod local_tauri;
 mod marketplace_tauri;
 mod mcp_tool;
+mod media_tauri;
 mod p2p_tauri;
 mod queue_tauri;
 mod routing;
@@ -279,6 +280,9 @@ pub fn run() {
             vision_tauri::vision_status,                       // v1.9.4 5.31 Vision
             vision_tauri::vision_meta,                         // v1.9.4 5.31 Vision
             vision_tauri::vision_caption,                     // v1.9.4 5.31 Vision
+            media_tauri::media_capabilities,                   // v1.9.6 多模态生图/生视频
+            media_tauri::media_generate_image,                 // v1.9.6 多模态生图
+            media_tauri::media_generate_video,                 // v1.9.6 多模态生视频
             vision_tauri::vision_ocr,                         // v1.9.4 5.31 Vision
             vision_tauri::vision_annotate,                    // v1.9.4 5.31 Vision
             vision_tauri::vision_formats,                     // v1.9.4 5.31 Vision

@@ -40,6 +40,10 @@ export type PersistedMessage = {
   createdAt: number;
   inputTokens?: number;
   outputTokens?: number;
+  /// v1.9.6：多模态生图结果（图片 URL 数组）
+  mediaGallery?: string[];
+  /// v1.9.6：多模态生视频结果（视频 URL）
+  mediaVideo?: string;
 };
 
 export type SessionsStore = {

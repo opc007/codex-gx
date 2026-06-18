@@ -32,6 +32,18 @@ pub fn load_secrets() -> Secrets {
         .unwrap_or_default()
 }
 
+/// 优先返回 secrets.json 中的 MiniMax Key；为空时回退到环境变量
+pub fn resolve_minimax_key() -> Result<String, String> {
+    let s = load_secrets();
+    if let Some(k) = s.minimax_api_key.filter(|k| !k.is_empty()) {
+        return Ok(k);
+    }
+    std::env::var("MINIMAX_API_KEY")
+        .ok()
+        .filter(|k| !k.is_empty())
+        .ok_or_else(|| "MINIMAX_API_KEY 未配置".into())
+}
+
 fn save_secrets(secrets: &Secrets) -> Result<(), String> {
     let path = secrets_path();
     let json = serde_json::to_string_pretty(secrets).map_err(|e| e.to_string())?;
