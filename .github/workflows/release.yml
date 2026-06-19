@@ -4,6 +4,11 @@ on:
   push:
     tags:
       - "v*"
+  workflow_dispatch:
+
+env:
+  CARGO_TERM_COLOR: always
+  RUSTUP_MAX_RETRIES: 10
 
 jobs:
   build:
@@ -14,12 +19,13 @@ jobs:
         include:
           - target: x86_64-unknown-linux-gnu
             os: ubuntu-latest
+            ext: linux
           - target: x86_64-apple-darwin
-            os: macos-latest
-          - target: aarch64-apple-darwin
-            os: macos-latest
+            os: macos-14
+            ext: macos
           - target: x86_64-pc-windows-msvc
             os: windows-latest
+            ext: windows
 
     runs-on: ${{ matrix.os }}
 
@@ -37,16 +43,7 @@ jobs:
           workspaces: "."
           shared-key: release-${{ matrix.target }}
 
-      - name: Setup Node (mac/linux)
-        if: matrix.os != 'windows-latest'
-        uses: actions/setup-node@v4
-        with:
-          node-version: "22"
-          cache: "npm"
-          cache-dependency-path: apps/desktop/package-lock.json
-
-      - name: Setup Node (windows)
-        if: matrix.os == 'windows-latest'
+      - name: Setup Node
         uses: actions/setup-node@v4
         with:
           node-version: "22"
@@ -57,26 +54,72 @@ jobs:
         working-directory: apps/desktop
         run: npm ci
 
-      - name: Build Tauri
-        uses: tauri-apps/tauri-action@v0
+      - name: Build Tauri (no auto-release)
+        working-directory: apps/desktop
+        run: npx tauri build --target ${{ matrix.target }} --bundles app,dmg,msi,nsis,deb,appimage
         env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        with:
-          projectPath: apps/desktop
-          tagName: ${{ github.ref_name }}
-          releaseName: "AgentShell ${{ github.ref_name }}"
-          releaseBody: "自动构建的 Tauri bundle — 见 README"
-          releaseDraft: true
-          prerelease: false
-          args: --target ${{ matrix.target }}
+          NO_RELEASE: "1"
+          TAURI_SIGNING_PRIVATE_KEY: ""
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ""
 
       - name: Upload artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: agentshell-${{ matrix.target }}
+          name: agentshell-${{ matrix.ext }}
           path: |
             apps/desktop/src-tauri/target/${{ matrix.target }}/release/bundle/dmg/*.dmg
+            apps/desktop/src-tauri/target/${{ matrix.target }}/release/bundle/macos/*.app
             apps/desktop/src-tauri/target/${{ matrix.target }}/release/bundle/msi/*.msi
+            apps/desktop/src-tauri/target/${{ matrix.target }}/release/bundle/nsis/*.exe
             apps/desktop/src-tauri/target/${{ matrix.target }}/release/bundle/deb/*.deb
             apps/desktop/src-tauri/target/${{ matrix.target }}/release/bundle/appimage/*.AppImage
           if-no-files-found: warn
+
+  release:
+    name: Publish GitHub Release
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write   # 允许创建/编辑 release
+    if: startsWith(github.ref, 'refs/tags/v')
+    steps:
+      - name: Download all artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: dist
+
+      - name: List downloaded artifacts
+        run: find dist -type f -ls
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          name: "AgentShell ${{ github.ref_name }}"
+          body: |
+            ## Codex gx v${{ github.ref_name }}
+
+            ### 下载说明
+            - **macOS (Apple Silicon)**: `Codex gx_*.aarch64.dmg`
+            - **macOS (Intel)**: `Codex gx_*.x64.dmg`
+            - **Windows**: `Codex gx_*_x64-setup.exe` (NSIS 推荐) 或 `Codex gx_*_x64_en-US.msi`
+            - **Linux**: `*.AppImage` 或 `*.deb`
+
+            首次打开如遇"未识别开发者"，右键 → 打开 → 仍要打开。
+
+            ### 激活
+            启动后默认进入 License 页（v1.6 强制激活）。
+            - 没有激活码？点 ⋯ →「API Key 设置」配置你想用的大模型 Key（M3 / DeepSeek / 智谱 / MiMo / Kimi / 自定义 OpenAI 协议），保存即用
+            - 详见 [README](https://github.com/opc007/codex-gx#readme)
+
+            自动构建 — 见 [commit history](https://github.com/opc007/codex-gx/commits/${{ github.ref_name }})
+          draft: true
+          prerelease: false
+          files: |
+            dist/**/*.dmg
+            dist/**/*.app
+            dist/**/*.msi
+            dist/**/*.exe
+            dist/**/*.deb
+            dist/**/*.AppImage
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
