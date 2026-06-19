@@ -235,14 +235,36 @@ mod tests {
 
     #[test]
     fn test_set_preset() {
-        let mut r = PersonalityRegistry::with_state(Personality::default());
-        r.set_preset(PersonalityPreset::Explanatory).unwrap();
-        assert_eq!(
-            r.current(),
-            &Personality::Preset(PersonalityPreset::Explanatory)
-        );
-        let addon = r.system_prompt_addon();
-        assert!(addon.contains("Markdown"));
+        // set_preset 内部调 save_state 写 $HOME/.agentshell/personality/state.json，
+        // 临时把 HOME 指到 tempdir 避免污染真实 home（CI / sandbox 安全）。
+        let dir = std::env::temp_dir().join(format!(
+            "agentshell-personality-test-{}",
+            std::process::id()
+        ));
+        let _ = std::fs::create_dir_all(&dir);
+        let prev = std::env::var("HOME").ok();
+        // SAFETY: 测试串行执行
+        unsafe { std::env::set_var("HOME", &dir) }
+
+        let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+            let mut r = PersonalityRegistry::with_state(Personality::default());
+            r.set_preset(PersonalityPreset::Explanatory).unwrap();
+            assert_eq!(
+                r.current(),
+                &Personality::Preset(PersonalityPreset::Explanatory)
+            );
+            let addon = r.system_prompt_addon();
+            assert!(addon.contains("Markdown"));
+        }));
+
+        match prev {
+            Some(v) => unsafe { std::env::set_var("HOME", v) },
+            None => unsafe { std::env::remove_var("HOME") },
+        }
+        let _ = std::fs::remove_dir_all(&dir);
+        if result.is_err() {
+            std::panic::resume_unwind(result.unwrap_err());
+        }
     }
 
     #[test]

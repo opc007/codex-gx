@@ -2331,7 +2331,7 @@ M3 / Claude / GPT 会自动调用：
         "MiniMax-M3": { in: 0.60, out: 2.40 },
         "claude-opus-4-8": { in: 15, out: 75 },
         "claude-sonnet-4-5": { in: 3, out: 15 },
-        "deepseek-v4-pro": { in: 0.27, out: 1.10 },
+        "deepseek-chat": { in: 0.27, out: 1.10 },
         "gpt-5.5": { in: 5, out: 15 },
       };
       const price = PRICE_PER_M[model] || { in: 0, out: 0 };

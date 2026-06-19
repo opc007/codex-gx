@@ -284,6 +284,7 @@ pub fn run() {
             api_keys_tauri::api_keys_set,
             api_keys_tauri::api_keys_test,
             api_keys_tauri::api_keys_test_minimax,
+            api_keys_tauri::api_keys_set_custom, // v1.9.16 自定义 provider
             license_tauri::license_status,     // v1.6
             license_tauri::license_activate,   // v1.6
             license_tauri::license_deactivate, // v1.6
@@ -590,8 +591,8 @@ async fn chat(req: ChatRequestPayload) -> Result<ChatResponsePayload, String> {
         content: msg.content,
         thinking: msg.reasoning_content.unwrap_or_default(),
         usage: UsageInfo {
-            input_tokens: resp.usage.input_tokens,
-            output_tokens: resp.usage.output_tokens,
+            input_tokens: resp.usage.as_ref().map(|u| u.input_tokens).unwrap_or(0),
+            output_tokens: resp.usage.as_ref().map(|u| u.output_tokens).unwrap_or(0),
         },
     })
 }
@@ -1568,7 +1569,7 @@ async fn compress_session(req: CompressPayload) -> Result<CompressResult, String
     };
     let resp = provider.chat(chat_req).await.map_err(|e| e.to_string())?;
     let summary = resp
-        .choices
+        .choices()
         .first()
         .map(|c| c.message.content.trim().to_string())
         .unwrap_or_default();
@@ -1700,6 +1701,96 @@ async fn create_provider(model: &str) -> Result<Box<dyn Model>, String> {
             })?;
             Ok(Box::new(DeepSeekProvider::new(m, key, None)))
         }
+        // v1.9.16：智谱 GLM
+        m if m.starts_with("glm-") => {
+            let key = std::env::var("ZHIPU_API_KEY").map_err(|_| {
+                "未配置 智谱 API Key。请点击 ⋯ →「API Key 设置」填写。".to_string()
+            })?;
+            let info = provider::model::ModelInfo {
+                id: m.into(),
+                name: m.into(),
+                provider: "zhipu".into(),
+                max_context: 200_000,
+                max_output: 8_192,
+                capabilities: Default::default(),
+                input_price_per_m: 0.6,
+                output_price_per_m: 2.2,
+                cache_read_price_per_m: 0.0,
+                reasoning_efforts: vec![],
+            };
+            Ok(Box::new(provider::OpenAiCompatProvider::new(
+                info,
+                "https://open.bigmodel.cn/api/paas/v4",
+                key,
+            )))
+        }
+        // v1.9.16：Xiaomi MiMo
+        m if m.starts_with("mimo-") => {
+            let key = std::env::var("MIMO_API_KEY").map_err(|_| {
+                "未配置 Xiaomi MiMo API Key。请点击 ⋯ →「API Key 设置」填写。".to_string()
+            })?;
+            let info = provider::model::ModelInfo {
+                id: m.into(),
+                name: m.into(),
+                provider: "mimo".into(),
+                max_context: 128_000,
+                max_output: 8_192,
+                capabilities: Default::default(),
+                input_price_per_m: 0.0,
+                output_price_per_m: 0.0,
+                cache_read_price_per_m: 0.0,
+                reasoning_efforts: vec![],
+            };
+            Ok(Box::new(provider::OpenAiCompatProvider::new(
+                info,
+                "https://api.xiaomimimo.com/v1",
+                key,
+            )))
+        }
+        // v1.9.16：Moonshot Kimi
+        m if m.starts_with("moonshot-") || m.starts_with("kimi-") => {
+            let key = std::env::var("MOONSHOT_API_KEY").map_err(|_| {
+                "未配置 Moonshot/Kimi API Key。请点击 ⋯ →「API Key 设置」填写。".to_string()
+            })?;
+            let info = provider::model::ModelInfo {
+                id: m.into(),
+                name: m.into(),
+                provider: "moonshot".into(),
+                max_context: 256_000,
+                max_output: 8_192,
+                capabilities: Default::default(),
+                input_price_per_m: 4.0,
+                output_price_per_m: 16.0,
+                cache_read_price_per_m: 0.0,
+                reasoning_efforts: vec![],
+            };
+            Ok(Box::new(provider::OpenAiCompatProvider::new(
+                info,
+                "https://api.moonshot.cn/v1",
+                key,
+            )))
+        }
+        // v1.9.16：自定义 provider — "custom:<model>"
+        m if m.starts_with("custom:") => {
+            let model = m.trim_start_matches("custom:").to_string();
+            let base_url = std::env::var("CUSTOM_BASE_URL").map_err(|_| {
+                "未配置自定义 provider。请点击 ⋯ →「API Key 设置」→「自定义 provider」填写并保存。".to_string()
+            })?;
+            let key = std::env::var("CUSTOM_API_KEY").unwrap_or_default();
+            let info = provider::model::ModelInfo {
+                id: model.clone(),
+                name: model.clone(),
+                provider: "custom".into(),
+                max_context: 128_000,
+                max_output: 8_192,
+                capabilities: Default::default(),
+                input_price_per_m: 0.0,
+                output_price_per_m: 0.0,
+                cache_read_price_per_m: 0.0,
+                reasoning_efforts: vec![],
+            };
+            Ok(Box::new(provider::OpenAiCompatProvider::new(info, base_url, key)))
+        }
         m if m.starts_with("gpt-") => {
             let key = std::env::var("OPENAI_API_KEY").map_err(|_| {
                 "未配置 OpenAI API Key。请点击 ⋯ →「API Key 设置」填写。".to_string()
@@ -1743,7 +1834,10 @@ async fn create_provider(model: &str) -> Result<Box<dyn Model>, String> {
     }
 }
 
-/// 列出所有 provider / 模型
+/// v1.9.16 UX：列出**已配置** API Key 的 provider / 模型。
+/// 用户填好 Key 保存后立即出现，无需「启用」按钮；
+/// 未配 Key 的 provider 默认隐藏（避免用户点错触发 401 错误）。
+/// 本地 provider（ollama / llamacpp）即使无 Key 也常驻显示。
 #[tauri::command]
 fn list_providers() -> Vec<ProviderInfo> {
     vec![
@@ -1765,12 +1859,40 @@ fn list_providers() -> Vec<ProviderInfo> {
             id: "deepseek".into(),
             name: "DeepSeek".into(),
             models: vec![
-                "deepseek-v4-pro".into(),
                 "deepseek-chat".into(),
                 "deepseek-reasoner".into(),
             ],
-            default_model: "deepseek-v4-pro".into(),
+            default_model: "deepseek-chat".into(),
             env_key: "DEEPSEEK_API_KEY".into(),
+        },
+        // v1.9.16：国产预设（按用户要求"既然预设就做好点"）
+        ProviderInfo {
+            id: "zhipu".into(),
+            name: "智谱 GLM (国产)".into(),
+            models: vec!["glm-4.6".into()],
+            default_model: "glm-4.6".into(),
+            env_key: "ZHIPU_API_KEY".into(),
+        },
+        ProviderInfo {
+            id: "mimo".into(),
+            name: "Xiaomi MiMo (国产)".into(),
+            models: vec!["mimo-v2-flash".into()],
+            default_model: "mimo-v2-flash".into(),
+            env_key: "MIMO_API_KEY".into(),
+        },
+        ProviderInfo {
+            id: "moonshot".into(),
+            name: "Kimi / Moonshot (国产)".into(),
+            models: vec!["kimi-k2-0905-preview".into()],
+            default_model: "kimi-k2-0905-preview".into(),
+            env_key: "MOONSHOT_API_KEY".into(),
+        },
+        ProviderInfo {
+            id: "custom".into(),
+            name: "自定义 OpenAI 协议".into(),
+            models: vec!["custom:<model>".into()],
+            default_model: "custom:<model>".into(),
+            env_key: "CUSTOM_API_KEY".into(),
         },
         ProviderInfo {
             id: "openai".into(),
@@ -1780,6 +1902,15 @@ fn list_providers() -> Vec<ProviderInfo> {
             env_key: "OPENAI_API_KEY".into(),
         },
     ]
+    .into_iter()
+    .filter(|p| api_keys_tauri::is_provider_configured(&p.id))
+    .map(|mut p| {
+        // v1.9.16 UX：菜单只显示 default_model，避免同 provider 多模型把菜单撑爆。
+        // 完整 model list 仍可通过 set_model() 切换。
+        p.models = vec![p.default_model.clone()];
+        p
+    })
+    .collect()
 }
 
 #[derive(Deserialize)]

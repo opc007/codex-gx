@@ -68,26 +68,36 @@ impl AssistantMessage {
 }
 
 /// 聊天响应
+///
+/// v1.9.16：兼容 Xiaomi MiMo / 一些非标准 OpenAI 协议服务 — 它们的响应
+/// 偶发 `choices: null`（或缺字段）。改 `choices` 为 `Option` 并提供 `default_choices()`，
+/// 配合 `unwrap_or_default()` 即可把 null 当作空 vec 处理，不再 panic。
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ChatResponse {
     pub id: String,
     pub model: String,
-    pub choices: Vec<ChatChoice>,
-    pub usage: Usage,
-    pub created: i64,
+    #[serde(default)]
+    pub choices: Option<Vec<ChatChoice>>,
+    #[serde(default)]
+    pub usage: Option<Usage>,
+    #[serde(default)]
+    pub created: Option<i64>,
     #[serde(default)]
     pub system_fingerprint: Option<String>,
 }
 
 impl ChatResponse {
+    /// 取得 choices，None 或空 vec 都视为空
+    pub fn choices(&self) -> &[ChatChoice] {
+        self.choices.as_deref().unwrap_or(&[])
+    }
     /// 第一个 choice 的助手消息（克隆）
     pub fn first_message(&self) -> Option<&AssistantMessage> {
-        self.choices.first().map(|c| &c.message)
+        self.choices().first().map(|c| &c.message)
     }
-
     /// 第一个 choice 的停止原因
     pub fn stop_reason(&self) -> Option<StopReason> {
-        self.choices.first().and_then(|c| c.finish_reason)
+        self.choices().first().and_then(|c| c.finish_reason)
     }
 }
 
@@ -118,11 +128,11 @@ mod tests {
             }
         }"#;
         let r: ChatResponse = serde_json::from_str(json).unwrap();
-        assert_eq!(r.choices.len(), 1);
+        assert_eq!(r.choices().len(), 1);
         let m = r.first_message().unwrap();
         assert_eq!(m.content, "hi");
         assert_eq!(m.reasoning_content.as_deref(), Some("thinking..."));
-        assert_eq!(r.usage.total(), 15);
+        assert_eq!(r.usage.as_ref().map(|u| u.total()).unwrap_or(0), 15);
     }
 
     #[test]
@@ -140,7 +150,7 @@ mod tests {
         }"#;
         let r: ChatResponse = serde_json::from_str(json).unwrap();
         assert_eq!(r.stop_reason(), Some(crate::model::StopReason::EndTurn));
-        assert_eq!(r.usage.input_tokens, 10);
-        assert_eq!(r.usage.output_tokens, 5);
+        assert_eq!(r.usage.as_ref().map(|u| u.input_tokens).unwrap_or(0), 10);
+        assert_eq!(r.usage.as_ref().map(|u| u.output_tokens).unwrap_or(0), 5);
     }
 }

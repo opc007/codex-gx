@@ -21,9 +21,9 @@ impl DeepSeekProvider {
     ) -> Self {
         let id = model_id.into();
         let info = match id.as_str() {
-            "deepseek-v4-pro" | "deepseek-v3-pro" => ModelInfo {
+            "deepseek-chat" | "deepseek-reasoner" => ModelInfo {
                 id: id.clone(),
-                name: "DeepSeek V4 Pro".into(),
+                name: "DeepSeek V3".into(),
                 provider: "deepseek".into(),
                 max_context: 128_000,
                 max_output: 8_192,
@@ -94,8 +94,8 @@ mod tests {
     #[ignore = "需要 DEEPSEEK_API_KEY 环境变量"]
     async fn live_deepseek_chat() {
         let key = std::env::var("DEEPSEEK_API_KEY").expect("DEEPSEEK_API_KEY");
-        let provider = DeepSeekProvider::new("deepseek-v4-pro", key, None);
-        let req = ChatRequest::new("deepseek-v4-pro")
+        let provider = DeepSeekProvider::new("deepseek-chat", key, None);
+        let req = ChatRequest::new("deepseek-chat")
             .with_message(ChatMessage::user("说一个字：好"));
         let resp = provider.chat(req).await.expect("chat");
         let text = resp.first_message().map(|m| m.content.as_str()).unwrap_or("");

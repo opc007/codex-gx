@@ -321,8 +321,8 @@ impl Model for AnthropicProvider {
         Ok(ChatResponse {
             id: ar.id,
             model: ar.model,
-            created: chrono::Utc::now().timestamp(),
-            choices: vec![crate::response::ChatChoice {
+            created: Some(chrono::Utc::now().timestamp()),
+            choices: Some(vec![crate::response::ChatChoice {
                 index: 0,
                 message: crate::response::AssistantMessage {
                     role: "assistant".into(),
@@ -335,8 +335,8 @@ impl Model for AnthropicProvider {
                     tool_calls,
                 },
                 finish_reason: Some(stop_reason),
-            }],
-            usage,
+            }]),
+            usage: Some(usage),
             system_fingerprint: None,
         })
     }

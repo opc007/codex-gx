@@ -528,22 +528,44 @@ mod tests {
 
     #[test]
     fn install_then_remove() {
-        let m = PluginManifest {
-            name: "test_install".into(),
-            version: "1".into(),
-            description: "".into(),
-            author: None,
-            tags: vec![],
-            hooks: vec![],
-        };
-        let json = serde_json::to_string(&m).unwrap();
-        let name = install(&json).unwrap();
-        assert_eq!(name, "test_install");
-        let reg = load_registry();
-        assert!(reg.plugins.contains_key("test_install"));
-        remove("test_install").unwrap();
-        let reg2 = load_registry();
-        assert!(!reg2.plugins.contains_key("test_install"));
+        // plugin_dir() 内部硬编码读 $HOME/.agentshell/plugins，临时
+        // 改 HOME 到 tempdir 以避免污染真实 home / 让 sandbox 测试能跑通。
+        let dir = std::env::temp_dir().join(format!(
+            "agentshell-plugin-test-{}",
+            std::process::id()
+        ));
+        let _ = std::fs::create_dir_all(&dir);
+        let prev = std::env::var_os("HOME");
+        // SAFETY: 测试串行执行
+        unsafe { std::env::set_var("HOME", &dir) }
+
+        let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+            let m = PluginManifest {
+                name: "test_install".into(),
+                version: "1".into(),
+                description: "".into(),
+                author: None,
+                tags: vec![],
+                hooks: vec![],
+            };
+            let json = serde_json::to_string(&m).unwrap();
+            let name = install(&json).unwrap();
+            assert_eq!(name, "test_install");
+            let reg = load_registry();
+            assert!(reg.plugins.contains_key("test_install"));
+            remove("test_install").unwrap();
+            let reg2 = load_registry();
+            assert!(!reg2.plugins.contains_key("test_install"));
+        }));
+
+        match prev {
+            Some(v) => unsafe { std::env::set_var("HOME", v) },
+            None => unsafe { std::env::remove_var("HOME") },
+        }
+        let _ = std::fs::remove_dir_all(&dir);
+        if result.is_err() {
+            std::panic::resume_unwind(result.unwrap_err());
+        }
     }
 
     #[test]

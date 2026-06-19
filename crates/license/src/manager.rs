@@ -284,21 +284,43 @@ mod tests {
 
     #[tokio::test]
     async fn test_manager_activate_deactivate() {
-        let m = LicenseManager::new_default();
-        let device = DeviceFingerprint::current();
+        // 把 HOME 临时指向 tempdir：manager.check_online / check_offline
+        // 内部硬编码读 $HOME/.agentshell/license.toml，redirect 后整个
+        // activate → check → persist 流程可以在不污染真实 $HOME 的情况下
+        // 完整跑通。
+        let home = tempfile::tempdir().unwrap();
+        let prev_home = std::env::var("HOME").ok();
+        // SAFETY: 仅在测试线程内设置 env，且测试串行运行。
+        unsafe { std::env::set_var("HOME", home.path()) };
 
-        // 生成测试码
-        let demo = ActivationCodeProvider::default_demo();
-        let code = demo.generate_demo_code(crate::code::LicenseTier::Yearly, &device);
-        let user_code = code.to_user_code().unwrap();
+        let result: Result<(), String> = async {
+            let device = DeviceFingerprint::current();
+            let provider: Arc<dyn LicenseProvider> =
+                Arc::new(ActivationCodeProvider::default_demo());
+            let m = LicenseManager::new_default();
 
-        // 激活
-        let s = m.activate(&user_code).await.unwrap();
-        assert!(matches!(s.status, LicenseStatus::Valid { .. }));
+            // 生成测试码
+            let demo = ActivationCodeProvider::default_demo();
+            let code = demo.generate_demo_code(crate::code::LicenseTier::Yearly, &device);
+            let user_code = code.to_user_code().map_err(|e| e.to_string())?;
 
-        // 移除 → 又回到试用
-        m.deactivate().await.unwrap();
-        let s2 = m.check().await;
-        assert!(matches!(s2.status, LicenseStatus::Trial { .. }));
+            // 激活
+            let s = m.activate(&user_code).await.map_err(|e| e.to_string())?;
+            assert!(matches!(s.status, LicenseStatus::Valid { .. }));
+
+            // 移除 → 又回到试用
+            m.deactivate().await.map_err(|e| e.to_string())?;
+            let s2 = m.check().await;
+            assert!(matches!(s2.status, LicenseStatus::Trial { .. }));
+            Ok::<(), String>(())
+        }
+        .await;
+
+        // 恢复 HOME
+        match prev_home {
+            Some(v) => unsafe { std::env::set_var("HOME", v) },
+            None => unsafe { std::env::remove_var("HOME") },
+        }
+        result.unwrap();
     }
 }

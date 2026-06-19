@@ -97,8 +97,7 @@ impl StreamAccumulator {
         ChatResponse {
             id,
             model,
-            created: chrono::Utc::now().timestamp(),
-            choices: vec![crate::response::ChatChoice {
+            choices: Some(vec![crate::response::ChatChoice {
                 index: 0,
                 message: AssistantMessage {
                     role: "assistant".into(),
@@ -111,8 +110,9 @@ impl StreamAccumulator {
                     tool_calls,
                 },
                 finish_reason: Some(crate::model::StopReason::EndTurn),
-            }],
-            usage: self.usage,
+            }]),
+            usage: Some(self.usage),
+            created: Some(chrono::Utc::now().timestamp()),
             system_fingerprint: None,
         }
     }

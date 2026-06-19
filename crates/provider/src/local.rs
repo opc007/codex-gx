@@ -128,8 +128,8 @@ impl Model for OllamaProvider {
         Ok(ChatResponse {
             id: format!("ollama-{}", chrono_now()),
             model: self.info.id.clone(),
-            created: chrono_now() as i64,
-            choices: vec![crate::response::ChatChoice {
+            created: Some(chrono_now() as i64),
+            choices: Some(vec![crate::response::ChatChoice {
                 index: 0,
                 message: crate::response::AssistantMessage {
                     role: "assistant".to_string(),
@@ -138,8 +138,8 @@ impl Model for OllamaProvider {
                     tool_calls: vec![],
                 },
                 finish_reason: Some(stop_reason),
-            }],
-            usage,
+            }]),
+            usage: Some(usage),
             system_fingerprint: None,
         })
     }
@@ -417,8 +417,8 @@ impl Model for LlamaCppProvider {
                 .unwrap_or("llamacpp")
                 .to_string(),
             model: self.info.id.clone(),
-            created: chrono_now() as i64,
-            choices: vec![crate::response::ChatChoice {
+            created: Some(chrono_now() as i64),
+            choices: Some(vec![crate::response::ChatChoice {
                 index: 0,
                 message: crate::response::AssistantMessage {
                     role: "assistant".to_string(),
@@ -427,8 +427,8 @@ impl Model for LlamaCppProvider {
                     tool_calls: vec![],
                 },
                 finish_reason: Some(stop_reason),
-            }],
-            usage,
+            }]),
+            usage: Some(usage),
             system_fingerprint: None,
         })
     }

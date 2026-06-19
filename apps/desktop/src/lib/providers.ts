@@ -25,8 +25,8 @@ export async function loadProviders(): Promise<ProviderInfo[]> {
       {
         id: "deepseek",
         name: "DeepSeek",
-        models: ["deepseek-v4-pro", "deepseek-chat", "deepseek-reasoner"],
-        defaultModel: "deepseek-v4-pro",
+        models: ["deepseek-chat", "deepseek-chat", "deepseek-reasoner"],
+        defaultModel: "deepseek-chat",
         envKey: "DEEPSEEK_API_KEY",
       },
     ];
