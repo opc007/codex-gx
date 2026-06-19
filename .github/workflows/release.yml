@@ -97,11 +97,11 @@ jobs:
         with:
           name: "AgentShell ${{ github.ref_name }}"
           body: |
-            ## Codex gx v${{ github.ref_name }}
+            ## Codex gx ${{ github.ref_name }}
 
             ### 下载说明
-            - **macOS (Apple Silicon)**: `Codex gx_*.aarch64.dmg`
             - **macOS (Intel)**: `Codex gx_*.x64.dmg`
+            - **macOS (Apple Silicon)**: 暂未提供 dmg（公开 CI 免费档不支持 aarch64-runner）；M1/M2/M3 用户下载 Intel 版即可（Rosetta 启动），或自行 `cargo tauri build --target aarch64-apple-darwin`
             - **Windows**: `Codex gx_*_x64-setup.exe` (NSIS 推荐) 或 `Codex gx_*_x64_en-US.msi`
             - **Linux**: `*.AppImage` 或 `*.deb`
 
