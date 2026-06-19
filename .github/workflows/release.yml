@@ -58,7 +58,9 @@ jobs:
         run: cargo install tauri-cli --version "^2" --locked
 
       - name: Build Tauri (no auto-release)
-        run: cargo tauri build --target ${{ matrix.target }} --bundles app,dmg,msi,nsis,deb,appimage
+        # 不传 --bundles：让 tauri 按平台自动选（mac=app+dmg, win=msi+nsis, linux=deb+appimage）
+        # Tauri 2 在 --target 跨平台 build 时会忽略不适配的 bundle
+        run: cargo tauri build --target ${{ matrix.target }}
         env:
           NO_RELEASE: "1"
           TAURI_SIGNING_PRIVATE_KEY: ""
