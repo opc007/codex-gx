@@ -54,9 +54,11 @@ jobs:
         working-directory: apps/desktop
         run: npm ci
 
+      - name: Install tauri-cli
+        run: cargo install tauri-cli --version "^2" --locked
+
       - name: Build Tauri (no auto-release)
-        working-directory: apps/desktop
-        run: npx tauri build --target ${{ matrix.target }} --bundles app,dmg,msi,nsis,deb,appimage
+        run: cargo tauri build --target ${{ matrix.target }} --bundles app,dmg,msi,nsis,deb,appimage
         env:
           NO_RELEASE: "1"
           TAURI_SIGNING_PRIVATE_KEY: ""
