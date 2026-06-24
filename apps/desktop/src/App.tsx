@@ -6,7 +6,6 @@ import { Sidebar } from "./components/Sidebar";
 import { Thread } from "./components/Thread";
 import { Composer } from "./components/Composer";
 import { TopBar } from "./components/TopBar";
-import { ActivationGate } from "./components/ActivationGate";
 import { ApprovalDialog, type ApprovalRequest } from "./components/ApprovalDialog";
 // v1.9.7：审批模式改在 Composer 内联（与 Codex 一致），逐次弹窗保留作为 fallback（后台在收到 approval_request 时如已开启「完全访问权限」则自动 respond_approval true）。
 import PlanDialog, {
@@ -20,20 +19,6 @@ import { openTab } from "./stores/tabs";
 import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
 
-type LicenseStatusKind =
-  | { kind: "unactivated" }
-  | { kind: "trial"; remaining_days: number | null; started_at: number }
-  | { kind: "valid"; tier: string; remaining_days: number | null; activated_at: number; expires_at: number | null }
-  | { kind: "expiring"; tier: string; days_left: number }
-  | { kind: "expired"; tier: string; expired_at: number }
-  | { kind: "offlinegrace"; days_offline: number }
-  | { kind: "invalid"; reason: string };
-
-type LicenseSummary = {
-  status: LicenseStatusKind;
-  last_validated_at: number;
-  offline: boolean;
-};
 
 // v1.3：全局错误上报
 function reportError(source: string, severity: string, message: string, stack?: string) {
@@ -140,8 +125,6 @@ export default function App() {
   const [approvalReq, setApprovalReq] = useState<ApprovalRequest | null>(null);
   // v0.6：plan mode
   const [planReq, setPlanReq] = useState<PlanRequest | null>(null);
-  // v1.9.x：未激活 / 试用已结束 → 显示激活门
-  const [licenseStatus, setLicenseStatus] = useState<LicenseStatusKind | null>(null);
 
   // v1.9.15：审批模式（Codex 风格：Composer 内联切换，三档）
   // - "full"  请求批准：所有外部操作都弹审批（默认）
@@ -165,26 +148,7 @@ export default function App() {
     }
   }, [requireApproval]);
 
-  useEffect(() => {
-    const refreshLicense = async () => {
-      try {
-        const s = await invoke<LicenseSummary>("license_status");
-        setLicenseStatus(s.status);
-      } catch {
-        setLicenseStatus(null);
-      }
-    };
-    void refreshLicense();
-    const unlistenP = listen("license:changed", () => void refreshLicense());
-    return () => {
-      void unlistenP.then((u) => u());
-    };
-  }, []);
 
-  const isBlocking =
-    licenseStatus !== null &&
-    (licenseStatus.kind === "unactivated" ||
-      (licenseStatus.kind === "trial" && licenseStatus.remaining_days === null));
 
   // v1.9.6：侧栏折叠状态（Codex 风格 Cmd+B）
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
@@ -404,20 +368,7 @@ export default function App() {
 
   return (
     <AppErrorBoundary>
-      <ActivationGate
-        onActivated={async () => {
-          try {
-            const s = await invoke<LicenseSummary>("license_status");
-            setLicenseStatus(s.status);
-          } catch {
-            /* ignore */
-          }
-        }}
-        onTrial={() => {
-          /* 试用期内不阻塞；trial 状态已在 useEffect 中读取 */
-        }}
-      />
-      <div className={`app-shell ${isBlocking ? "app-shell-locked" : ""} ${sidebarCollapsed ? "app-shell-sidebar-collapsed" : ""}`}>
+      <div className={`app-shell ${sidebarCollapsed ? "app-shell-sidebar-collapsed" : ""}`}>
         <TopBar />
         <div className="app-body">
           <Sidebar />

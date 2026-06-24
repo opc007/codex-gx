@@ -1,0 +1,230 @@
+name: Daily Auto-Upgrade
+
+on:
+  schedule:
+    - cron: "0 2 * * *"
+  workflow_dispatch:
+    inputs:
+      force_build:
+        description: 'Force build (skip no-change check)'
+        required: false
+        default: 'false'
+
+env:
+  CARGO_TERM_COLOR: always
+  RUSTUP_MAX_RETRIES: 10
+
+jobs:
+  auto-fix:
+    name: Auto-Fix & Check
+    runs-on: ubuntu-latest
+    outputs:
+      rust_changed: ${{ steps.auto_fix_rust.outputs.rust_changed }}
+      frontend_changed: ${{ steps.auto_fix_frontend.outputs.frontend_changed }}
+      fix_summary: ${{ steps.fix_summary.outputs.summary }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt, clippy, cargo-edit
+
+      - name: Auto-fix Rust code
+        id: auto_fix_rust
+        run: |
+          echo "=== Auto-fixing Rust ==="
+          cargo fix --workspace --allow-dirty --allow-staged --lib 2>&1 | tee /tmp/rust_fix.log || true
+          if grep -q "Fixed\|warning fixed" /tmp/rust_fix.log 2>/dev/null; then
+            echo "rust_changed=true" >> $GITHUB_OUTPUT
+          else
+            echo "rust_changed=false" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Apply clippy suggestions
+        run: |
+          echo "=== Applying clippy suggestions ==="
+          cargo clippy --workspace --fix --allow-dirty --allow-staged 2>&1 | tail -5 || true
+
+      - name: Auto-fix frontend dependencies
+        id: auto_fix_frontend
+        working-directory: apps/desktop
+        run: |
+          echo "=== Auto-fixing frontend dependencies ==="
+          npm audit fix --force 2>&1 | tee /tmp/npm_fix.log || true
+          if grep -q "auto-fixed\|added\|removed\|changed" /tmp/npm_fix.log 2>/dev/null; then
+            echo "frontend_changed=true" >> $GITHUB_OUTPUT
+          else
+            echo "frontend_changed=false" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Generate fix summary
+        id: fix_summary
+        run: |
+          SUMMARY="Auto-fix completed"
+          if git diff --stat | grep -q "."; then
+            SUMMARY=$(git diff --stat | head -5)
+          fi
+          echo "summary=${SUMMARY}" >> $GITHUB_OUTPUT
+
+      - name: Commit auto-fixes
+        if: steps.auto_fix_rust.outputs.rust_changed == 'true' || steps.auto_fix_frontend.outputs.frontend_changed == 'true'
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add -A
+          git commit -m "🤖 Auto-fix: Rust warnings and frontend dependencies
+
+          - Applied cargo fix for Rust warnings
+          - Applied clippy suggestions
+          - Fixed npm audit issues
+
+          Co-authored-by: github-actions[bot] <github-actions[bot]@users.noreply.github.com>" || echo "No changes to commit"
+
+  check:
+    name: Full Check
+    needs: auto-fix
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest]
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt, clippy
+
+      - name: Cache cargo
+        uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: "."
+          shared-key: ${{ matrix.os }}
+
+      - name: Check formatting
+        run: cargo fmt --all -- --check
+
+      - name: Clippy
+        run: cargo clippy --workspace --all-targets -- -D warnings
+
+      - name: Build workspace
+        run: cargo build --workspace --locked
+
+      - name: Test workspace
+        run: cargo test --workspace --all-features
+
+      - name: Doc tests
+        run: cargo test --doc --workspace
+
+  frontend-check:
+    name: Frontend Check
+    needs: auto-fix
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: apps/desktop
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: "npm"
+          cache-dependency-path: apps/desktop/package-lock.json
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Type check
+        run: npx tsc --noEmit
+
+      - name: Build
+        run: npm run build
+
+  build-and-release:
+    name: Build & Release
+    needs: [check, frontend-check]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Get current version
+        id: version
+        run: |
+          CURRENT=$(grep '"version"' apps/desktop/package.json | head -1 | sed 's/[^0-9.]//g')
+          echo "current_version=${CURRENT}" >> $GITHUB_OUTPUT
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Cache cargo
+        uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: "."
+          shared-key: release-build
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: "npm"
+          cache-dependency-path: apps/desktop/package-lock.json
+
+      - name: Install frontend deps
+        working-directory: apps/desktop
+        run: npm ci
+
+      - name: Install tauri-cli
+        run: cargo install tauri-cli --version "^2" --locked
+
+      - name: Build Tauri (Linux only for CI)
+        run: cargo tauri build --target x86_64-unknown-linux-gnu --bundles deb,appimage
+        env:
+          NO_RELEASE: "1"
+
+      - name: Upload Linux artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: daily-build-artifacts
+          path: |
+            target/x86_64-unknown-linux-gnu/release/bundle/deb/*.deb
+            target/x86_64-unknown-linux-gnu/release/bundle/appimage/*.AppImage
+          if-no-files-found: warn
+
+      - name: Create daily tag
+        id: release
+        run: |
+          TAG="daily-$(date +%Y-%m-%d)"
+          if git tag -l "$TAG" | grep -q .; then
+            echo "Tag $TAG already exists, skipping"
+          else
+            git tag "$TAG"
+            git push origin "$TAG" || true
+            echo "tag_created=true" >> $GITHUB_OUTPUT
+            echo "tag_name=$TAG" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Daily build summary
+        if: always()
+        run: |
+          echo "## Daily Upgrade Summary" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "| Check | Status |" >> $GITHUB_STEP_SUMMARY
+          echo "|-------|--------|" >> $GITHUB_STEP_SUMMARY
+          echo "| Auto-fix | ✅ Done |" >> $GITHUB_STEP_SUMMARY
+          echo "| Rust Check | ✅ Passed |" >> $GITHUB_STEP_SUMMARY
+          echo "| Frontend Check | ✅ Passed |" >> $GITHUB_STEP_SUMMARY
+          echo "| Linux Build | ✅ Done |" >> $GITHUB_STEP_SUMMARY

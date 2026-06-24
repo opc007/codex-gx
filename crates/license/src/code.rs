@@ -7,19 +7,22 @@ use serde::{Deserialize, Serialize};
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "lowercase")]
 pub enum LicenseTier {
-    /// 月卡 ¥9.9
+    /// v2.0: 社区免费版
+    Community,
+    /// 月卡 ¥9.9 (已废弃)
     Monthly,
-    /// 季卡 ¥29.9
+    /// 季卡 ¥29.9 (已废弃)
     Quarterly,
-    /// 年卡 ¥99
+    /// 年卡 ¥99 (已废弃)
     Yearly,
-    /// 终身 ¥299
+    /// 终身 ¥299 (已废弃)
     Lifetime,
 }
 
 impl LicenseTier {
     pub fn duration_days(&self) -> Option<i64> {
         match self {
+            Self::Community => None,
             Self::Monthly => Some(30),
             Self::Quarterly => Some(90),
             Self::Yearly => Some(365),
@@ -29,10 +32,11 @@ impl LicenseTier {
 
     pub fn display_name(&self) -> &'static str {
         match self {
-            Self::Monthly => "月卡 ¥9.9",
-            Self::Quarterly => "季卡 ¥29.9",
-            Self::Yearly => "年卡 ¥99",
-            Self::Lifetime => "终身 ¥299",
+            Self::Community => "社区版",
+            Self::Monthly => "月卡（已停售）",
+            Self::Quarterly => "季卡（已停售）",
+            Self::Yearly => "年卡（已停售）",
+            Self::Lifetime => "终身（已停售）",
         }
     }
 }

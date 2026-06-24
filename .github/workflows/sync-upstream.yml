@@ -1,0 +1,110 @@
+name: Sync Upstream
+
+# 每天早上 8:00 (北京时间) 从上游同步最新代码
+# 适用于：fork 了上游 Codex 源码，需要同步最新变动的场景
+on:
+  schedule:
+    - cron: "0 0 * * *"    # 每天 UTC 0:00 = 北京时间 8:00
+  workflow_dispatch:
+    inputs:
+      upstream_repo:
+        description: '上游仓库 (owner/repo)，留空使用配置的默认值'
+        required: false
+        default: ''
+
+env:
+  # ⚠️ 修改为你的上游仓库，例如：openaikkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkxxxxxxX"
+        default: ''
+
+jobs:
+  sync:
+    name: Sync from Upstream
+    runs-on: ubuntu-latest
+    outputs:
+      upstream_changed: ${{ steps.sync.outputs.upstream_changed }}
+      upstream_commits: ${{ steps.sync.outputs.upstream_commits }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          ref: main
+
+      - name: Set upstream repo
+        id: upstream
+        run: |
+          REPO="${{ github.event.inputs.upstream_repo || env.UPSTREAM_REPO }}"
+          if [ -z "$REPO" ]; then
+            echo "⚠️ 未配置上游仓库，跳过同步"
+            echo "upstream_repo=not-configured" >> $GITHUB_OUTPUT
+          else
+            echo "upstream_repo=$REPO" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Fetch upstream
+        if: steps.upstream.outputs.upstream_repo != 'not-configured'
+        run: |
+          git remote add upstream https://github.com/${{ steps.upstream.outputs.upstream_repo }}.git 2>/dev/null || true
+          git fetch upstream main --tags
+
+      - name: Compare and apply changes
+        id: sync
+        if: steps.upstream.outputs.upstream_repo != 'not-configured'
+        run: |
+          UPSTREAM_HASH=$(git rev-parse upstream/main)
+          LOCAL_HASH=$(git rev-parse main)
+
+          if [ "$UPSTREAM_HASH" = "$LOCAL_HASH" ]; then
+            echo "✅ 已同步到最新，无变动"
+            echo "upstream_changed=false" >> $GITHUB_OUTPUT
+            echo "upstream_commits=0" >> $GITHUB_OUTPUT
+          else
+            echo "检测到上游更新！"
+            COMMITS=$(git log --oneline main..upstream/main | wc -l)
+            echo "upstream_changed=true" >> $GITHUB_OUTPUT
+            echo "upstream_commits=$COMMITS" >> $GITHUB_OUTPUT
+
+            echo "## 上游新提交 ($COMMITS 条)" >> $GITHUB_STEP_SUMMARY
+            git log --oneline main..upstream/main >> $GITHUB_STEP_SUMMARY
+
+            # 尝试 merge（可能产生冲突，冲突需要手动解决）
+            git merge upstream/main --no-edit || {
+              echo "⚠️ 存在冲突，需要手动解决后继续"
+              echo "has_conflicts=true" >> $GITHUB_OUTPUT
+            }
+          fi
+
+      - name: Push if synced
+        if: steps.sync.outputs.upstream_changed == 'true' && steps.sync.outputs.has_conflicts != 'true'
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git push origin main
+          echo "✅ 已推送同步更新到 main 分支"
+
+      - name: Report
+        if: steps.upstream.outputs.upstream_repo == 'not-configured'
+        run: |
+          echo "📋 未配置上游仓库，当前为独立开发模式"
+          echo ""
+          echo "如需启用上游同步，请在仓库 Settings → Secrets 添加："
+          echo "  UPSTREAM_REPO = \"owner/repo\""
+
+  # 上游同步后自动触发检查
+  check-after-sync:
+    name: Verify After Sync
+    needs: sync
+    if: needs.sync.outputs.upstream_changed == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: main
+          fetch-depth: 1
+
+      - name: Quick check
+        run: cargo check --workspace
+
+      - name: Report sync success
+        run: |
+          echo "✅ 上游同步验证通过"
+          echo "已同步 ${{ needs.sync.outputs.upstream_commits }} 条新提交"

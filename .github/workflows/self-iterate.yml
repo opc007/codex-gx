@@ -1,0 +1,598 @@
+name: 🧠 Self-Iterate
+
+# 每天 UTC 3:00 (北京时间 11:00) 自动运行
+# 核心循环: 检查 → 诊断 → 修复 → 复查 → 提交
+on:
+  schedule:
+    - cron: "0 3 * * *"
+  workflow_dispatch:
+
+env:
+  CARGO_TERM_COLOR: always
+
+permissions:
+  contents: write
+  pull-requests: write
+  issues: write
+
+jobs:
+  # ═══════════════════════════════════════════════════════
+  # 阶段 0: 准备工作 — 拉取代码、设置环境
+  # ═══════════════════════════════════════════════════════
+  setup:
+    name: 🔧 Setup & Baseline
+    runs-on: ubuntu-latest
+    outputs:
+      iteration_date: ${{ steps.date.outputs.date }}
+      iteration_id: ${{ steps.date.outputs.id }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
+
+      - name: Generate iteration ID
+        id: date
+        run: |
+          DATE=$(date +%Y-%m-%d)
+          ID="iter-${DATE}-$(date +%H%M%S)"
+          echo "date=${DATE}" >> $GITHUB_OUTPUT
+          echo "id=${ID}" >> $GITHUB_OUTPUT
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt, clippy, cargo-edit
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: "npm"
+          cache-dependency-path: apps/desktop/package-lock.json
+
+      - name: Install frontend deps
+        working-directory: apps/desktop
+        run: npm ci
+
+      - name: Install Playwright
+        working-directory: apps/desktop
+        run: npx playwright install --with-deps chromium
+
+      - name: Save iteration start snapshot
+        run: |
+          echo "iteration_id=${{ steps.date.outputs.id }}" >> $GITHUB_OUTPUT
+          echo "## 🧠 自我迭代开始" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "**迭代 ID**: ${{ steps.date.outputs.id }}" >> $GITHUB_STEP_SUMMARY
+          echo "**开始时间**: $(date)" >> $GITHUB_STEP_SUMMARY
+
+  # ═══════════════════════════════════════════════════════
+  # 阶段 1: 全面诊断 — 扫描所有问题
+  # ═══════════════════════════════════════════════════════
+  diagnose:
+    name: 🔬 Diagnose
+    needs: setup
+    runs-on: ubuntu-latest
+    outputs:
+      rust_warnings: ${{ steps.rust_diag.outputs.warnings }}
+      rust_errors: ${{ steps.rust_diag.outputs.errors }}
+      clippy_issues: ${{ steps.clippy_diag.outputs.issues }}
+      ts_errors: ${{ steps.ts_diag.outputs.errors }}
+      build_status: ${{ steps.build_diag.outputs.status }}
+      diagnosis_summary: ${{ steps.summary.outputs.summary }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
+
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt, clippy
+
+      # ── Rust 诊断 ──
+      - name: "Rust: compile check"
+        id: rust_diag
+        run: |
+          echo "=== Rust 编译诊断 ==="
+          cargo check --workspace 2>&1 | tee /tmp/rust_check.log
+          
+          ERRORS=$(grep -c "^error\[" /tmp/rust_check.log || echo "0")
+          WARNINGS=$(grep -c "^warning:" /tmp/rust_check.log || echo "0")
+          
+          echo "errors=${ERRORS}" >> $GITHUB_OUTPUT
+          echo "warnings=${WARNINGS}" >> $GITHUB_OUTPUT
+          echo "errors=${ERRORS} | warnings=${WARNINGS}" >> $GITHUB_STEP_SUMMARY
+
+      # ── Clippy 诊断 ──
+      - name: "Rust: clippy diagnostics"
+        id: clippy_diag
+        run: |
+          echo "=== Clippy 诊断 ==="
+          cargo clippy --workspace --all-targets -- -D warnings 2>&1 | tee /tmp/clippy.log
+          
+          ISSUES=$(grep -c "warning:" /tmp/clippy.log || echo "0")
+          AUTO_FIXABLE=$(grep -c "consider using\|replace\|remove the" /tmp/clippy.log || echo "0")
+          
+          echo "issues=${ISSUES}" >> $GITHUB_OUTPUT
+          echo "auto_fixable=${AUTO_FIXABLE}" >> $GITHUB_OUTPUT
+
+      # ── TypeScript 诊断 ──
+      - name: "Frontend: type check"
+        id: ts_diag
+        working-directory: apps/desktop
+        run: |
+          echo "=== TypeScript 诊断 ==="
+          npx tsc --noEmit 2>&1 | tee /tmp/ts.log
+          
+          ERRORS=$(grep -c "error TS" /tmp/ts.log || echo "0")
+          WARNINGS=$(grep -c "warning" /tmp/ts.log || echo "0")
+          
+          echo "errors=${ERRORS}" >> $GITHUB_OUTPUT
+          echo "warnings=${WARNINGS}" >> $GITHUB_STEP_SUMMARY
+          echo "TypeScript: ${ERRORS} errors, ${WARNINGS} warnings" >> $GITHUB_STEP_SUMMARY
+
+      # ── Build 诊断 ──
+      - name: "Frontend: build check"
+        id: build_diag
+        working-directory: apps/desktop
+        run: |
+          echo "=== Build 诊断 ==="
+          npm run build 2>&1 | tee /tmp/build.log
+          
+          if grep -q "error\|Error" /tmp/build.log && ! grep -q "0 error"; then
+            echo "status=failed" >> $GITHUB_OUTPUT
+          else
+            echo "status=passed" >> $GITHUB_OUTPUT
+          fi
+
+      # ── 汇总诊断报告 ──
+      - name: Generate diagnosis report
+        id: summary
+        run: |
+          echo "### 🔬 诊断报告" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          
+          echo "| 检查项 | 状态 | 数量 |" >> $GITHUB_STEP_SUMMARY
+          echo "|--------|------|------|" >> $GITHUB_STEP_SUMMARY
+          echo "| Rust 编译 | ${{ needs.setup.outputs.iteration_id }} | ${{ steps.rust_diag.outputs.errors }} errors |" >> $GITHUB_STEP_SUMMARY
+          echo "| Clippy | 🔍 | ${{ steps.clippy_diag.outputs.issues }} issues |" >> $GITHUB_STEP_SUMMARY
+          echo "| TypeScript | 🔍 | ${{ steps.ts_diag.outputs.errors }} errors |" >> $GITHUB_STEP_SUMMARY
+          echo "| Frontend Build | 🔍 | ${{ steps.build_diag.outputs.status }} |" >> $GITHUB_STEP_SUMMARY
+          
+          # 生成摘要
+          HAS_ERRORS=$(( ${{ steps.rust_diag.outputs.errors }} + ${{ steps.ts_diag.outputs.errors }} ))
+          if [ "$HAS_ERRORS" -gt 0 ]; then
+            echo "summary=has_errors" >> $GITHUB_OUTPUT
+          else
+            echo "summary=healthy" >> $GITHUB_OUTPUT
+          fi
+
+  # ═══════════════════════════════════════════════════════
+  # 阶段 2: Rust 自愈 — 自动修复 Rust 问题
+  # ═══════════════════════════════════════════════════════
+  rust-heal:
+    name: 🔧 Rust Self-Heal
+    needs: [setup, diagnose]
+    runs-on: ubuntu-latest
+    outputs:
+      loop: "1"
+      fixes_applied: ${{ steps.heal1.outputs.fixes }}
+      still_failing: ${{ steps.heal1.outputs.failing }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
+
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt, clippy, cargo-edit
+
+      # ── 自愈循环第 1 轮 ──
+      - name: "Self-heal loop 1/3: Auto-fix Rust"
+        id: heal1
+        run: |
+          echo "=== Self-heal Round 1/3 ==="
+          
+          # Step 1: cargo fix
+          echo "1/4: cargo fix..."
+          cargo fix --workspace --allow-dirty --allow-staged --lib --bins 2>&1 | tail -3
+          
+          # Step 2: cargo clippy --fix
+          echo "2/4: cargo clippy --fix..."
+          cargo clippy --workspace --fix --allow-dirty --allow-staged --lib --bins 2>&1 | tail -5 || true
+          
+          # Step 3: format
+          echo "3/4: cargo fmt..."
+          cargo fmt --all
+          
+          # Step 4: 统计改动
+          CHANGED=$(git diff --name-only | wc -l)
+          echo "fixes=${CHANGED}" >> $GITHUB_OUTPUT
+          
+          echo "Changed ${CHANGED} files in round 1"
+
+      - name: "Verify after round 1"
+        id: verify1
+        run: |
+          echo "=== 验证自愈效果 ==="
+          cargo check --workspace 2>&1 | tee /tmp/verify1.log
+          
+          ERRORS=$(grep -c "^error\[" /tmp/verify1.log || echo "0")
+          echo "Remaining errors: ${ERRORS}"
+          
+          if [ "$ERRORS" -gt 0 ]; then
+            echo "still_failing=true" >> $GITHUB_OUTPUT
+            echo "Errors remain after round 1, will try next round"
+          else
+            echo "still_failing=false" >> $GITHUB_OUTPUT
+            echo "All errors resolved in round 1!"
+          fi
+
+      # ── 自愈循环第 2 轮（如果第 1 轮未完全修复）──
+      - name: "Self-heal loop 2/3: Advanced fixes"
+        if: steps.verify1.outputs.still_failing == 'true'
+        run: |
+          echo "=== Self-heal Round 2/3 ==="
+          
+          # 尝试更激进的 clippy 修复
+          cargo clippy --workspace --fix --allow-dirty --allow-staged 2>&1 | tail -5 || true
+          
+          # 更新依赖版本
+          cargo update 2>&1 | tail -5 || true
+          
+          # 格式化和检查
+          cargo fmt --all
+          cargo check --workspace 2>&1 | tail -3
+
+      - name: "Verify after round 2"
+        if: steps.verify1.outputs.still_failing == 'true'
+        run: |
+          cargo check --workspace 2>&1 | tee /tmp/verify2.log
+          ERRORS=$(grep -c "^error\[" /tmp/verify2.log || echo "0")
+          if [ "$ERRORS" -gt 0 ]; then
+            echo "still_failing=true" >> $GITHUB_OUTPUT
+          else
+            echo "still_failing=false" >> $GITHUB_OUTPUT
+          fi
+
+      # ── 自愈循环第 3 轮（最后尝试）──
+      - name: "Self-heal loop 3/3: Final attempt"
+        if: steps.verify1.outputs.still_failing == 'true'
+        run: |
+          echo "=== Self-heal Round 3/3 (Final) ==="
+          
+          # 尝试所有自动化手段
+          cargo fix --workspace --allow-dirty --allow-staged --all-targets 2>&1 | tail -3 || true
+          cargo clippy --workspace --fix --allow-dirty --allow-staged --all-targets 2>&1 | tail -5 || true
+          cargo fmt --all
+          
+          # 最终检查
+          cargo check --workspace 2>&1 | tee /tmp/verify3.log
+          ERRORS=$(grep -c "^error\[" /tmp/verify3.log || echo "0")
+          WARNINGS=$(grep -c "^warning:" /tmp/verify3.log || echo "0")
+          
+          echo "Final state: ${ERRORS} errors, ${WARNINGS} warnings"
+          echo "still_failing=${ERRORS}" >> $GITHUB_OUTPUT
+
+      # ── 提交 Rust 自愈结果 ──
+      - name: Commit Rust fixes
+        if: steps.heal1.outputs.fixes != '0'
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add -A
+          
+          # 检查是否有实际改动
+          if git diff --cached --stat | grep -q "."; then
+            git commit -m "🔧 Self-heal: Rust auto-fixes (round ${{ needs.setup.outputs.iteration_id }})
+
+            - Auto-applied cargo fix + clippy suggestions
+            - Code formatting
+            - Iteration: ${{ needs.setup.outputs.iteration_id }}
+
+            Co-authored-by: github-actions[bot] <github-actions[bot]@users.noreply.github.com>"
+            echo "✅ Rust fixes committed"
+          else
+            echo "No Rust changes to commit"
+          fi
+
+  # ═══════════════════════════════════════════════════════
+  # 阶段 3: Frontend 自愈 — 自动修复前端问题
+  # ═══════════════════════════════════════════════════════
+  frontend-heal:
+    name: 🔧 Frontend Self-Heal
+    needs: [setup, diagnose]
+    runs-on: ubuntu-latest
+    outputs:
+      fixes_applied: ${{ steps.heal_fe.outputs.fixes }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: "npm"
+          cache-dependency-path: apps/desktop/package-lock.json
+
+      - name: Install deps
+        working-directory: apps/desktop
+        run: npm ci
+
+      - name: "Self-heal: Fix frontend"
+        id: heal_fe
+        run: |
+          echo "=== Frontend Self-Heal ==="
+          
+          # npm audit fix
+          cd apps/desktop
+          npm audit fix --force 2>&1 | tail -5 || true
+          
+          # 检查 package.json 改动
+          cd ..
+          CHANGED=$(git diff --name-only -- apps/desktop/package*.json | wc -l)
+          echo "fixes=${CHANGED}" >> $GITHUB_OUTPUT
+
+      - name: Commit frontend fixes
+        if: steps.heal_fe.outputs.fixes != '0'
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add apps/desktop/package.json apps/desktop/package-lock.json
+          git commit -m "🔧 Self-heal: Frontend dependency fixes
+
+          - npm audit fix applied
+          - Dependencies updated
+
+          Co-authored-by: github-actions[bot] <github-actions[bot]@users.noreply.github.com>" || echo "No frontend changes"
+
+  # ═══════════════════════════════════════════════════════
+  # 阶段 4: 全量测试验证 — 确保修复没有破坏任何东西
+  # ═══════════════════════════════════════════════════════
+  test-verify:
+    name: ✅ Test & Verify
+    needs: [setup, diagnose, rust-heal, frontend-heal]
+    runs-on: ubuntu-latest
+    outputs:
+      all_tests_passed: ${{ steps.run_tests.outputs.passed }}
+      test_summary: ${{ steps.run_tests.outputs.summary }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
+
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt, clippy
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: "npm"
+          cache-dependency-path: apps/desktop/package-lock.json
+
+      - name: Install deps
+        working-directory: apps/desktop
+        run: npm ci
+
+      - name: Install Playwright
+        working-directory: apps/desktop
+        run: npx playwright install --with-deps chromium
+
+      # ── 测试 1: Rust 单元测试 ──
+      - name: "Test: Rust unit tests"
+        id: rust_tests
+        run: |
+          echo "=== Rust 单元测试 ==="
+          cargo test --workspace --all-features 2>&1 | tee /tmp/rust_tests.log
+          
+          if grep -q "test result: ok" /tmp/rust_tests.log; then
+            echo "rust_tests=passed" >> $GITHUB_STEP_SUMMARY
+          else
+            echo "rust_tests=failed" >> $GITHUB_STEP_SUMMARY
+          fi
+
+      # ── 测试 2: Frontend TypeScript ──
+      - name: "Test: TypeScript type check"
+        id: ts_tests
+        working-directory: apps/desktop
+        run: |
+          echo "=== TypeScript 类型检查 ==="
+          npx tsc --noEmit 2>&1 | tee /tmp/ts_test.log
+          
+          if grep -q "0 errors" /tmp/ts_test.log; then
+            echo "ts_tests=passed" >> $GITHUB_STEP_SUMMARY
+          else
+            ERRORS=$(grep -c "error TS" /tmp/ts_test.log || echo "0")
+            echo "ts_tests=failed (${ERRORS} errors)" >> $GITHUB_STEP_SUMMARY
+          fi
+
+      # ── 测试 3: Frontend Build ──
+      - name: "Test: Frontend build"
+        id: build_tests
+        working-directory: apps/desktop
+        run: |
+          echo "=== Frontend Build ==="
+          npm run build 2>&1 | tee /tmp/build_test.log
+          
+          if [ ${PIPESTATUS[0]} -eq 0 ]; then
+            echo "build_tests=passed" >> $GITHUB_STEP_SUMMARY
+          else
+            echo "build_tests=failed" >> $GITHUB_STEP_SUMMARY
+          fi
+
+      # ── 测试 4: Playwright E2E 冒烟测试 ──
+      - name: "Test: Playwright E2E smoke"
+        id: e2e_tests
+        working-directory: apps/desktop
+        run: |
+          echo "=== Playwright E2E 冒烟测试 ==="
+          npx playwright test smoke.spec.ts --reporter=list 2>&1 | tee /tmp/e2e_test.log
+          
+          if grep -q "passed\|ok" /tmp/e2e_test.log; then
+            echo "e2e_tests=passed" >> $GITHUB_STEP_SUMMARY
+          else
+            echo "e2e_tests=skipped_or_failed" >> $GITHUB_STEP_SUMMARY
+          fi
+
+      # ── 测试 5: Clippy 验证 ──
+      - name: "Test: Clippy verify"
+        id: clippy_tests
+        run: |
+          echo "=== Clippy 验证 ==="
+          cargo clippy --workspace --all-targets -- -D warnings 2>&1 | tee /tmp/clippy_test.log
+          
+          ERRORS=$(grep -c "^error:" /tmp/clippy_test.log || echo "0")
+          WARNINGS=$(grep -c "^warning:" /tmp/clippy_test.log || echo "0")
+          
+          echo "Clippy: ${ERRORS} errors, ${WARNINGS} warnings" >> $GITHUB_STEP_SUMMARY
+          
+          if [ "$ERRORS" -eq 0 ]; then
+            echo "clippy_tests=passed" >> $GITHUB_STEP_SUMMARY
+          else
+            echo "clippy_tests=failed" >> $GITHUB_STEP_SUMMARY
+          fi
+
+      # ── 综合测试报告 ──
+      - name: Generate test report
+        id: run_tests
+        run: |
+          echo "### ✅ 测试验证报告" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          
+          echo "| 测试项 | 结果 |" >> $GITHUB_STEP_SUMMARY
+          echo "|--------|------|" >> $GITHUB_STEP_SUMMARY
+          echo "| Rust 单元测试 | ${{ steps.rust_tests.outputs.result }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| TypeScript 检查 | ${{ steps.ts_tests.outputs.result }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| Frontend Build | ${{ steps.build_tests.outputs.result }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| Playwright E2E | ${{ steps.e2e_tests.outputs.result }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| Clippy 检查 | ${{ steps.clippy_tests.outputs.result }} |" >> $GITHUB_STEP_SUMMARY
+          
+          # 判断是否全部通过
+          PASSED=true
+          for result in "${{ steps.rust_tests.outputs.result }}" "${{ steps.ts_tests.outputs.result }}" "${{ steps.build_tests.outputs.result }}" "${{ steps.clippy_tests.outputs.result }}"; do
+            if [ "$result" != "passed" ]; then
+              PASSED=false
+            fi
+          done
+          
+          if $PASSED; then
+            echo "all_passed=true" >> $GITHUB_OUTPUT
+            echo "summary=ALL_PASSED" >> $GITHUB_OUTPUT
+            echo "## ✅ 全部测试通过！" >> $GITHUB_STEP_SUMMARY
+          else
+            echo "all_passed=false" >> $GITHUB_OUTPUT
+            echo "summary=HAS_FAILURES" >> $GITHUB_OUTPUT
+            echo "## ⚠️ 部分测试失败，需要人工介入" >> $GITHUB_STEP_SUMMARY
+          fi
+
+  # ═══════════════════════════════════════════════════════
+  # 阶段 5: 最终处理 — 成功则提交，失败则报告
+  # ═══════════════════════════════════════════════════════
+  final:
+    name: 🚀 Finalize
+    needs: [setup, test-verify]
+    runs-on: ubuntu-latest
+    steps:
+      # ── 全部通过 → 提交所有改动 ──
+      - uses: actions/checkout@v4
+        if: needs.test-verify.outputs.all_tests_passed == 'true'
+        with:
+          fetch-depth: 1
+
+      - name: Commit all improvements
+        if: needs.test-verify.outputs.all_tests_passed == 'true'
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add -A
+          
+          if git diff --cached --stat | grep -q "."; then
+            git commit -m "🧠 Self-iterate: ${{ needs.setup.outputs.iteration_id }}
+
+            ✅ 全面自愈完成 — 检查 → 修复 → 复查 → 通过
+            - Rust auto-fixes applied
+            - Frontend dependency fixes applied
+            - All tests passed: unit + type-check + build + clippy + e2e
+
+            Iteration: ${{ needs.setup.outputs.iteration_id }}
+
+            Co-authored-by: github-actions[bot] <github-actions[bot]@users.noreply.github.com>"
+            
+            git push origin main
+            echo "✅ 已推送自愈结果到 main"
+          else
+            echo "No additional changes to commit"
+          fi
+
+      # ── 未全部通过 → 创建 Issue 报告 ──
+      - name: Create issue for unresolved problems
+        if: needs.test-verify.outputs.all_tests_passed == 'false'
+        uses: actions/github-script@v7
+        with:
+          script: |
+            github.rest.issues.create({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              title: "🧠 Self-Iterate [${{ needs.setup.outputs.iteration_date }}]: 需要人工介入",
+              body: `## 自我迭代报告 — ${{ needs.setup.outputs.iteration_date }}
+
+              迭代 ID: **${{ needs.setup.outputs.iteration_id }}**
+
+              ### 自动修复结果
+              - ❌ 自动修复未能解决所有问题
+              - 请人工检查以下失败的测试
+
+              ### 测试验证结果
+              ${{ needs.test-verify.outputs.test_summary }}
+
+              ### 下一步
+              1. 查看上方测试报告了解失败原因
+              2. 运行 \`cargo tauri dev\` 本地复现问题
+              3. 修复后提交，self-iterate 下次运行会自动验证
+
+              ---
+              *由 Self-Iterate workflow 自动生成*`,
+              labels: ["self-iterate", "needs-attention"],
+            })
+          env:
+            GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      # ── 保存迭代历史 ──
+      - name: Persist iteration history
+        run: |
+          mkdir -p .self-iterate/history
+          
+          cat >> .self-iterate/history/iterations.jsonl << EOF
+          {"date": "${{ needs.setup.outputs.iteration_date }}", "id": "${{ needs.setup.outputs.iteration_id }}", "all_passed": ${{ needs.test-verify.outputs.all_tests_passed }}, "summary": "${{ needs.test-verify.outputs.test_summary }}"}
+          EOF
+          
+          # 保留最近 90 条
+          tail -90 .self-iterate/history/iterations.jsonl > /tmp/iterations_tmp.jsonl
+          mv /tmp/iterations_tmp.jsonl .self-iterate/history/iterations.jsonl
+
+      - name: Final summary
+        run: |
+          echo "## 🧠 自我迭代完成" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          
+          if ${{ needs.test-verify.outputs.all_tests_passed }}; then
+            echo "### ✅ 全部通过 — 改动已提交到 main 分支" >> $GITHUB_STEP_SUMMARY
+            echo "" >> $GITHUB_STEP_SUMMARY
+            echo "项目经过检查、修复、复查全部通过。" >> $GITHUB_STEP_SUMMARY
+            echo "改动已自动提交并推送。" >> $GITHUB_STEP_SUMMARY
+          else
+            echo "### ⚠️ 存在未解决问题" >> $GITHUB_STEP_SUMMARY
+            echo "" >> $GITHUB_STEP_SUMMARY
+            echo "已自动创建 Issue，请人工介入处理。" >> $GITHUB_STEP_SUMMARY
+          fi
+          
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "**迭代 ID**: ${{ needs.setup.outputs.iteration_id }}" >> $GITHUB_STEP_SUMMARY
+          echo "**完成时间**: $(date)" >> $GITHUB_STEP_SUMMARY

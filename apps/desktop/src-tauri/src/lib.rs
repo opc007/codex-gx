@@ -188,7 +188,7 @@ pub fn run() {
         .manage::<BugReportState>(Arc::new(bugreport_tauri::BugReportState::new()))
         .manage::<queue_tauri::QueueState>(queue_tauri::build_state())
         .manage(p2p_tauri::P2pState::new())
-        .manage::<license_tauri::LicenseManagerState>(license_tauri::build_state())
+        .manage::<license_tauri::LicenseManagerState>(Arc::new(()))  // v2.0: 免费版，无需 LicenseManager
         .manage::<personality_tauri::PersonalityState>(personality_tauri::build_state())
         .manage::<skills_md_tauri::SkillIndexState>(skills_md_tauri::build_state())
         .manage::<goal_tauri::GoalState>(goal_tauri::build_state())
@@ -1106,7 +1106,7 @@ struct McpServerDto {
     tool_count: usize,
 }
 
-/// 激活码 demo 密钥已迁到 `license_tauri::ActivationCodeProvider::default_demo`（v1.6）
+/// v2.0: 永久免费，所有激活码返回 community 状态
 /// 旧实现 `activate_license` / `get_license_status` / `deactivate_license` 替换为：
 /// - `license_tauri::license_status`
 /// - `license_tauri::license_activate`
