@@ -1,5 +1,19 @@
 # Codex GX
 
+<p align="center">
+  <img src="https://img.shields.io/badge/Codex-GX-v2.0-blue?style=for-the-badge&logo=github" alt="Version">
+  <img src="https://img.shields.io/badge/License-MIT-green?style=for-the-badge" alt="License">
+  <img src="https://img.shields.io/badge/Rust-Tauri-orange?style=for-the-badge&logo=rust" alt="Tech">
+  <img src="https://img.shields.io/badge/Price-100%25%20Free-red?style=for-the-badge" alt="Price">
+</p>
+
+<p align="center">
+  <a href="https://github.com/opc007/codex-gx/stargazers"><img src="https://img.shields.io/github/stars/opc007/codex-gx?style=social" alt="Stars"></a>
+  <a href="https://github.com/opc007/codex-gx/network/members"><img src="https://img.shields.io/github/forks/opc007/codex-gx?style=social" alt="Forks"></a>
+  <a href="https://github.com/opc007/codex-gx/issues"><img src="https://img.shields.io/github/issues/opc007/codex-gx?style=social" alt="Issues"></a>
+</p>
+
+
 > **全功能免费开源 AI Agent 桌面客户端** — Tauri 2 + Rust，macOS / Windows 双端
 >
 > v2.0 永久免费 · MIT 开源协议 · 社区共建
