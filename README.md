@@ -103,3 +103,64 @@ MIT License — 完全免费，可自由使用、修改、分发。
 - [GitHub](https://github.com/opc007/codex-gx)
 - [Releases](https://github.com/opc007/codex-gx/releases)
 - [Issues](https://github.com/opc007/codex-gx/issues)
+
+---
+
+## 🤝 如何参与贡献
+
+### 方式一：提交 Pull Request（推荐）
+
+```bash
+# 1. Fork 仓库到你的 GitHub 账号
+# 2. Clone 你的 fork
+git clone https://github.com/YOUR_USERNAME/codex-gx.git
+cd codex-gx
+
+# 3. 从 main 创建功能分支
+git checkout -b feat/你的功能名
+
+# 4. 开发
+git commit -m "feat: 添加新功能"
+
+# 5. Push 到你的 fork
+git push origin feat/你的功能名
+
+# 6. 在 GitHub 上发起 Pull Request
+```
+
+### 方式二：提交 Issue
+
+- 🐛 发现 Bug？ → [新建 Bug Report](https://github.com/opc007/codex-gx/issues/new?template=bug.md)
+- 💡 有功能建议？ → [新建 Feature Request](https://github.com/opc007/codex-gx/issues/new?template=feature.md)
+- 📖 文档改进？ → [新建 Documentation Issue](https://github.com/opc007/codex-gx/issues/new?template=documentation.md)
+
+### 协作流程
+
+```
+贡献者                 管理员 (@ahs)
+   │                        │
+   ├─── Fork + Clone ──────→│
+   │                        │
+   │─── 提交 PR ────────────→ 自动通知
+   │                        │
+   │                        ├─── Review 代码
+   │                        │
+   │←─── Review 反馈 ───────┤
+   │                        │
+   ├─── 修复问题 ───────────→│
+   │                        │
+   │                        ├─── Approve + Merge
+   │                        │
+   └─── 🚀 贡献完成！      │
+```
+
+### 自动化工具体系
+
+- **Dependabot**：自动更新依赖版本（每周）
+- **Self-Iterate**：每日自动检查-修复-验证代码问题
+- **Playwright E2E**：每次 PR 自动运行端到端测试
+- **Greeting**：新 PR/Issue 自动感谢回复
+
+### 贡献者荣誉
+
+查看 [CONTRIBUTORS.md](CONTRIBUTORS.md)，所有贡献者都会被记录！

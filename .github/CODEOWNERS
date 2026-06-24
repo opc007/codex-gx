@@ -1,0 +1,18 @@
+# 代码所有权 — 定义各模块负责人
+# 所有 PR 改动这些文件时，会自动通知对应 owner
+
+# 默认 owner
+* @ahs
+
+# 核心模块
+/crates/agent-core/     @ahs
+/crates/provider/        @ahs
+/crates/mcp/            @ahs
+/crates/license/        @ahs
+
+# 前端
+apps/desktop/src/       @ahs
+apps/desktop/src-tauri/  @ahs
+
+# 工作流
+.github/workflows/       @ahs
