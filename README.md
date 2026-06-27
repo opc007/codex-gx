@@ -33,9 +33,12 @@
 
 ### macOS
 
-1. 下载 [GitHub Releases](https://github.com/opc007/codex-gx/releases) 的 `Codex gx_*.dmg`
-2. 双击 `.dmg`，拖到 Applications
-3. 打开 Applications，右键 → 打开 → 仍要打开
+1. 下载 [v1.9.16 Release](https://github.com/opc007/codex-gx/releases/tag/v1.9.16) 的 `Codex gx_1.9.16_aarch64.dmg`（Apple Silicon）或 `.app.zip`
+2. 校验（推荐）：对比 `checksums.txt` 中的 SHA256
+3. 双击 `.dmg`，拖到 Applications
+4. 打开 Applications，右键 → 打开 → 仍要打开
+
+> Windows 版本请从 Releases 下载对应 exe/msi。
 
 ### Windows
 
