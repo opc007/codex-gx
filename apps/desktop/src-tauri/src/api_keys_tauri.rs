@@ -1,4 +1,6 @@
 //! API Key 本地存储 — ~/.agentshell/secrets.json（仅本机，不进 git）
+//! 注意：当前为明文存储（带 0600 权限）。
+//! 后续优化建议：迁移到 macOS Keychain / Windows Credential Manager（更安全）。
 
 use serde::{Deserialize, Serialize};
 use std::path::PathBuf;

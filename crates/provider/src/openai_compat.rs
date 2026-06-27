@@ -81,16 +81,17 @@ struct OpenAiMessage {
 
 impl From<ChatMessage> for OpenAiMessage {
     fn from(m: ChatMessage) -> Self {
-        let content = if m.content.len() == 1 {
-            if let crate::request::ChatContentPart::Text { text } = &m.content[0] {
-                Some(serde_json::Value::String(text.clone()))
-            } else {
-                Some(serde_json::to_value(&m.content).unwrap_or(serde_json::json!(null)))
-            }
-        } else {
-            Some(serde_json::to_value(&m.content).unwrap_or(serde_json::json!(null)))
-        };
+        // 提取纯文本内容（OpenAI content 字段通常是 string 或 null）
+        let text_content: Option<String> = m
+            .content
+            .iter()
+            .filter_map(|p| match p {
+                crate::request::ChatContentPart::Text { text } => Some(text.clone()),
+                _ => None,
+            })
+            .next();  // 取第一条文本，复杂内容时可扩展
 
+        // 提取 tool_calls （仅 assistant）
         let tool_calls = if m.role == ChatRole::Assistant {
             let calls: Vec<serde_json::Value> = m
                 .content
@@ -109,11 +110,29 @@ impl From<ChatMessage> for OpenAiMessage {
                     _ => None,
                 })
                 .collect();
-            if calls.is_empty() {
-                None
-            } else {
-                Some(calls)
-            }
+            if calls.is_empty() { None } else { Some(calls) }
+        } else {
+            None
+        };
+
+        // 决定 content 字段：
+        // 永远不要把 ToolUse / ToolResult 塞到 content 里发给 OpenAI 兼容接口
+        // （它们要么走 tool_calls，要么 role=tool + tool_call_id）
+        let non_tool_content: Vec<_> = m
+            .content
+            .iter()
+            .filter(|p| !matches!(p, crate::request::ChatContentPart::ToolUse { .. } | crate::request::ChatContentPart::ToolResult { .. }))
+            .cloned()
+            .collect();
+
+        let content: Option<serde_json::Value> = if tool_calls.is_some() {
+            // assistant 做 tool call 时，content 只保留文本（或 null）
+            text_content.map(serde_json::Value::String)
+        } else if let Some(t) = text_content {
+            Some(serde_json::Value::String(t))
+        } else if !non_tool_content.is_empty() {
+            // 图片等复杂内容
+            Some(serde_json::to_value(&non_tool_content).unwrap_or(serde_json::json!(null)))
         } else {
             None
         };

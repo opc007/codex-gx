@@ -54,19 +54,16 @@ curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
 # 2. 安装 Node.js（≥ 20）
 brew install node@20
 
-# 3. 安装 pnpm
-npm install -g pnpm
+# 3. 安装前端依赖（使用 npm）
+cd apps/desktop && npm install && cd ..
 
 # 4. 安装 Tauri CLI
 cargo install tauri-cli --version "^2"
 
-# 5. 安装前端依赖
-cd apps/desktop && pnpm install && cd ..
-
-# 6. 开发模式
+# 5. 开发模式
 cargo tauri dev
 
-# 7. 生产 build
+# 6. 生产 build
 cargo tauri build
 ```
 

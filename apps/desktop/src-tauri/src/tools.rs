@@ -12,6 +12,7 @@
 
 use agent_core::tool::{Tool, ToolInput, ToolOutput};
 use async_trait::async_trait;
+use sandbox::{build_sandbox_command, SandboxMode, SandboxPolicy};
 use serde_json::json;
 use std::path::PathBuf;
 use std::process::Command;
@@ -68,17 +69,25 @@ impl Tool for BashTool {
             .ok_or_else(|| agent_core::Error::ToolExecution("missing command".into()))?;
         let _timeout = input["timeout_ms"].as_u64().unwrap_or(30_000);
 
-        let output = if cfg!(target_os = "windows") {
-            Command::new("cmd")
-                .args(["/C", cmd])
-                .current_dir(&self.cwd)
-                .output()
+        // 使用沙箱包装命令（macOS 优先）
+        let full_argv: Vec<String> = if cfg!(target_os = "macos") {
+            let policy = SandboxPolicy::default();
+            build_sandbox_command(&policy, SandboxMode::WorkspaceWrite, "sh", &["-c", cmd], &self.cwd)
+        } else if cfg!(target_os = "windows") {
+            let mut v = vec!["cmd".to_string(), "/C".to_string()];
+            v.push(cmd.to_string());
+            v
         } else {
-            Command::new("sh")
-                .args(["-c", cmd])
-                .current_dir(&self.cwd)
-                .output()
+            vec!["sh".to_string(), "-c".to_string(), cmd.to_string()]
         };
+
+        let program = &full_argv[0];
+        let args: Vec<&str> = full_argv[1..].iter().map(|s| s.as_str()).collect();
+
+        let output = Command::new(program)
+            .args(args)
+            .current_dir(&self.cwd)
+            .output();
 
         match output {
             Ok(out) => {
@@ -373,7 +382,7 @@ impl Tool for WebSearchTool {
         if let Some(s) = &site_filter {
             url.push_str(&format!("&site_filter={}", urlencoding(s)));
         }
-        if let Some(s) = &site_exclude {
+        if let Some(_s) = &site_exclude {
             // brave 没有 site_exclude，用 site_filter=null 也不行；先记在描述里
             // 我们在 client-side 过滤
         }

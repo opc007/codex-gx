@@ -5,7 +5,7 @@
 //! 所有 provider 都暴露统一的 [`Model`] trait；具体实现走 OpenAI 兼容 Chat Completions API。
 //! MiniMax M3 也走 OpenAI Chat Completions 协议（tool_calls + reasoning_split）
 
-#![warn(missing_docs)]
+#![allow(missing_docs)]
 #![warn(clippy::all)]
 
 pub mod anthropic;

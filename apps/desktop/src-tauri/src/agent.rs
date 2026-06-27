@@ -17,7 +17,7 @@
 
 use agent_core::tool::ToolRegistry;
 use provider::model::Usage;
-use provider::request::{ChatContentPart, ChatMessage, ChatRequest, ToolDefinition};
+use provider::request::{ChatContentPart, ChatMessage, ChatRequest, ChatRole, ToolDefinition};
 use provider::response::AssistantMessage;
 use provider::stream::{ChatStream, StreamChunk};
 use provider::Model;
@@ -564,17 +564,23 @@ impl AgentRunner {
                     continue;
                 }
 
-                let (success, output, error) = {
+                let (success, output, error, tool_output) = {
                     let mut reg = self.tool_registry.lock().await;
                     match reg.get(name) {
                         Some(tool) => match tool.execute(args.clone()).await {
-                            Ok(out) => (out.success, out.output, out.error),
-                            Err(e) => (false, String::new(), Some(e.to_string())),
+                            Ok(out) => {
+                                let success = out.success;
+                                let output = out.output.clone();
+                                let error = out.error.clone();
+                                (success, output, error, Some(out))
+                            }
+                            Err(e) => (false, String::new(), Some(e.to_string()), None),
                         },
                         None => (
                             false,
                             String::new(),
                             Some(format!("tool not found: {}", name)),
+                            None,
                         ),
                     }
                 };
@@ -605,6 +611,29 @@ impl AgentRunner {
                     format!("[ERROR] {}", error.unwrap_or_else(|| "no message".into()))
                 };
                 self.history.push(ChatMessage::tool(id, result_text));
+
+                // 特殊处理 screenshot 结果：把 base64 作为图像喂给模型（用于视觉）
+                if name == "desktop_screenshot" {
+                    if let Some(out) = tool_output {
+                        if let Some(data) = out.data {
+                            if let Some(b64) = data.get("png_base64").and_then(|v| v.as_str()) {
+                                let img_content = vec![ChatContentPart::ImageBase64 {
+                                    data: b64.to_string(),
+                                    mime_type: "image/png".to_string(),
+                                }];
+                                let img_msg = ChatMessage {
+                                    role: ChatRole::User,
+                                    content: img_content,
+                                    reasoning_content: None,
+                                    tool_call_id: None,
+                                };
+                                self.history.push(img_msg);
+                                // 可选：再加一条系统提示提醒协议
+                                self.history.push(ChatMessage::system("以上是刚才的桌面截图，请根据协议使用相对坐标操作。"));
+                            }
+                        }
+                    }
+                }
             }
 
             if !finish_chunk && step >= self.max_steps {

@@ -137,6 +137,24 @@ export function Composer({ sessionId, requireApproval, setRequireApproval, onReq
     return () => window.removeEventListener("api-keys:changed", onKeys);
   }, []);
 
+  // 当切换 session 时，尽量采用该 session 最后一次回复使用的模型
+  // 这样切换历史会话时，模型选择器会自动对齐，避免“切换了但显示还是旧的”困惑
+  useEffect(() => {
+    if (!sessionId) return;
+    const msgs = getSessionsState().messages[sessionId] ?? [];
+    // 从后往前找最后一条有 modelUsed 的 assistant
+    for (let i = msgs.length - 1; i >= 0; i--) {
+      const m = msgs[i];
+      if (m.role === "assistant" && m.modelUsed && m.modelUsed !== model) {
+        setModel(m.modelUsed);
+        try {
+          localStorage.setItem(MODEL_STORAGE_KEY, m.modelUsed);
+        } catch {}
+        break;
+      }
+    }
+  }, [sessionId]);
+
   // v1.2：voice input 状态（v1.9.13：UI 隐藏，保留内部状态以备未来重启用）
   const [recording, setRecording] = useState(false);
   const voiceBusyRef = useRef(false);
@@ -2636,6 +2654,11 @@ ${diff.diff.slice(0, 5000)}${diff.truncated ? "\n... [truncated, view full in gi
         }
       }
 
+      // 执行完毕后自动收起 stages，保持页面干净
+      setTimeout(() => {
+        setStages((prev) => prev.map(s => ({...s, status: s.status === 'running' ? 'done' : s.status})));
+      }, 1200);
+
       if (streamingAssistantId) {
         updateAssistantMessage(sessionId, streamingAssistantId, {
           text: acc || "(empty response)",
@@ -2647,6 +2670,11 @@ ${diff.diff.slice(0, 5000)}${diff.truncated ? "\n... [truncated, view full in gi
           modelUsed: modelForThisTurn,
         });
       }
+
+      // 响应结束后自动收起执行过程，避免占位
+      setTimeout(() => {
+        setStages(prev => prev.length > 0 ? prev : []);
+      }, 800);
     } catch (e) {
       const errText = String(e);
       if (/API Key|未配置/i.test(errText)) {

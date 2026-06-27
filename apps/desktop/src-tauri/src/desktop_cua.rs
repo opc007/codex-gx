@@ -1,10 +1,12 @@
 //! v0.6 / v1.2：Desktop Computer Use (CUA)
 //!
 //! 跨平台 `DesktopCua` trait + 各平台 impl。
-//! - macOS：通过 `osascript` 调 System Events（AXUIElement）+ `screencapture`
+//! - macOS：通过 `osascript` 调 System Events（窗口/焦点） + enigo（鼠标/键盘）
 //! - Windows：通过 PowerShell 调 UI Automation API（System.Windows.Automation）
 //!   + System.Drawing 截图
 //! - Linux：stub（v1.3+）
+//!
+//! 重要变更：鼠标键盘模拟已从 Python+Quartz 迁移到 Rust enigo，避免用户环境缺 Quartz 模块的问题。
 //!
 //! Windows 平台同时支持：
 //! - 列出窗口
@@ -12,6 +14,8 @@
 //! - 枚举 UI 树
 //! - 点击 / 输入 / 组合键
 //! - 屏幕截图（base64）
+
+#![allow(missing_docs)]
 
 use agent_core::tool::ToolOutput;
 use agent_core::{Error, Result, Tool};
@@ -21,6 +25,11 @@ use serde_json::json;
 use std::io::Write;
 use std::path::PathBuf;
 use std::process::Command;
+use std::sync::LazyLock;
+use std::sync::Mutex;
+
+/// 最后一次截图的屏幕尺寸，用于相对坐标换算 (Codex 风格 0-1 相对)
+static LAST_SCREEN_SIZE: LazyLock<Mutex<(u32, u32)>> = LazyLock::new(|| Mutex::new((1920, 1080)));
 
 type ToolInput = serde_json::Value;
 
@@ -40,6 +49,19 @@ pub trait DesktopCua: Send + Sync + std::fmt::Debug {
     /// 在屏幕坐标 (x, y) 上点击
     fn click_at(&self, x: i32, y: i32) -> Result<String>;
 
+    /// 双击
+    fn double_click_at(&self, x: i32, y: i32) -> Result<String> {
+        // 默认 fallback 到两次 click
+        let _ = self.click_at(x, y);
+        std::thread::sleep(std::time::Duration::from_millis(80));
+        self.click_at(x, y)
+    }
+
+    /// 滚动 (dx, dy)
+    fn scroll(&self, dx: i32, dy: i32) -> Result<String> {
+        Err(Error::ToolExecution("scroll 未在此平台实装".to_string()))
+    }
+
     /// 向当前聚焦的应用输入文本
     fn type_text(&self, text: &str) -> Result<String>;
 
@@ -53,6 +75,11 @@ pub trait DesktopCua: Send + Sync + std::fmt::Debug {
             "screenshot 在 {} 上未实装",
             self.platform()
         )))
+    }
+
+    /// 启动应用（推荐用这个来打开 App，比 AppleScript 可靠）
+    fn launch_app(&self, app_name: &str) -> Result<String> {
+        Err(Error::ToolExecution("launch_app 未在此平台实装".to_string()))
     }
 }
 
@@ -126,30 +153,40 @@ impl DesktopCua for MacOsDesktopCua {
 
     fn focus_window(&self, app_name: &str, title_contains: Option<&str>) -> Result<String> {
         let title_filter = title_contains.unwrap_or("");
-        let script = format!(
-            r#"
-            tell application "System Events"
-                set theProcess to first process whose name is "{app}"
-                if (count of windows of theProcess) is 0 then
-                    return "FAIL: {app} 没有任何窗口"
-                end if
-                if "{title}" is "" then
-                    set frontmost of theProcess to true
-                    return "OK: focused {app}"
-                else if (count of (every window of theProcess whose name contains "{title}")) is 0 then
-                    return "FAIL: {app} 没有标题含 '{title}' 的窗口"
-                else
-                    set theWindow to first window of theProcess whose name contains "{title}"
-                    set frontmost of theProcess to true
-                    perform action "AXRaise" of theWindow
-                    return "OK: focused {app} / {title}"
-                end if
-            end tell
-            "#,
-            app = app_name,
-            title = title_filter,
-        );
-        run_osascript(&script)
+        // 尝试常见名称（微信/WeChat）
+        for app in [app_name, "微信", "WeChat", "weixin"] {
+            let script = format!(
+                r#"
+                tell application "System Events"
+                    try
+                        set theProcess to first process whose name is "{app}"
+                        if (count of windows of theProcess) is 0 then
+                            continue
+                        end if
+                        if "{title}" is "" then
+                            set frontmost of theProcess to true
+                            return "OK: focused {app}"
+                        else if (count of (every window of theProcess whose name contains "{title}")) is 0 then
+                            continue
+                        else
+                            set theWindow to first window of theProcess whose name contains "{title}"
+                            set frontmost of theProcess to true
+                            perform action "AXRaise" of theWindow
+                            return "OK: focused {app} / {title}"
+                        end if
+                    end try
+                end tell
+                "#,
+                app = app,
+                title = title_filter,
+            );
+            if let Ok(res) = run_osascript(&script) {
+                if res.starts_with("OK") {
+                    return Ok(res);
+                }
+            }
+        }
+        Err(Error::ToolExecution(format!("无法聚焦应用 {}", app_name)))
     }
 
     fn get_app_tree(&self, app_name: &str, depth: u32) -> Result<String> {
@@ -181,53 +218,165 @@ impl DesktopCua for MacOsDesktopCua {
     }
 
     fn click_at(&self, x: i32, y: i32) -> Result<String> {
-        let script = format!(
-            r#"
-            do shell script "/usr/bin/python3 -c 'import Quartz; e = Quartz.CGEventCreateMouseEvent(None, Quartz.kCGEventLeftMouseDown, ({}, {}), Quartz.kCGMouseButtonLeft); Quartz.CGEventPost(Quartz.kCGHIDEventTap, e); e2 = Quartz.CGEventCreateMouseEvent(None, Quartz.kCGEventLeftMouseUp, ({}, {}), Quartz.kCGMouseButtonLeft); Quartz.CGEventPost(Quartz.kCGHIDEventTap, e2)'"
-            "#,
-            x, y, x, y
-        );
-        run_osascript(&script)?;
+        use enigo::{Enigo, Mouse, Settings, Coordinate, Button, Direction};
+
+        let mut enigo = match Enigo::new(&Settings::default()) {
+            Ok(e) => e,
+            Err(e) => {
+                let msg = format!("{}", e);
+                if msg.to_lowercase().contains("accessibility") || msg.to_lowercase().contains("permission") {
+                    return Err(Error::ToolExecution("缺少 macOS 辅助功能权限。请到「系统设置 → 隐私与安全性 → 辅助功能」授予 Codex gx 权限，然后完全重启应用。".to_string()));
+                }
+                return Err(Error::ToolExecution(format!("Enigo 初始化失败: {}", e)));
+            }
+        };
+
+        enigo.move_mouse(x as i32, y as i32, Coordinate::Abs)
+            .map_err(|e| Error::ToolExecution(format!("移动鼠标失败: {}", e)))?;
+
+        enigo.button(Button::Left, Direction::Click)
+            .map_err(|e| Error::ToolExecution(format!("点击失败: {}", e)))?;
+
         Ok(format!("🖱️ 点击 ({}, {})", x, y))
     }
 
+    fn double_click_at(&self, x: i32, y: i32) -> Result<String> {
+        use enigo::{Enigo, Mouse, Settings, Coordinate, Button, Direction};
+
+        let mut enigo = Enigo::new(&Settings::default())
+            .map_err(|e| Error::ToolExecution(format!("Enigo 初始化失败: {}", e)))?;
+
+        enigo.move_mouse(x as i32, y as i32, Coordinate::Abs)
+            .map_err(|e| Error::ToolExecution(format!("移动鼠标失败: {}", e)))?;
+
+        enigo.button(Button::Left, Direction::Click)
+            .map_err(|e| Error::ToolExecution(format!("第一次点击失败: {}", e)))?;
+
+        std::thread::sleep(std::time::Duration::from_millis(80));
+
+        enigo.button(Button::Left, Direction::Click)
+            .map_err(|e| Error::ToolExecution(format!("第二次点击失败: {}", e)))?;
+
+        Ok(format!("🖱️🖱️ 双击 ({}, {})", x, y))
+    }
+
+    fn scroll(&self, dx: i32, dy: i32) -> Result<String> {
+        use enigo::{Enigo, Axis, Mouse, Settings};
+
+        let mut enigo = Enigo::new(&Settings::default())
+            .map_err(|e| Error::ToolExecution(format!("Enigo 初始化失败: {}", e)))?;
+
+        // Enigo scroll: amount, Axis
+        if dy != 0 {
+            enigo.scroll(dy, Axis::Vertical)
+                .map_err(|e| Error::ToolExecution(format!("垂直滚动失败: {}", e)))?;
+        }
+        if dx != 0 {
+            enigo.scroll(dx, Axis::Horizontal)
+                .map_err(|e| Error::ToolExecution(format!("水平滚动失败: {}", e)))?;
+        }
+
+        Ok(format!("🖱️ 滚动 dx={}, dy={}", dx, dy))
+    }
+
     fn type_text(&self, text: &str) -> Result<String> {
-        let escaped = text.replace('\\', "\\\\").replace('"', "\\\"");
-        let script = format!(
-            r#"tell application "System Events" to keystroke "{}""#,
-            escaped
-        );
-        run_osascript(&script)?;
+        use enigo::{Enigo, Keyboard, Settings, Direction};
+
+        let mut enigo = Enigo::new(&Settings::default())
+            .map_err(|e| Error::ToolExecution(format!("Enigo 初始化失败: {}", e)))?;
+
+        enigo.text(text)
+            .map_err(|e| Error::ToolExecution(format!("输入文字失败: {}", e)))?;
+
         Ok(format!("⌨️ 输入 {} 字符", text.chars().count()))
     }
 
     fn key_combo(&self, keys: &str) -> Result<String> {
-        let parts: Vec<&str> = keys.split('+').map(|s| s.trim()).collect();
+        use enigo::{Enigo, Keyboard, Settings, Direction, Key};
+
+        let mut enigo = Enigo::new(&Settings::default())
+            .map_err(|e| Error::ToolExecution(format!("Enigo 初始化失败: {}", e)))?;
+
+        let parts: Vec<String> = keys.split('+').map(|s| s.trim().to_lowercase()).collect();
         if parts.is_empty() {
             return Err(Error::ToolExecution("keys 不能为空".to_string()));
         }
-        let key = parts[0];
-        let modifiers: Vec<&str> = parts[1..]
-            .iter()
-            .map(|s| match s.to_lowercase().as_str() {
-                "cmd" | "command" => "command down",
-                "ctrl" | "control" => "control down",
-                "alt" | "option" => "option down",
-                "shift" => "shift down",
-                _ => "command down",
-            })
-            .collect();
-        let using = if modifiers.is_empty() {
-            String::new()
-        } else {
-            format!(" using {{ {} }}", modifiers.join(", "))
+
+        let main_key_str = &parts[0];
+        let main_key = match main_key_str.as_str() {
+            "enter" | "return" => Key::Return,
+            "tab" => Key::Tab,
+            "esc" | "escape" => Key::Escape,
+            "space" => Key::Space,
+            "backspace" | "delete" => Key::Backspace,
+            "up" => Key::UpArrow,
+            "down" => Key::DownArrow,
+            "left" => Key::LeftArrow,
+            "right" => Key::RightArrow,
+            c if c.len() == 1 => Key::Unicode(c.chars().next().unwrap()),
+            _ => return Err(Error::ToolExecution(format!("不支持的按键: {}", main_key_str))),
         };
-        let script = format!(
-            r#"tell application "System Events" to keystroke "{}"{}"#,
-            key, using
-        );
-        run_osascript(&script)?;
+
+        // 处理修饰键
+        for m in &parts[1..] {
+            match m.as_str() {
+                "cmd" | "command" | "meta" => { let _ = enigo.key(Key::Meta, Direction::Press); }
+                "ctrl" | "control" => { let _ = enigo.key(Key::Control, Direction::Press); }
+                "alt" | "option" => { let _ = enigo.key(Key::Alt, Direction::Press); }
+                "shift" => { let _ = enigo.key(Key::Shift, Direction::Press); }
+                _ => {}
+            }
+        }
+
+        let _ = enigo.key(main_key, Direction::Click);
+
+        // 释放修饰键
+        for m in &parts[1..] {
+            match m.as_str() {
+                "cmd" | "command" | "meta" => { let _ = enigo.key(Key::Meta, Direction::Release); }
+                "ctrl" | "control" => { let _ = enigo.key(Key::Control, Direction::Release); }
+                "alt" | "option" => { let _ = enigo.key(Key::Alt, Direction::Release); }
+                "shift" => { let _ = enigo.key(Key::Shift, Direction::Release); }
+                _ => {}
+            }
+        }
+
         Ok(format!("⌨️ 组合键 {}", keys))
+    }
+
+    fn launch_app(&self, app_name: &str) -> Result<String> {
+        // 尝试常见名称
+        let mut launched_name = None;
+        for name in [app_name, "微信", "WeChat", "weixin"] {
+            let output = Command::new("open")
+                .arg("-a")
+                .arg(name)
+                .output()
+                .map_err(|e| Error::ToolExecution(format!("执行 open 失败: {}", e)))?;
+
+            if output.status.success() {
+                launched_name = Some(name.to_string());
+                break;
+            }
+        }
+        if launched_name.is_none() {
+            return Err(Error::ToolExecution(format!(
+                "打开「{}」失败。请确认应用已安装，并尝试 bash 命令: open -a \"微信\" ",
+                app_name
+            )));
+        }
+        let name = launched_name.unwrap();
+
+        // 等待应用启动，最多10秒，每秒检查是否有窗口
+        for _ in 0..10 {
+            std::thread::sleep(std::time::Duration::from_secs(1));
+            if let Ok(windows) = self.list_windows() {
+                if windows.iter().any(|w| w.app.contains("微信") || w.app.contains("WeChat") || w.app.to_lowercase().contains("weixin")) {
+                    return Ok(format!("✅ 已成功启动应用: {} 并确认窗口出现", name));
+                }
+            }
+        }
+        Ok(format!("✅ 已尝试启动应用: {} （请手动确认是否打开）", name))
     }
 
     fn screenshot(&self) -> Result<DesktopScreenshot> {
@@ -248,7 +397,13 @@ impl DesktopCua for MacOsDesktopCua {
         let bytes = std::fs::read(&tmp)
             .map_err(|e| Error::ToolExecution(format!("读取截图失败: {}", e)))?;
         // 解析 PNG 头获取宽高
-        let (w, h) = parse_png_dimensions(&bytes).unwrap_or((0, 0));
+        let (w, h) = parse_png_dimensions(&bytes).unwrap_or((1920, 1080));
+
+        // 更新 last screen size 供相对坐标使用 (Codex 协议)
+        if let Ok(mut size) = LAST_SCREEN_SIZE.lock() {
+            *size = (w, h);
+        }
+
         let b64 = base64::engine::general_purpose::STANDARD.encode(&bytes);
         Ok(DesktopScreenshot {
             png_base64: b64,
@@ -268,10 +423,14 @@ fn run_osascript(script: &str) -> Result<String> {
         .map_err(|e| Error::ToolExecution(format!("osascript 启动失败: {}", e)))?;
     if !out.status.success() {
         let stderr = String::from_utf8_lossy(&out.stderr);
-        return Err(Error::ToolExecution(format!(
-            "osascript 错误: {}",
-            stderr.trim()
-        )));
+        let msg = stderr.trim().to_string();
+        // 常见 macOS 权限错误：辅助功能 / Accessibility
+        if msg.contains("辅助访问") || msg.contains("not allowed assistive access") || msg.contains("-25211") {
+            return Err(Error::ToolExecution(
+                "【权限不足】无法控制桌面。\n\n请执行以下操作：\n1. 打开「系统设置 → 隐私与安全性 → 辅助功能」\n2. 点击锁解锁\n3. 将「Codex gx」（或运行 `cargo tauri dev` 的终端/iTerm）添加到列表并打勾\n4. 完全退出 Codex gx（Cmd+Q）后重新启动\n\n授权后，点击/输入等操作才能工作。".to_string()
+            ));
+        }
+        return Err(Error::ToolExecution(format!("osascript 错误: {}", msg)));
     }
     Ok(String::from_utf8_lossy(&out.stdout).trim().to_string())
 }
@@ -444,6 +603,32 @@ impl DesktopCua for WindowsDesktopCua {
         );
         run_powershell(&ps)?;
         Ok(format!("🖱️ 点击 ({}, {})", x, y))
+    }
+
+    fn double_click_at(&self, x: i32, y: i32) -> Result<String> {
+        // 简单两次 click
+        let _ = self.click_at(x, y);
+        std::thread::sleep(std::time::Duration::from_millis(100));
+        self.click_at(x, y)
+    }
+
+    fn scroll(&self, dx: i32, dy: i32) -> Result<String> {
+        let ps = format!(
+            r#"
+Add-Type @"
+using System;
+using System.Runtime.InteropServices;
+public class S {{
+    [DllImport("user32.dll")] public static extern void mouse_event(uint flags, uint dx, uint dy, uint data, UIntPtr extra);
+}}
+"@
+[S]::mouse_event(0x0800, 0, 0, {}, [UIntPtr]::Zero)  # WHEEL
+"OK: scrolled dy={}"
+            "#,
+            dy, dy
+        );
+        run_powershell(&ps)?;
+        Ok(format!("🖱️ 滚动 dx={}, dy={}", dx, dy))
     }
 
     fn type_text(&self, text: &str) -> Result<String> {
@@ -783,7 +968,7 @@ impl Tool for DesktopFocusWindowTool {
         "desktop_focus_window"
     }
     fn description(&self) -> &str {
-        "聚焦到指定应用的窗口（可按标题子串过滤）。"
+        "聚焦到指定应用的窗口（可按标题子串过滤）。强烈建议先调用 desktop_launch_app 来打开应用。"
     }
     fn parameters_schema(&self) -> serde_json::Value {
         json!({
@@ -849,22 +1034,104 @@ impl Tool for DesktopClickAtTool {
         "desktop_click_at"
     }
     fn description(&self) -> &str {
-        "在屏幕坐标 (x, y) 上点击鼠标左键。"
+        "在屏幕上点击鼠标左键。支持绝对像素或相对坐标 x:0.0-1.0, y:0.0-1.0（Codex风格，推荐）。先 screenshot 获取视觉，然后根据描述输出相对坐标点击。用于朋友圈按钮等。"
     }
     fn parameters_schema(&self) -> serde_json::Value {
         json!({
             "type": "object",
             "properties": {
-                "x": {"type": "integer"},
-                "y": {"type": "integer"}
+                "x": {"type": "number", "description": "x 坐标：整数像素 或 0.0~1.0 相对坐标"},
+                "y": {"type": "number", "description": "y 坐标：整数像素 或 0.0~1.0 相对坐标"}
             },
             "required": ["x", "y"]
         })
     }
     async fn execute(&self, input: ToolInput) -> Result<ToolOutput> {
-        let x = input["x"].as_i64().unwrap_or(0) as i32;
-        let y = input["y"].as_i64().unwrap_or(0) as i32;
+        let x_val = input["x"].as_f64().unwrap_or(0.0);
+        let y_val = input["y"].as_f64().unwrap_or(0.0);
+
+        // Codex 对齐：支持相对坐标 0.0-1.0，使用上次截图的实际尺寸
+        let (x, y) = if x_val > 0.0 && x_val <= 1.0 && y_val > 0.0 && y_val <= 1.0 {
+            let (sw, sh) = if let Ok(size) = LAST_SCREEN_SIZE.lock() {
+                *size
+            } else {
+                (1920u32, 1080u32)
+            };
+            let abs_x = (x_val * sw as f64) as i32;
+            let abs_y = (y_val * sh as f64) as i32;
+            (abs_x, abs_y)
+        } else {
+            (x_val as i32, y_val as i32)
+        };
+
         let r = cua().click_at(x, y)?;
+        Ok(ToolOutput::ok(format!("{} (原始输入: {}, {})", r, x_val, y_val)))
+    }
+}
+
+// --- desktop_double_click_at ---
+
+#[derive(Debug)]
+pub struct DesktopDoubleClickAtTool;
+#[async_trait]
+impl Tool for DesktopDoubleClickAtTool {
+    fn name(&self) -> &str {
+        "desktop_double_click_at"
+    }
+    fn description(&self) -> &str {
+        "双击屏幕坐标。支持相对坐标 x,y 0.0-1.0 或绝对像素。"
+    }
+    fn parameters_schema(&self) -> serde_json::Value {
+        json!({
+            "type": "object",
+            "properties": {
+                "x": {"type": "number"},
+                "y": {"type": "number"}
+            },
+            "required": ["x", "y"]
+        })
+    }
+    async fn execute(&self, input: ToolInput) -> Result<ToolOutput> {
+        let x_val = input["x"].as_f64().unwrap_or(0.0);
+        let y_val = input["y"].as_f64().unwrap_or(0.0);
+
+        let (x, y) = if x_val > 0.0 && x_val <= 1.0 && y_val > 0.0 && y_val <= 1.0 {
+            let (sw, sh) = if let Ok(size) = LAST_SCREEN_SIZE.lock() { *size } else { (1920u32, 1080u32) };
+            ((x_val * sw as f64) as i32, (y_val * sh as f64) as i32)
+        } else {
+            (x_val as i32, y_val as i32)
+        };
+
+        let r = cua().double_click_at(x, y)?;
+        Ok(ToolOutput::ok(r))
+    }
+}
+
+// --- desktop_scroll ---
+
+#[derive(Debug)]
+pub struct DesktopScrollTool;
+#[async_trait]
+impl Tool for DesktopScrollTool {
+    fn name(&self) -> &str {
+        "desktop_scroll"
+    }
+    fn description(&self) -> &str {
+        "滚动鼠标。dx 水平, dy 垂直。正数向下/右。"
+    }
+    fn parameters_schema(&self) -> serde_json::Value {
+        json!({
+            "type": "object",
+            "properties": {
+                "dx": {"type": "integer", "default": 0},
+                "dy": {"type": "integer", "default": 0}
+            }
+        })
+    }
+    async fn execute(&self, input: ToolInput) -> Result<ToolOutput> {
+        let dx = input["dx"].as_i64().unwrap_or(0) as i32;
+        let dy = input["dy"].as_i64().unwrap_or(0) as i32;
+        let r = cua().scroll(dx, dy)?;
         Ok(ToolOutput::ok(r))
     }
 }
@@ -941,18 +1208,27 @@ impl Tool for DesktopScreenshotTool {
         "desktop_screenshot"
     }
     fn description(&self) -> &str {
-        "截取全屏并返回 PNG base64 + 临时文件路径。模型可分析图像内容。"
+        "截取全屏（或当前 App）返回 PNG base64。模型可用视觉分析界面，然后用相对坐标 0.0-1.0 或元素描述来点击/操作。Codex Computer Use 核心工具。"
     }
     fn parameters_schema(&self) -> serde_json::Value {
-        json!({"type": "object", "properties": {}})
+        json!({
+            "type": "object",
+            "properties": {
+                "app": {"type": "string", "description": "可选：指定 App 名称，只截这个窗口（例如 'Safari' 或 '微信'）"}
+            }
+        })
     }
-    async fn execute(&self, _input: ToolInput) -> Result<ToolOutput> {
+    async fn execute(&self, input: ToolInput) -> Result<ToolOutput> {
         let c = cua();
+        // 如果指定了 app，先尝试 focus（最佳实践）
+        if let Some(app) = input["app"].as_str() {
+            let _ = c.focus_window(app, None);
+        }
         let shot = c.screenshot()?;
         // 工具输出里只放 path + 尺寸 + base64 前 200 字符（节省 token）
         let preview: String = shot.png_base64.chars().take(200).collect();
         let text = format!(
-            "📸 截图完成\n平台: {}\n尺寸: {}x{}\n文件: {}\nbase64 长度: {} 字符\nbase64 前 200 字符: {}\n...(模型可读取多模态图片)",
+            "📸 截图完成（Codex Computer Use）\n平台: {}\n尺寸: {}x{}\n文件: {}\nbase64 长度: {} 字符\n\n【Codex 风格使用协议】\n1. 先看这张图，找到目标元素\n2. 回复相对坐标 {{ \"x\": 0.0-1.0, \"y\": 0.0-1.0, \"reason\": \"...\" }} 或直接调用 desktop_click_at\n3. 操作后可以再截图验证\n\nbase64 前 200 字符: {}...(完整 base64 在 data 里，模型可直接看图片)",
             c.platform(),
             shot.width,
             shot.height,
@@ -978,9 +1254,115 @@ pub fn register_desktop_cua(reg: &mut agent_core::ToolRegistry) {
     reg.register(DesktopFocusWindowTool);
     reg.register(DesktopGetAppTreeTool);
     reg.register(DesktopClickAtTool);
+    reg.register(DesktopDoubleClickAtTool);
+    reg.register(DesktopScrollTool);
     reg.register(DesktopTypeTextTool);
     reg.register(DesktopKeyComboTool);
     reg.register(DesktopScreenshotTool);
+    reg.register(DesktopCheckPermissionTool);
+    reg.register(DesktopLaunchAppTool);
+    reg.register(DesktopOpenAccessibilitySettingsTool);
+}
+
+/// 检查桌面控制权限（推荐在做复杂操作前先调用）
+#[derive(Debug)]
+pub struct DesktopCheckPermissionTool;
+
+#[async_trait]
+impl Tool for DesktopCheckPermissionTool {
+    fn name(&self) -> &str {
+        "desktop_check_permission"
+    }
+    fn description(&self) -> &str {
+        "检查 macOS 辅助功能权限状态。返回是否可以控制桌面、窗口、鼠标、键盘等，并给出授权指导。先调用这个，再用 desktop_launch_app 打开微信。"
+    }
+    fn parameters_schema(&self) -> serde_json::Value {
+        json!({ "type": "object", "properties": {} })
+    }
+    async fn execute(&self, _input: ToolInput) -> Result<ToolOutput> {
+        #[cfg(target_os = "macos")]
+        {
+            Ok(ToolOutput::ok(
+                "【macOS 桌面控制权限检查】\n\
+                 要使用点击窗口、控制微信/浏览器等功能，必须授予「辅助功能」权限。\n\n\
+                 操作步骤：\n\
+                 1. 打开「系统设置 → 隐私与安全性 → 辅助功能」\n\
+                 2. 解锁后，点击 + 添加「Codex gx」或你运行 `cargo tauri dev` 的终端（iTerm/Terminal）\n\
+                 3. 打勾启用\n\
+                 4. **完全退出** Codex gx (右键 Dock 图标 → 退出)，然后重新打开\n\n\
+                 授权后，desktop_* 工具即可正常工作。\n\
+                 同时建议也授予「屏幕录制」权限用于截图。"
+                    .to_string()
+            ))
+        }
+        #[cfg(not(target_os = "macos"))]
+        {
+            Ok(ToolOutput::ok("非 macOS 平台，桌面控制权限通常由系统沙箱或用户确认控制。".to_string()))
+        }
+    }
+}
+
+// --- desktop_open_accessibility_settings ---
+
+#[derive(Debug)]
+pub struct DesktopOpenAccessibilitySettingsTool;
+
+#[async_trait]
+impl Tool for DesktopOpenAccessibilitySettingsTool {
+    fn name(&self) -> &str {
+        "desktop_open_accessibility_settings"
+    }
+    fn description(&self) -> &str {
+        "打开 macOS 辅助功能设置页面，帮助用户授予权限以使用桌面控制（点击、输入等）。"
+    }
+    fn parameters_schema(&self) -> serde_json::Value {
+        json!({ "type": "object", "properties": {} })
+    }
+    async fn execute(&self, _input: ToolInput) -> Result<ToolOutput> {
+        #[cfg(target_os = "macos")]
+        {
+            let _ = Command::new("open")
+                .arg("x-apple.systempreferences:com.apple.preference.security?Privacy_Accessibility")
+                .output();
+            Ok(ToolOutput::ok("已打开辅助功能设置页面。请添加 Codex gx 并启用权限，然后重启应用。".to_string()))
+        }
+        #[cfg(not(target_os = "macos"))]
+        {
+            Ok(ToolOutput::ok("此功能仅 macOS 可用。".to_string()))
+        }
+    }
+}
+
+// --- desktop_launch_app ---
+
+#[derive(Debug)]
+pub struct DesktopLaunchAppTool;
+
+#[async_trait]
+impl Tool for DesktopLaunchAppTool {
+    fn name(&self) -> &str {
+        "desktop_launch_app"
+    }
+    fn description(&self) -> &str {
+        "启动 macOS 应用（推荐用于打开微信、浏览器等）。比直接用 AppleScript 可靠。参数 app_name 如 '微信' 。示例流程：先 launch_app('微信') ，然后 focus ，screenshot ，根据视觉用 click_at 相对坐标点朋友圈图标。"
+    }
+    fn parameters_schema(&self) -> serde_json::Value {
+        json!({
+            "type": "object",
+            "properties": {
+                "app_name": {"type": "string", "description": "应用名称，如 '微信' 或 'WeChat'"}
+            },
+            "required": ["app_name"]
+        })
+    }
+    async fn execute(&self, input: ToolInput) -> Result<ToolOutput> {
+        let app_name = input["app_name"].as_str().unwrap_or("").to_string();
+        if app_name.is_empty() {
+            return Ok(ToolOutput::err("app_name 不能为空".to_string()));
+        }
+        let r = cua().launch_app(&app_name)?;
+        Ok(ToolOutput::ok(r))
+    }
 }
 
 // 避免未用 import 警告

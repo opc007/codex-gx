@@ -8,12 +8,27 @@ test.describe("Settings & API Keys", () => {
     await page.goto("/", { waitUntil: "networkidle", timeout: 30_000 });
     await page.waitForTimeout(2_000);
 
-    const apiKeyLink = page
+    // 尝试多种方式打开 API Key / Provider 设置（对齐 Codex 风格）
+    let apiKeyLink = page
       .locator("button, a, [role='button']")
-      .filter({ hasText: /api.key|apikey|key.*设置|provider|模型/i })
+      .filter({ hasText: /api.key|apikey|key.*设置|provider|模型|密钥|设置/i })
       .first();
 
-    const hasLink = await apiKeyLink.isVisible().catch(() => false);
+    let hasLink = await apiKeyLink.isVisible().catch(() => false);
+
+    if (!hasLink) {
+      // 尝试侧边栏或菜单
+      const menuBtn = page.locator("button, [class*='menu'], [class*='setting']").first();
+      if (await menuBtn.isVisible().catch(() => false)) {
+        await menuBtn.click().catch(() => {});
+        await page.waitForTimeout(500);
+      }
+      apiKeyLink = page
+        .locator("button, a, [role='button'], div")
+        .filter({ hasText: /api.key|apikey|key.*设置|provider|模型|密钥/i })
+        .first();
+      hasLink = await apiKeyLink.isVisible().catch(() => false);
+    }
 
     if (!hasLink) {
       test.skip();

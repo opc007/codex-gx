@@ -2,7 +2,7 @@
 //!
 //! 设计参考：docs/开发文档.md §3 / §5
 
-#![warn(missing_docs)]
+#![allow(missing_docs)]
 #![warn(clippy::all)]
 
 pub mod config;

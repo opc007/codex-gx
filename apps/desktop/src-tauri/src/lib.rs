@@ -66,9 +66,9 @@ fn init_agents_md(args: InitAgentsArgs) -> Result<String, String> {
 - 一次只改一个文件，commit 粒度要细。\n\
 - 重要决策（API 选择、库引入、删除代码）要在 commit message 写明原因。\n\n\
 ## 常用命令\n\n\
-- 启动开发：`pnpm dev`（按实际填）\n\
-- 类型检查：`pnpm typecheck`\n\
-- 测试：`pnpm test`\n\n\
+- 启动开发：`npm run dev`\n\
+- 类型检查：`npm run type-check`\n\
+- 测试：`npm test`（如有）\n\n\
 ## 项目结构\n\n\
 - `apps/`：桌面 / 移动端\n\
 - `crates/`：Rust 后端 crate\n\
@@ -427,6 +427,8 @@ pub fn run() {
             plugin_list,                                   // v1.5
             plugin_install,                                // v1.5
             plugin_remove,                                 // v1.5
+            open_accessibility_settings,                   // v1.x Computer Use permission helper
+            check_accessibility_permission,                // v1.x Computer Use permission helper
             plugin_reload,                                 // v1.5
             plugin_install_defaults,                       // v1.5
             plugin_run_steps,                              // v1.5
@@ -672,16 +674,19 @@ async fn agent_run(app: AppHandle, req: AgentRunPayload) -> Result<String, Strin
     }
 
     // v1.9.7：注入本轮实际模型（切换模型后勿沿用历史中的旧自称）
+    // 放在最前面，最高优先级，强制覆盖历史自称
     let pinfo = provider_arc.info();
-    history.insert(
-        0,
-        ChatMessage::system(format!(
-            "[Codex gx 系统] 本轮 API 实际调用模型: **{}**（provider: {}）。\
-             用户问「你是什么模型 / 谁在回复」时，只回答该模型 ID，不要自称历史消息里的其他模型名。\
-             你是 Codex gx 桌面助手，由用户选定的第三方大模型驱动。",
-            model_name, pinfo.provider
-        )),
+    let model_identity = format!(
+        "【最高优先级系统指令 - 本轮模型身份】\n\
+         你当前正在通过 Codex gx 桌面版使用模型：**{}**（provider: {}）。\n\
+         - 无论之前对话中你或用户提到过任何其他模型（包括 deepseek、v4-pro 等），本轮及以后你都必须严格遵守：\n\
+         - 当任何人问你「你是什么模型」「现在用的是哪个模型」「你是谁」时，**只回答**：我是 {}（由 Codex gx 驱动的 {} 模型）。\n\
+         - 绝对不要再自称是 deepseek、deepseek-v4-pro 或任何历史模型。\n\
+         - 你是 Codex gx 桌面助手，由用户当前选定的模型驱动。\n\
+         这是硬性指令，优先级高于所有历史对话和用户消息。",
+        model_name, pinfo.provider, model_name, pinfo.provider
     );
+    history.insert(0, ChatMessage::system(model_identity));
 
     let session_id = req.session_id.clone();
     let user_msg = req.message.clone();
@@ -729,7 +734,7 @@ async fn agent_run(app: AppHandle, req: AgentRunPayload) -> Result<String, Strin
             agent::AgentRunner::new(app_clone.clone(), session_id.clone(), provider_arc, reg_arc)
                 .with_active_model(model_name.clone())
                 .with_history(history)
-                .with_max_steps(10)
+                .with_max_steps(20)
                 .with_require_approval(require_approval)
                 .with_plan_mode(plan_mode);
 
@@ -1189,6 +1194,42 @@ fn route_model(message: &str) -> String {
 #[tauri::command]
 async fn route_model_cmd(message: String) -> Result<String, String> {
     Ok(route_model(&message))
+}
+
+/// 打开 macOS 辅助功能设置页面（方便用户授予 Codex gx 桌面控制权限）
+#[tauri::command]
+async fn open_accessibility_settings() -> Result<(), String> {
+    // macOS 特有：用 open 命令打开隐私设置的辅助功能面板
+    #[cfg(target_os = "macos")]
+    {
+        std::process::Command::new("open")
+            .arg("x-apple.systempreferences:com.apple.preference.security?Privacy_Accessibility")
+            .spawn()
+            .map_err(|e| format!("无法打开设置: {}", e))?;
+        Ok(())
+    }
+    #[cfg(not(target_os = "macos"))]
+    {
+        Err("此功能仅在 macOS 上可用".to_string())
+    }
+}
+
+/// 检查当前是否有辅助功能权限（用于桌面控制）
+#[tauri::command]
+fn check_accessibility_permission() -> bool {
+    #[cfg(target_os = "macos")]
+    {
+        // 使用系统 API 检查是否被信任
+        use std::os::raw::c_void;
+        extern "C" {
+            fn AXIsProcessTrusted() -> bool;
+        }
+        unsafe { AXIsProcessTrusted() }
+    }
+    #[cfg(not(target_os = "macos"))]
+    {
+        true
+    }
 }
 
 // ============================================================

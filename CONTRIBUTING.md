@@ -93,7 +93,7 @@ git checkout -b fix/issue-123
 # 跑测试 + lint
 cargo test --workspace
 cargo clippy --all-targets --all-features -- -D warnings
-pnpm lint
+npm run lint
 
 # 提交
 git add .
@@ -145,7 +145,7 @@ Closes #123
 
 - **Rust**：1.85+（`rustup install stable`）
 - **Node.js**：20+（推荐用 nvm）
-- **pnpm**：9+（`npm i -g pnpm`）
+- **npm**：内置（推荐直接使用）
 - **Tauri 前置**：
   - macOS：`xcode-select --install`
   - Windows：Microsoft Visual Studio C++ Build Tools + WebView2
@@ -155,7 +155,7 @@ Closes #123
 ```bash
 git clone https://github.com/<你的用户名>/agentshell.git
 cd agentshell
-pnpm install
+npm install
 cargo build --workspace
 ```
 
@@ -163,18 +163,18 @@ cargo build --workspace
 
 ```bash
 # 桌面端（开发模式）
-pnpm tauri dev
+npm run tauri dev
 
 # 跑测试
 cargo test --workspace
-pnpm test
+npm test
 
 # 跑 lint
 cargo clippy --all-targets --all-features -- -D warnings
-pnpm lint
+npm run lint
 
 # 构建 release
-pnpm tauri build
+npm run tauri build
 ```
 
 ## 📐 代码规范
@@ -189,7 +189,7 @@ pnpm tauri build
 
 ### TypeScript / React
 
-- **ESLint + Prettier**：`pnpm lint` 必须通过
+- **ESLint + Prettier**：`npm run lint` 必须通过
 - **组件**：函数式 + Hooks，避免 class component
 - **TypeScript**：`strict: true`，避免 `any`
 - **命名**：组件 PascalCase / 函数 camelCase / 常量 UPPER_SNAKE_CASE

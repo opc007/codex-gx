@@ -208,7 +208,7 @@ function loadInitial(): { mode: ThemeMode; themeId: string } {
   return { mode, themeId };
 }
 
-let loaded = loadInitial();
+const loaded = loadInitial();
 let state: ThemeStore = {
   mode: loaded.mode,
   setMode: (m) => {
