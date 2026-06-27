@@ -19,7 +19,7 @@
     "test:all": "cargo test --workspace && npm run type-check && npm run build && npx playwright test"
   },
   "dependencies": {
-    "@tauri-apps/api": "^2.1.1",
+    "@tauri-apps/api": "^2.11.1",
     "@tauri-apps/plugin-dialog": "^2.0.1",
     "@tauri-apps/plugin-fs": "^2.0.2",
     "@tauri-apps/plugin-os": "^2.0.0",
