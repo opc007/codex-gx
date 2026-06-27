@@ -77,7 +77,7 @@ walkdir = "2.5"
 # 加密 / 编码
 base64 = "0.22"
 sha2 = "0.10"
-hmac = "0.12"
+hmac = "0.13"
 
 # CLI
 clap = { version = "4.5", features = ["derive"] }
